@@ -319,6 +319,18 @@ export function parseDateString(input: string): Date | null {
     return makeDate(y, Number(m[2]), Number(m[1]), m[4], m[5], m[6])
   }
 
+  // Competência MM/AAAA (mês/ano) -> dia 1. Ex.: "05/2026".
+  m = s.match(/^(\d{1,2})\/(\d{4})$/)
+  if (m) return makeDate(Number(m[2]), Number(m[1]), 1)
+
+  // Ano-mês AAAA-MM ou YY-MM (sem dia) -> dia 1.
+  m = s.match(/^(\d{2,4})[-.](\d{1,2})$/)
+  if (m) {
+    let y = Number(m[1])
+    if (m[1].length <= 2) y += 2000
+    return makeDate(y, Number(m[2]), 1)
+  }
+
   const d = new Date(s)
   return Number.isNaN(d.getTime()) ? null : d
 }
