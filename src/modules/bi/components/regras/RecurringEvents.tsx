@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Layers, Eraser } from 'lucide-react'
+import { Layers, Eraser } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -171,20 +171,6 @@ export function RecurringEvents() {
     }
   }
 
-  async function reagruparAuto() {
-    if (!orgId) return
-    setSaving(true)
-    try {
-      const n = await reclassifyFamilias(orgId)
-      await qc.invalidateQueries({ queryKey: ['bi'] })
-      toast.success('Sugestão aplicada', { description: `${n} eventos atualizados.` })
-    } catch (e) {
-      toast.error('Erro ao reagrupar', { description: (e as Error).message })
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function limparTudo() {
     if (!orgId) return
     if (
@@ -253,10 +239,6 @@ export function RecurringEvents() {
             />
             Mostrar todos (mesmo sem ano)
           </label>
-          <Button variant="secondary" onClick={reagruparAuto} disabled={saving}>
-            <RefreshCw className={`size-4 ${saving ? 'animate-spin' : ''}`} />
-            Reagrupar (sugestão)
-          </Button>
           <Button
             variant="ghost"
             className="text-destructive hover:text-destructive"

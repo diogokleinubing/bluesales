@@ -35,20 +35,17 @@ export async function deleteFamilyOverride(id: string) {
   if (error) throw new Error(error.message)
 }
 
-/** Zera todos os agrupamentos: apaga overrides e limpa events.familia. */
-export async function clearAllFamilias(orgId: string): Promise<void> {
-  const del = await supabase
-    .from('event_family_override')
-    .delete()
-    .eq('org_id', orgId)
-  if (del.error) throw new Error(del.error.message)
-
-  const upd = await supabase
-    .from('events')
-    .update({ familia: null })
-    .eq('org_id', orgId)
-    .not('familia', 'is', null)
-  if (upd.error) throw new Error(upd.error.message)
+/**
+ * Zera todos os agrupamentos: apaga overrides e limpa events.familia.
+ * Usa RPC server-side (transação única, sem o timeout/limites do PostgREST no
+ * update em massa). Retorna quantos eventos foram limpos.
+ */
+export async function clearAllFamilias(orgId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('clear_event_families', {
+    p_org: orgId,
+  })
+  if (error) throw new Error(`clear_event_families: ${error.message}`)
+  return Number(data ?? 0)
 }
 
 /**
