@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Save } from 'lucide-react'
+import { RefreshCw, Layers } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -18,7 +19,6 @@ import { supabase } from '@/lib/supabase'
 import { useOrgId } from '../../hooks/useBi'
 import { biBiggestEvents } from '../../lib/rpc'
 import { reclassifyFamilias, setFamilyOverride } from '../../lib/family-api'
-import { familiaFromName } from '../../lib/family'
 import { norm } from '../../lib/classify'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
@@ -37,8 +37,8 @@ export function hasYearInTitle(nome: string | null): boolean {
 
 async function fetchEventsBase(
   orgId: string,
-): Promise<{ codigo_evento: string; nome: string | null; familia: string | null }[]> {
-  const all: { codigo_evento: string; nome: string | null; familia: string | null }[] = []
+): Promise<Omit<EvRow, 'receita'>[]> {
+  const all: Omit<EvRow, 'receita'>[] = []
   const PAGE = 1000
   let from = 0
   for (;;) {
@@ -48,7 +48,7 @@ async function fetchEventsBase(
       .eq('org_id', orgId)
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
-    const rows = (data ?? []) as typeof all
+    const rows = (data ?? []) as Omit<EvRow, 'receita'>[]
     all.push(...rows)
     if (rows.length < PAGE) break
     from += PAGE
@@ -60,10 +60,12 @@ export function RecurringEvents() {
   const orgId = useOrgId()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
-  const [edits, setEdits] = useState<Record<string, string>>({})
+  const [showAll, setShowAll] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [familiaInput, setFamiliaInput] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const eventsQ = useQuery({
+  const baseQ = useQuery({
     enabled: !!orgId,
     staleTime: 60 * 1000,
     queryKey: ['bi', 'family-events', orgId],
@@ -76,37 +78,75 @@ export function RecurringEvents() {
         rev.map((r) => [r.codigo_evento, Number(r.receita_bt)]),
       )
       return evs
-        .filter((e) => hasYearInTitle(e.nome))
         .map((e) => ({ ...e, receita: revMap.get(e.codigo_evento) ?? 0 }))
         .sort((a, b) => b.receita - a.receita)
     },
   })
 
-  const events = eventsQ.data ?? []
+  const events = baseQ.data ?? []
 
-  const filtered = useMemo(() => {
+  const visible = useMemo(() => {
     const q = norm(search)
-    const list = q
-      ? events.filter(
-          (e) =>
-            norm(e.nome).includes(q) ||
-            norm(e.familia).includes(q) ||
-            e.codigo_evento.includes(q),
-        )
-      : events
-    return list.slice(0, 500)
-  }, [events, search])
+    return events
+      .filter((e) => (showAll ? true : hasYearInTitle(e.nome)))
+      .filter(
+        (e) =>
+          !q ||
+          norm(e.nome).includes(q) ||
+          norm(e.familia).includes(q) ||
+          e.codigo_evento.includes(q),
+      )
+      .slice(0, 500)
+  }, [events, search, showAll])
 
   const resumo = useMemo(() => {
     const counts = new Map<string, number>()
     for (const e of events) {
-      const f = e.familia ?? '(sem família)'
-      counts.set(f, (counts.get(f) ?? 0) + 1)
+      if (!e.familia) continue
+      counts.set(e.familia, (counts.get(e.familia) ?? 0) + 1)
     }
     let recorrentes = 0
     for (const c of counts.values()) if (c >= 2) recorrentes++
     return { familias: counts.size, recorrentes }
   }, [events])
+
+  function toggle(codigo: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(codigo)) next.delete(codigo)
+      else next.add(codigo)
+      return next
+    })
+  }
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === visible.length
+        ? new Set()
+        : new Set(visible.map((e) => e.codigo_evento)),
+    )
+  }
+
+  async function aplicarFamilia() {
+    if (!orgId || selected.size === 0 || !familiaInput.trim()) return
+    setSaving(true)
+    try {
+      const familia = familiaInput.trim()
+      for (const codigo of selected) {
+        await setFamilyOverride(orgId, codigo, familia)
+      }
+      await reclassifyFamilias(orgId)
+      setSelected(new Set())
+      setFamiliaInput('')
+      await qc.invalidateQueries({ queryKey: ['bi'] })
+      toast.success('Eventos agrupados', {
+        description: `${selected.size} eventos → "${familia}".`,
+      })
+    } catch (e) {
+      toast.error('Erro ao agrupar', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function reagruparAuto() {
     if (!orgId) return
@@ -114,9 +154,7 @@ export function RecurringEvents() {
     try {
       const n = await reclassifyFamilias(orgId)
       await qc.invalidateQueries({ queryKey: ['bi'] })
-      toast.success('Eventos reagrupados', {
-        description: `${n} eventos atualizados.`,
-      })
+      toast.success('Sugestão aplicada', { description: `${n} eventos atualizados.` })
     } catch (e) {
       toast.error('Erro ao reagrupar', { description: (e as Error).message })
     } finally {
@@ -124,46 +162,51 @@ export function RecurringEvents() {
     }
   }
 
-  async function salvarEdicoes() {
-    if (!orgId) return
-    const entries = Object.entries(edits).filter(([, v]) => v.trim())
-    if (entries.length === 0) return
-    setSaving(true)
-    try {
-      for (const [codigo, familia] of entries) {
-        await setFamilyOverride(orgId, codigo, familia.trim())
-      }
-      await reclassifyFamilias(orgId)
-      setEdits({})
-      await qc.invalidateQueries({ queryKey: ['bi'] })
-      toast.success('Famílias atualizadas', {
-        description: `${entries.length} override(s) aplicado(s).`,
-      })
-    } catch (e) {
-      toast.error('Erro ao salvar', { description: (e as Error).message })
-    } finally {
-      setSaving(false)
-    }
+  // Pré-preenche o nome do grupo com a família mais comum entre os selecionados.
+  function suggestFromSelection() {
+    const fams = [...selected]
+      .map((c) => events.find((e) => e.codigo_evento === c)?.familia)
+      .filter(Boolean) as string[]
+    if (fams.length) setFamiliaInput(fams[0])
   }
-
-  const pendentes = Object.values(edits).filter((v) => v.trim()).length
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          {fmtInt(resumo.familias)} famílias · {fmtInt(resumo.recorrentes)} com
-          2+ edições. Apenas eventos com ano (2020–2030) no título. Edite a
-          família para mesclar/corrigir.
-        </p>
-        <div className="flex gap-2">
+      <p className="text-sm text-muted-foreground">
+        Agrupe edições e festivais multi-dia numa mesma <strong>família</strong>{' '}
+        (sem o ano). Ex.: selecione todos os dias da “Festa do Pinhão” de 2025 e
+        2026 e aplique a família “Festa do Pinhão” — o YTD compara os anos
+        automaticamente. {fmtInt(resumo.familias)} famílias ·{' '}
+        {fmtInt(resumo.recorrentes)} com 2+ edições.
+      </p>
+
+      {/* Barra de ação */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3">
+        <Badge variant="secondary">{selected.size} selecionados</Badge>
+        <Input
+          placeholder="Nome da família (ex.: Festa do Pinhão)"
+          className="h-9 w-64"
+          value={familiaInput}
+          onChange={(e) => setFamiliaInput(e.target.value)}
+          onFocus={() => !familiaInput && suggestFromSelection()}
+        />
+        <Button
+          onClick={aplicarFamilia}
+          disabled={saving || selected.size === 0 || !familiaInput.trim()}
+        >
+          <Layers className="size-4" /> Agrupar selecionados
+        </Button>
+        <div className="ml-auto flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+            <Checkbox
+              checked={showAll}
+              onCheckedChange={(c) => setShowAll(c === true)}
+            />
+            Mostrar todos (mesmo sem ano)
+          </label>
           <Button variant="secondary" onClick={reagruparAuto} disabled={saving}>
             <RefreshCw className={`size-4 ${saving ? 'animate-spin' : ''}`} />
             Reagrupar (sugestão)
-          </Button>
-          <Button onClick={salvarEdicoes} disabled={saving || pendentes === 0}>
-            <Save className="size-4" /> Salvar{' '}
-            {pendentes > 0 ? `(${pendentes})` : ''}
           </Button>
         </div>
       </div>
@@ -177,75 +220,70 @@ export function RecurringEvents() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="max-h-[60vh] overflow-auto">
+          <div className="max-h-[55vh] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={
+                        visible.length > 0 && selected.size === visible.length
+                      }
+                      onCheckedChange={toggleAll}
+                    />
+                  </TableHead>
                   <TableHead>Evento</TableHead>
                   <TableHead>Código</TableHead>
                   <TableHead className="text-right">Receita</TableHead>
-                  <TableHead className="w-80">Família (recorrente)</TableHead>
+                  <TableHead>Família atual</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {eventsQ.isLoading ? (
+                {baseQ.isLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Carregando…
                     </TableCell>
                   </TableRow>
-                ) : filtered.length === 0 ? (
+                ) : visible.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="py-8 text-center text-muted-foreground"
                     >
-                      Nenhum evento com ano no título.
+                      Nenhum evento encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((e) => {
-                    const suggestion = familiaFromName(e.nome) ?? ''
-                    const value = edits[e.codigo_evento] ?? e.familia ?? ''
-                    return (
-                      <TableRow key={e.codigo_evento}>
-                        <TableCell className="max-w-72 truncate font-medium">
-                          {e.nome ?? '—'}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {e.codigo_evento}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtBRL(e.receita)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              className="h-8"
-                              value={value}
-                              placeholder={suggestion}
-                              onChange={(ev) =>
-                                setEdits((p) => ({
-                                  ...p,
-                                  [e.codigo_evento]: ev.target.value,
-                                }))
-                              }
-                            />
-                            {e.familia &&
-                              suggestion &&
-                              e.familia !== suggestion && (
-                                <Badge variant="outline" className="shrink-0">
-                                  manual
-                                </Badge>
-                              )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
+                  visible.map((e) => (
+                    <TableRow key={e.codigo_evento}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(e.codigo_evento)}
+                          onCheckedChange={() => toggle(e.codigo_evento)}
+                        />
+                      </TableCell>
+                      <TableCell className="max-w-72 truncate font-medium">
+                        {e.nome ?? '—'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {e.codigo_evento}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmtBRL(e.receita)}
+                      </TableCell>
+                      <TableCell>
+                        {e.familia ? (
+                          <Badge variant="outline">{e.familia}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
