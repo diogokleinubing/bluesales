@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RulesEditor } from '../components/regras/RulesEditor'
 import { PopularVenues } from '../components/regras/PopularVenues'
 import { BiggestEvents } from '../components/regras/BiggestEvents'
+import { RecurringEvents } from '../components/regras/RecurringEvents'
 
 export function RegrasPage() {
   return (
@@ -19,6 +20,7 @@ export function RegrasPage() {
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="locais">Locais populares</TabsTrigger>
           <TabsTrigger value="eventos">Maiores eventos</TabsTrigger>
+          <TabsTrigger value="recorrentes">Eventos recorrentes</TabsTrigger>
         </TabsList>
         <TabsContent value="regras" className="mt-4">
           <RulesEditor />
@@ -28,6 +30,9 @@ export function RegrasPage() {
         </TabsContent>
         <TabsContent value="eventos" className="mt-4">
           <BiggestEvents />
+        </TabsContent>
+        <TabsContent value="recorrentes" className="mt-4">
+          <RecurringEvents />
         </TabsContent>
       </Tabs>
     </div>

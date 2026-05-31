@@ -24,8 +24,12 @@ import type {
 
 const CHUNK = 500
 
-type EventInsert = Omit<EventRow, 'id' | 'created_at' | 'segmento'> & {
+type EventInsert = Omit<
+  EventRow,
+  'id' | 'created_at' | 'segmento' | 'familia'
+> & {
   segmento?: string | null
+  familia?: string | null
 }
 type SaleInsert = Omit<SaleRow, 'id' | 'gmv' | 'receita_bt' | 'receita_liq'>
 

@@ -3,7 +3,13 @@ import type { DateBase, Metric, Pdv } from './controls'
 import { matchesPdv, metricValue, saleMonth, saleYear } from './metrics'
 import type { YtdGroupRow, YtdMonthlyRow } from './rpc'
 
-export type YtdView = 'organizador' | 'segmento' | 'cidade' | 'uf' | 'local'
+export type YtdView =
+  | 'organizador'
+  | 'segmento'
+  | 'cidade'
+  | 'uf'
+  | 'local'
+  | 'familia'
 
 export const YTD_VIEW_LABELS: Record<YtdView, string> = {
   organizador: 'Organizador',
@@ -11,6 +17,7 @@ export const YTD_VIEW_LABELS: Record<YtdView, string> = {
   cidade: 'Cidade',
   uf: 'UF',
   local: 'Local',
+  familia: 'Evento recorrente',
 }
 
 export const YTD_VIEW_PARAM: Record<YtdView, string> = {
@@ -19,6 +26,7 @@ export const YTD_VIEW_PARAM: Record<YtdView, string> = {
   cidade: 'cidade',
   uf: 'uf',
   local: 'local',
+  familia: 'q',
 }
 
 function viewKey(sale: SaleEnriched, view: YtdView): string | null {
@@ -33,6 +41,8 @@ function viewKey(sale: SaleEnriched, view: YtdView): string | null {
       return sale.uf
     case 'local':
       return sale.local
+    case 'familia':
+      return null // família vive no servidor; o YTD agrupa via RPC (bi_ytd_group)
   }
 }
 

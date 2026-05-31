@@ -22,7 +22,15 @@ export interface EventRow {
   cidade: string | null
   uf: string | null
   segmento: string | null
+  familia: string | null
   created_at: string
+}
+
+export interface EventFamilyOverrideRow {
+  id: string
+  org_id: string
+  codigo_evento: string
+  familia: string
 }
 
 export interface SaleRow {
