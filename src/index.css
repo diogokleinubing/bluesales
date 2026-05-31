@@ -1,111 +1,155 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Blueticket Analytics — design tokens.
+  Tema dark é o padrão. Paleta de referência:
+    fundo #0a0f1e | superfície #0d1526 | borda #1e2d4a
+    primário #1a7fe8 | verde #4ade80 | roxo #a78bfa | vermelho #f87171
+    âmbar #f59e0b | texto #e2e8f0 | texto secundário #6b88b0
+*/
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --radius: 0.625rem;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --background: #0a0f1e;
+  --foreground: #e2e8f0;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --card: #0d1526;
+  --card-foreground: #e2e8f0;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  --popover: #0d1526;
+  --popover-foreground: #e2e8f0;
+
+  --primary: #1a7fe8;
+  --primary-foreground: #f8fafc;
+
+  --secondary: #16203a;
+  --secondary-foreground: #e2e8f0;
+
+  --muted: #111a30;
+  --muted-foreground: #6b88b0;
+
+  --accent: #16203a;
+  --accent-foreground: #e2e8f0;
+
+  --destructive: #f87171;
+  --destructive-foreground: #f8fafc;
+
+  --success: #4ade80;
+  --warning: #f59e0b;
+  --info: #a78bfa;
+
+  --border: #1e2d4a;
+  --input: #1e2d4a;
+  --ring: #1a7fe8;
+
+  /* Cores de gráfico (Recharts) */
+  --chart-1: #1a7fe8;
+  --chart-2: #4ade80;
+  --chart-3: #a78bfa;
+  --chart-4: #f59e0b;
+  --chart-5: #f87171;
+
+  --sidebar: #0d1526;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #1a7fe8;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #16203a;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #1e2d4a;
+  --sidebar-ring: #1a7fe8;
+}
+
+/* O app é dark-first; a classe .dark espelha o :root para o seletor do shadcn. */
+.dark {
+  --background: #0a0f1e;
+  --foreground: #e2e8f0;
+  --card: #0d1526;
+  --card-foreground: #e2e8f0;
+  --popover: #0d1526;
+  --popover-foreground: #e2e8f0;
+  --primary: #1a7fe8;
+  --primary-foreground: #f8fafc;
+  --secondary: #16203a;
+  --secondary-foreground: #e2e8f0;
+  --muted: #111a30;
+  --muted-foreground: #6b88b0;
+  --accent: #16203a;
+  --accent-foreground: #e2e8f0;
+  --destructive: #f87171;
+  --destructive-foreground: #f8fafc;
+  --success: #4ade80;
+  --warning: #f59e0b;
+  --info: #a78bfa;
+  --border: #1e2d4a;
+  --input: #1e2d4a;
+  --ring: #1a7fe8;
+  --chart-1: #1a7fe8;
+  --chart-2: #4ade80;
+  --chart-3: #a78bfa;
+  --chart-4: #f59e0b;
+  --chart-5: #f87171;
+  --sidebar: #0d1526;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #1a7fe8;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #16203a;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #1e2d4a;
+  --sidebar-ring: #1a7fe8;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  body {
+    @apply bg-background text-foreground;
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }
