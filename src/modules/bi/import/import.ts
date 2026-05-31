@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase'
 import type { EventRow, SaleRow } from '@/lib/database.types'
-import { backfillEventLinks, upsertEventDates } from '../lib/rpc'
+import {
+  backfillEventLinks,
+  clearRollup,
+  pruneRollupYear,
+  refreshRollupCodigos,
+  upsertEventDates,
+} from '../lib/rpc'
 import {
   parseCodigo,
   parseEventDate,
@@ -259,6 +265,32 @@ export async function runImport({
       phase: 'Gravando vendas',
       current: Math.min(i + CHUNK, sales.length),
       total: sales.length,
+    })
+  }
+
+  // 7) Manutenção incremental do rollup (escala para milhões de vendas).
+  //    Só recomputa os códigos tocados — nunca o rollup inteiro.
+  const touched = new Set<string>()
+  for (const e of events) touched.add(e.codigo_evento)
+  for (const s of sales) touched.add(s.codigo_evento)
+  for (const c of build.eventDates.codigos) touched.add(c)
+
+  if (mode === 'replace') {
+    await clearRollup(orgId)
+  } else if (build.hasSales) {
+    // merge: as vendas dos anos importados foram apagadas em todos os códigos;
+    // limpa o rollup desses anos antes de recompor os códigos tocados.
+    for (const y of years) await pruneRollupYear(orgId, y)
+  }
+
+  const codigos = [...touched]
+  const ROLLUP_BATCH = 800
+  for (let i = 0; i < codigos.length; i += ROLLUP_BATCH) {
+    await refreshRollupCodigos(orgId, codigos.slice(i, i + ROLLUP_BATCH))
+    onProgress?.({
+      phase: 'Consolidando dados',
+      current: Math.min(i + ROLLUP_BATCH, codigos.length),
+      total: codigos.length,
     })
   }
 

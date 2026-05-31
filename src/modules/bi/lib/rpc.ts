@@ -355,6 +355,28 @@ export async function refreshRollup(): Promise<void> {
   await rpc<null>('refresh_sales_rollup', {})
 }
 
+/** Recomputa o rollup só para os códigos informados (incremental, em lote). */
+export async function refreshRollupCodigos(
+  orgId: string,
+  codigos: string[],
+): Promise<void> {
+  if (codigos.length === 0) return
+  await rpc<null>('refresh_rollup_codigos', { p_org: orgId, p_codigos: codigos })
+}
+
+/** Remove o rollup de um ano (ao apagar os dados desse ano). */
+export async function pruneRollupYear(
+  orgId: string,
+  year: number,
+): Promise<void> {
+  await rpc<null>('prune_rollup_year', { p_org: orgId, p_year: year })
+}
+
+/** Limpa todo o rollup da org (modo replace). */
+export async function clearRollup(orgId: string): Promise<void> {
+  await rpc<null>('clear_rollup', { p_org: orgId })
+}
+
 /** Reconecta vendas órfãs (event_id null) aos eventos. Retorna qtd vinculada. */
 export async function backfillEventLinks(orgId: string): Promise<number> {
   return rpc<number>('backfill_event_links', { p_org: orgId })

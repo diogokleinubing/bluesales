@@ -41,7 +41,6 @@ import {
   type SaleSheetInput,
 } from './import'
 import { reclassifyEvents } from '../lib/rules-api'
-import { refreshRollup } from '../lib/rpc'
 import { loadMapping, loadType, saveMapping, saveType } from './mapping-cache'
 import {
   EVENT_FIELDS,
@@ -204,9 +203,8 @@ export function ImportWizard() {
         onProgress: setProgress,
       })
 
-      setProgress({ phase: 'Consolidando dados', current: 0, total: 1 })
-      await refreshRollup()
-      // Reclassifica só se vieram eventos.
+      // O consolidador (rollup) já é atualizado de forma incremental dentro
+      // do runImport. Reclassifica só se vieram eventos.
       if (res.hadEvents) {
         setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
         await reclassifyEvents(org.data.id)

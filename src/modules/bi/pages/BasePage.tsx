@@ -30,7 +30,7 @@ import { useDefaultOrg } from '@/lib/org'
 import { useBiBase } from '../hooks/useBi'
 import { useReclassify } from '../hooks/useReclassify'
 import { deleteYearData } from '../lib/base-api'
-import { refreshRollup } from '../lib/rpc'
+import { pruneRollupYear } from '../lib/rpc'
 import { exportToXlsx } from '../lib/export'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
@@ -56,7 +56,7 @@ export function BasePage() {
     setBusyYear(year)
     try {
       await deleteYearData(orgId, year)
-      await refreshRollup()
+      await pruneRollupYear(orgId, year)
       await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success(`Vendas de ${year} apagadas.`)
     } catch (e) {
