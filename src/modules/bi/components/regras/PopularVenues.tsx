@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,53 +13,37 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useDataset } from '../../lib/dataset'
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
+import { useOrgId } from '../../hooks/useBi'
 import { setVenueSegment } from '../../lib/rules-api'
+import { biPopularVenues } from '../../lib/rpc'
 import { norm } from '../../lib/classify'
 import { fmtInt } from '@/lib/format'
 
-interface VenueRow {
-  local: string
-  eventos: number
-}
-
 export function PopularVenues() {
-  const { sales, isLoading } = useDataset()
-  const { rules, orgId } = useRules()
+  const { rules, orgId: rulesOrg } = useRules()
+  const orgId = useOrgId()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
   const [segInputs, setSegInputs] = useState<Record<string, string>>({})
 
-  const venueMapByNorm = useMemo(
-    () => new Map(rules.venueMap.map((v) => [norm(v.local), v.segmento])),
-    [rules.venueMap],
+  const venuesQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'popular-venues', orgId, search],
+    queryFn: () => biPopularVenues(orgId!, search, 200),
+  })
+
+  const venueMapByNorm = new Map(
+    rules.venueMap.map((v) => [norm(v.local), v.segmento]),
   )
-
-  const venues = useMemo<VenueRow[]>(() => {
-    const map = new Map<string, Set<string>>()
-    for (const s of sales) {
-      if (!s.local) continue
-      const set = map.get(s.local) ?? new Set<string>()
-      set.add(s.codigo_evento)
-      map.set(s.local, set)
-    }
-    return [...map.entries()]
-      .map(([local, set]) => ({ local, eventos: set.size }))
-      .sort((a, b) => b.eventos - a.eventos)
-  }, [sales])
-
-  const filtered = useMemo(() => {
-    const q = norm(search)
-    return q ? venues.filter((v) => norm(v.local).includes(q)) : venues
-  }, [venues, search])
 
   async function assign(local: string) {
     const segmento = (segInputs[local] ?? '').trim()
-    if (!orgId || !segmento) return
+    if (!rulesOrg || !segmento) return
     try {
-      await setVenueSegment(orgId, local, segmento)
+      await setVenueSegment(rulesOrg, local, segmento)
       toast.success(`Local "${local}" → ${segmento}`)
       reclassify.mutate()
     } catch (e) {
@@ -87,20 +72,20 @@ export function PopularVenues() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {venuesQ.isLoading ? (
                   <TableRow>
                     <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
                       Carregando…
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.slice(0, 200).map((v) => (
+                  (venuesQ.data ?? []).map((v) => (
                     <TableRow key={v.local}>
                       <TableCell className="max-w-64 truncate font-medium">
                         {v.local}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtInt(v.eventos)}
+                        {fmtInt(Number(v.eventos))}
                       </TableCell>
                       <TableCell>
                         {venueMapByNorm.has(norm(v.local)) ? (

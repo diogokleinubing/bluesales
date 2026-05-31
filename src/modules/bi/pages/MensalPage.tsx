@@ -12,20 +12,42 @@ import {
 } from '@/components/ui/table'
 import { GmvReceitaCombo } from '../components/charts'
 import { MONTH_LABELS } from '../components/chart-theme'
-import { useDataset } from '../lib/dataset'
+import { useBiMonthly } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { filterSales } from '../lib/metrics'
-import { monthlySeries } from '../lib/aggregate'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
 export function MensalPage() {
-  const { sales, isLoading } = useDataset()
-  const { year, metric, dateBase, pdv } = useControls()
+  const { year } = useControls()
+  const query = useBiMonthly()
+  const isLoading = query.isLoading
 
   const monthly = useMemo(() => {
-    const cur = filterSales(sales, { pdv, year, dateBase })
-    return monthlySeries(cur, dateBase, metric)
-  }, [sales, year, metric, dateBase, pdv])
+    const byMonth = new Map(
+      (query.data ?? []).map((m) => [
+        m.month,
+        {
+          month: m.month,
+          vendas: Number(m.qtd),
+          gmv: Number(m.gmv),
+          receitaBt: Number(m.receita_bt),
+          receitaLiq: Number(m.receita_liq),
+          mdr: Number(m.mdr),
+          rebate: Number(m.rebate),
+        },
+      ]),
+    )
+    return Array.from({ length: 12 }, (_, month) =>
+      byMonth.get(month) ?? {
+        month,
+        vendas: 0,
+        gmv: 0,
+        receitaBt: 0,
+        receitaLiq: 0,
+        mdr: 0,
+        rebate: 0,
+      },
+    )
+  }, [query.data])
 
   const totals = useMemo(
     () =>

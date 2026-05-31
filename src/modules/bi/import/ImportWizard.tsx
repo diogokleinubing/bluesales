@@ -29,6 +29,7 @@ import {
 } from './parse'
 import { buildRecords, runImport } from './import'
 import { reclassifyEvents } from '../lib/rules-api'
+import { refreshRollup } from '../lib/rpc'
 import { loadMapping, saveMapping } from './mapping-cache'
 import {
   EVENT_FIELDS,
@@ -153,7 +154,9 @@ export function ImportWizard() {
         mode,
         onProgress: setProgress,
       })
-      // Classifica os segmentos com as regras atuais.
+      // Atualiza o consolidador (rollup) e classifica os segmentos.
+      setProgress({ phase: 'Consolidando dados', current: 0, total: 1 })
+      await refreshRollup()
       setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
       await reclassifyEvents(org.data.id)
       setResult({

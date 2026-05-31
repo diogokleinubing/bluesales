@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,38 +14,28 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useDataset } from '../../lib/dataset'
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
+import { useOrgId } from '../../hooks/useBi'
 import { bulkSetEventOverride } from '../../lib/rules-api'
-import { aggregateEvents } from '../../lib/aggregate'
-import { norm } from '../../lib/classify'
+import { biBiggestEvents } from '../../lib/rpc'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 export function BiggestEvents() {
-  const { sales, isLoading } = useDataset()
-  const { rules, orgId } = useRules()
+  const { rules, orgId: rulesOrg } = useRules()
+  const orgId = useOrgId()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [segmento, setSegmento] = useState('')
 
-  // Maiores eventos por bilheteria (GMV), sobre toda a base.
-  const events = useMemo(() => aggregateEvents(sales, 'gmv'), [sales])
-
-  const filtered = useMemo(() => {
-    const q = norm(search)
-    return q
-      ? events.filter(
-          (e) =>
-            norm(e.nome).includes(q) ||
-            norm(e.organizador).includes(q) ||
-            e.codigo_evento.includes(q),
-        )
-      : events
-  }, [events, search])
-
-  const visible = filtered.slice(0, 200)
+  const eventsQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['bi', 'biggest-events', orgId, search],
+    queryFn: () => biBiggestEvents(orgId!, search, 200),
+  })
+  const visible = eventsQ.data ?? []
 
   function toggle(codigo: string) {
     setSelected((prev) => {
@@ -64,12 +55,10 @@ export function BiggestEvents() {
   }
 
   async function applyBulk() {
-    if (!orgId || selected.size === 0 || !segmento.trim()) return
+    if (!rulesOrg || selected.size === 0 || !segmento.trim()) return
     try {
-      await bulkSetEventOverride(orgId, [...selected], segmento.trim())
-      toast.success(
-        `${selected.size} eventos → ${segmento.trim()}`,
-      )
+      await bulkSetEventOverride(rulesOrg, [...selected], segmento.trim())
+      toast.success(`${selected.size} eventos → ${segmento.trim()}`)
       setSelected(new Set())
       setSegmento('')
       reclassify.mutate()
@@ -127,7 +116,7 @@ export function BiggestEvents() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {eventsQ.isLoading ? (
                   <TableRow>
                     <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                       Carregando…
@@ -154,10 +143,10 @@ export function BiggestEvents() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtInt(e.vendas)}
+                        {fmtInt(Number(e.qtd))}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(e.gmv)}
+                        {fmtBRL(Number(e.gmv))}
                       </TableCell>
                     </TableRow>
                   ))

@@ -11,7 +11,8 @@ export function useReclassify(orgId: string | undefined) {
       return reclassifyEvents(orgId)
     },
     onSuccess: (count) => {
-      qc.invalidateQueries({ queryKey: ['dataset'] })
+      // Reclassificar muda events.segmento (join na leitura), não o rollup.
+      qc.invalidateQueries({ queryKey: ['bi'] })
       qc.invalidateQueries({ queryKey: ['rules'] })
       toast.success('Reclassificação concluída', {
         description: `${count} eventos atualizados.`,

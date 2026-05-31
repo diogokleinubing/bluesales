@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -25,11 +26,11 @@ import {
   MultiLineChart,
 } from '../components/charts'
 import { MONTH_LABELS } from '../components/chart-theme'
-import { useDataset } from '../lib/dataset'
 import { useControls } from '@/modules/shared/controls-context'
-import { availableYears } from '../lib/aggregate'
+import { useBiYears, useOrgId } from '../hooks/useBi'
+import { biYtdMonthly, biYtdGroup } from '../lib/rpc'
 import {
-  ytdCompare,
+  buildYtdResult,
   YTD_VIEW_LABELS,
   YTD_VIEW_PARAM,
   type YtdView,
@@ -38,14 +39,15 @@ import { METRIC_LABELS, type Metric, type DateBase } from '../lib/controls'
 import { fmtBRL, fmtDelta, fmtInt } from '@/lib/format'
 
 export function YtdPage() {
-  const { sales, isLoading } = useDataset()
   const { year, metric: gMetric, dateBase: gDateBase, pdv } = useControls()
+  const orgId = useOrgId()
   const navigate = useNavigate()
 
+  const yearsQuery = useBiYears(gDateBase)
   const years = useMemo(() => {
-    const ys = availableYears(sales, gDateBase)
+    const ys = yearsQuery.data ?? []
     return ys.length ? ys : [year]
-  }, [sales, gDateBase, year])
+  }, [yearsQuery.data, year])
 
   const [targetYear, setTargetYear] = useState(year)
   const [monthStart, setMonthStart] = useState(0)
@@ -54,18 +56,30 @@ export function YtdPage() {
   const [view, setView] = useState<YtdView>('organizador')
   const [metric, setMetric] = useState<Metric>(gMetric)
 
+  const ytdQuery = useQuery({
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'ytd', orgId, targetYear, monthStart, monthEnd, dateBase, view, pdv],
+    queryFn: async () => {
+      const [monthly, groups] = await Promise.all([
+        biYtdMonthly(orgId!, targetYear, monthStart, monthEnd, dateBase, pdv),
+        biYtdGroup(orgId!, targetYear, monthStart, monthEnd, dateBase, pdv, view),
+      ])
+      return { monthly, groups }
+    },
+  })
+  const isLoading = ytdQuery.isLoading
+
   const result = useMemo(
     () =>
-      ytdCompare(sales, {
-        targetYear,
+      buildYtdResult(
+        ytdQuery.data?.monthly ?? [],
+        ytdQuery.data?.groups ?? [],
+        metric,
         monthStart,
         monthEnd,
-        dateBase,
-        metric,
-        view,
-        pdv,
-      }),
-    [sales, targetYear, monthStart, monthEnd, dateBase, metric, view, pdv],
+      ),
+    [ytdQuery.data, metric, monthStart, monthEnd],
   )
 
   const baseYear = targetYear - 1

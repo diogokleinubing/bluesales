@@ -1,19 +1,18 @@
 import { useMemo } from 'react'
 import { RankingView } from '../components/RankingView'
-import { useDataset } from '../lib/dataset'
+import { useBiGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { filterSales } from '../lib/metrics'
-import { groupBy } from '../lib/aggregate'
+import { groupRowsToAgg } from '../lib/group-map'
 import { METRIC_LABELS } from '../lib/controls'
 
 export function OrganizadoresPage() {
-  const { sales, isLoading } = useDataset()
-  const { year, metric, dateBase, pdv } = useControls()
+  const { year, metric } = useControls()
+  const query = useBiGroup('organizador')
 
-  const groups = useMemo(() => {
-    const cur = filterSales(sales, { pdv, year, dateBase })
-    return groupBy(cur, (s) => s.organizador, metric, 'Sem organizador')
-  }, [sales, year, metric, dateBase, pdv])
+  const groups = useMemo(
+    () => groupRowsToAgg(query.data ?? [], metric, 'Sem organizador'),
+    [query.data, metric],
+  )
 
   return (
     <div className="space-y-4">
@@ -28,7 +27,7 @@ export function OrganizadoresPage() {
         groups={groups}
         metricLabel={METRIC_LABELS[metric]}
         drillParam="organizador"
-        loading={isLoading}
+        loading={query.isLoading}
       />
     </div>
   )

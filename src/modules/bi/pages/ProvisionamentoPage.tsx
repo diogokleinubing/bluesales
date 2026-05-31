@@ -24,14 +24,14 @@ import {
 } from '@/components/ui/table'
 import { KpiCard } from '../components/KpiCard'
 import { WaterfallChart } from '../components/charts'
-import { useDataset } from '../lib/dataset'
 import { useDefaultOrg } from '@/lib/org'
 import { useControls } from '@/modules/shared/controls-context'
+import { biProvStats, biMonthsElapsed } from '../lib/rpc'
 import {
   buildWaterfall,
-  computeOrgStats,
   OUTROS_KEY,
   waterfallBars,
+  type OrgStat,
   type ProvItem,
 } from '../lib/provisioning'
 import {
@@ -52,7 +52,6 @@ const STATUS_COLOR: Record<Status, string> = {
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
 
 export function ProvisionamentoPage() {
-  const { sales, isLoading } = useDataset()
   const org = useDefaultOrg()
   const orgId = org.data?.id
   const { year, dateBase, pdv } = useControls()
@@ -73,10 +72,28 @@ export function ProvisionamentoPage() {
     return m
   }, [provQuery.data])
 
-  const { stats } = useMemo(
-    () => computeOrgStats(sales, { baseYear, targetYear, dateBase, pdv }),
-    [sales, baseYear, targetYear, dateBase, pdv],
-  )
+  const statsQuery = useQuery({
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'prov', orgId, baseYear, targetYear, dateBase, pdv],
+    queryFn: async () => {
+      const [rows, months] = await Promise.all([
+        biProvStats(orgId!, baseYear, targetYear, dateBase, pdv),
+        biMonthsElapsed(orgId!, targetYear, dateBase, pdv),
+      ])
+      const m = months > 0 ? months : 12
+      const stats: OrgStat[] = rows
+        .map((r) => ({
+          organizador: r.organizador,
+          gmvBase: Number(r.gmv_base),
+          ytd: Number(r.ytd),
+          runRate: (Number(r.ytd) / m) * 12,
+        }))
+        .sort((a, b) => b.gmvBase - a.gmvBase)
+      return stats
+    },
+  })
+  const stats = useMemo(() => statsQuery.data ?? [], [statsQuery.data])
 
   const effectiveTop = topN === 0 ? stats.length : topN
 
@@ -219,7 +236,7 @@ export function ProvisionamentoPage() {
     })
   }
 
-  const loading = isLoading || provQuery.isLoading
+  const loading = statsQuery.isLoading || provQuery.isLoading
   const totalForecast = waterfall.total
 
   return (

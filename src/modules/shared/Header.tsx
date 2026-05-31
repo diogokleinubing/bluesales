@@ -12,8 +12,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/lib/auth'
 import { useControls } from './controls-context'
-import { useDataset } from '@/modules/bi/lib/dataset'
-import { availableYears } from '@/modules/bi/lib/aggregate'
+import { useBiYears } from '@/modules/bi/hooks/useBi'
 import {
   ALL_PDV,
   CURRENT_YEAR,
@@ -28,13 +27,13 @@ import {
 export function Header() {
   const { user, signOut } = useAuth()
   const { year, metric, dateBase, pdv, setControls } = useControls()
-  const { sales } = useDataset()
+  const yearsQuery = useBiYears(dateBase)
 
   // Anos reais da base (conforme a base de data). Fallback: ano atual.
   const years = useMemo(() => {
-    const ys = availableYears(sales, dateBase)
+    const ys = yearsQuery.data ?? []
     return ys.length ? ys : [CURRENT_YEAR]
-  }, [sales, dateBase])
+  }, [yearsQuery.data])
 
   // Corrige o ano selecionado se ele não existir mais na base.
   useEffect(() => {

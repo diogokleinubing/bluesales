@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -26,47 +26,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useDataset } from '../lib/dataset'
 import { useDefaultOrg } from '@/lib/org'
+import { useBiBase } from '../hooks/useBi'
 import { useReclassify } from '../hooks/useReclassify'
 import { deleteYearData } from '../lib/base-api'
+import { refreshRollup } from '../lib/rpc'
 import { exportToXlsx } from '../lib/export'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 export function BasePage() {
   const org = useDefaultOrg()
   const orgId = org.data?.id
-  const { sales, isLoading, isError, error } = useDataset()
+  const base = useBiBase()
   const reclassify = useReclassify(orgId)
   const qc = useQueryClient()
   const [busyYear, setBusyYear] = useState<number | null>(null)
 
-  const summary = useMemo(() => {
-    const eventos = new Set<string>()
-    const byYear = new Map<number, { vendas: number; gmv: number }>()
-    let gmv = 0
-    for (const s of sales) {
-      eventos.add(s.codigo_evento)
-      gmv += s.gmv
-      if (s.data_venda) {
-        const y = new Date(s.data_venda).getFullYear()
-        if (!Number.isNaN(y)) {
-          const cur = byYear.get(y) ?? { vendas: 0, gmv: 0 }
-          cur.vendas += 1
-          cur.gmv += s.gmv
-          byYear.set(y, cur)
-        }
-      }
-    }
-    return {
-      vendas: sales.length,
-      eventos: eventos.size,
-      gmv,
-      years: [...byYear.entries()]
-        .map(([year, v]) => ({ year, ...v }))
-        .sort((a, b) => b.year - a.year),
-    }
-  }, [sales])
+  const years = base.data?.years ?? []
+  const totals = base.data?.totals ?? { qtd: 0, eventos: 0, gmv: 0 }
 
   async function handleDeleteYear(year: number) {
     if (!orgId) return
@@ -79,7 +56,8 @@ export function BasePage() {
     setBusyYear(year)
     try {
       await deleteYearData(orgId, year)
-      await qc.invalidateQueries({ queryKey: ['dataset'] })
+      await refreshRollup()
+      await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success(`Vendas de ${year} apagadas.`)
     } catch (e) {
       toast.error('Erro ao apagar', { description: (e as Error).message })
@@ -93,10 +71,10 @@ export function BasePage() {
       await exportToXlsx('blueticket-base', [
         {
           name: 'Resumo por ano',
-          rows: summary.years.map((y) => ({
+          rows: years.map((y) => ({
             Ano: y.year,
-            Vendas: y.vendas,
-            GMV: y.gmv,
+            Vendas: Number(y.qtd),
+            GMV: Number(y.gmv),
           })),
         },
       ])
@@ -130,7 +108,7 @@ export function BasePage() {
           <Button
             variant="outline"
             onClick={handleExport}
-            disabled={summary.years.length === 0}
+            disabled={years.length === 0}
           >
             <Download className="size-4" /> Exportar
           </Button>
@@ -140,7 +118,7 @@ export function BasePage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            {isError ? (
+            {base.isError ? (
               <AlertCircle className="size-4 text-destructive" />
             ) : (
               <CheckCircle2 className="size-4 text-[var(--success)]" />
@@ -154,9 +132,9 @@ export function BasePage() {
         <CardContent>
           {org.isLoading ? (
             <Skeleton className="h-6 w-48" />
-          ) : isError ? (
+          ) : base.isError ? (
             <p className="text-sm text-destructive">
-              Falha: {(error as Error)?.message}
+              Falha: {(base.error as Error)?.message}
             </p>
           ) : (
             <div className="flex items-center gap-3">
@@ -170,9 +148,9 @@ export function BasePage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="Vendas" value={fmtInt(summary.vendas)} loading={isLoading} />
-        <Stat label="Eventos" value={fmtInt(summary.eventos)} loading={isLoading} />
-        <Stat label="GMV total" value={fmtBRL(summary.gmv)} loading={isLoading} />
+        <Stat label="Vendas" value={fmtInt(Number(totals.qtd))} loading={base.isLoading} />
+        <Stat label="Eventos" value={fmtInt(Number(totals.eventos))} loading={base.isLoading} />
+        <Stat label="GMV total" value={fmtBRL(Number(totals.gmv))} loading={base.isLoading} />
       </div>
 
       <Card>
@@ -192,13 +170,13 @@ export function BasePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {base.isLoading ? (
                 <TableRow>
                   <TableCell colSpan={4}>
                     <Skeleton className="h-5 w-full" />
                   </TableCell>
                 </TableRow>
-              ) : summary.years.length === 0 ? (
+              ) : years.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={4}
@@ -208,14 +186,14 @@ export function BasePage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                summary.years.map((y) => (
+                years.map((y) => (
                   <TableRow key={y.year}>
                     <TableCell className="font-medium">{y.year}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fmtInt(y.vendas)}
+                      {fmtInt(Number(y.qtd))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fmtBRL(y.gmv)}
+                      {fmtBRL(Number(y.gmv))}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

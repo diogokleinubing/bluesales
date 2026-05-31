@@ -4,45 +4,42 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MultiLineChart } from '../components/charts'
 import { RankingView } from '../components/RankingView'
-import { useDataset } from '../lib/dataset'
+import { useBiGroup, useBiMonthlyByGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { filterSales } from '../lib/metrics'
-import { groupBy, monthlyByGroup } from '../lib/aggregate'
+import { groupRowsToAgg } from '../lib/group-map'
+import { metricOf } from '../lib/rpc'
 import { METRIC_LABELS } from '../lib/controls'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
 export function SegmentosPage() {
-  const { sales, isLoading } = useDataset()
-  const { year, metric, dateBase, pdv } = useControls()
+  const { year, metric } = useControls()
   const navigate = useNavigate()
-
-  const cur = useMemo(
-    () => filterSales(sales, { pdv, year, dateBase }),
-    [sales, year, dateBase, pdv],
-  )
+  const groupQ = useBiGroup('segmento')
 
   const groups = useMemo(
-    () => groupBy(cur, (s) => s.segmento, metric, 'Sem segmento'),
-    [cur, metric],
+    () => groupRowsToAgg(groupQ.data ?? [], metric, 'Sem segmento'),
+    [groupQ.data, metric],
   )
-
   const topNames = useMemo(() => groups.slice(0, 5).map((g) => g.label), [groups])
 
-  const monthly = useMemo(
-    () =>
-      monthlyByGroup(
-        cur,
-        dateBase,
-        metric,
-        (s) => s.segmento,
-        'Sem segmento',
-        topNames,
-      ),
-    [cur, dateBase, metric, topNames],
-  )
+  const monthlyQ = useBiMonthlyByGroup('segmento', topNames)
+  const monthly = useMemo(() => {
+    const rows = Array.from({ length: 12 }, (_, month) => {
+      const base: Record<string, number> = { month }
+      for (const k of topNames) base[k] = 0
+      return base
+    })
+    for (const r of monthlyQ.data ?? []) {
+      const key = r.key ?? 'Sem segmento'
+      if (r.month >= 0 && r.month < 12 && key in rows[r.month])
+        rows[r.month][key] = metricOf(r, metric)
+    }
+    return rows
+  }, [monthlyQ.data, topNames, metric])
 
   const metricLabel = METRIC_LABELS[metric]
   const total = groups.reduce((a, g) => a + g.value, 0)
+  const isLoading = groupQ.isLoading
 
   return (
     <div className="space-y-4">
@@ -53,7 +50,6 @@ export function SegmentosPage() {
         </p>
       </div>
 
-      {/* Cards por segmento */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {isLoading
           ? Array.from({ length: 4 }).map((_, i) => (
@@ -81,7 +77,6 @@ export function SegmentosPage() {
             ))}
       </div>
 
-      {/* Evolução mensal por segmento */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -97,7 +92,6 @@ export function SegmentosPage() {
         </CardContent>
       </Card>
 
-      {/* Tabela detalhada + ranking */}
       <RankingView
         title="Segmento"
         groups={groups}

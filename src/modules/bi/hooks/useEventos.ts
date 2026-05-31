@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import { useDataset } from '../lib/dataset'
+import { useQuery } from '@tanstack/react-query'
+import { useOrgId } from './useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { aggregateEvents, type EventAgg } from '../lib/aggregate'
-import { filterSales } from '../lib/metrics'
+import { biEvents, biEventOptions, metricOf } from '../lib/rpc'
 
 export interface EventFilters {
   search: string
@@ -22,49 +22,95 @@ export interface EventOptions {
   ufs: string[]
 }
 
-function uniqSorted(values: (string | null)[]): string[] {
-  return [...new Set(values.filter((v): v is string => !!v && v.trim() !== ''))].sort(
-    (a, b) => a.localeCompare(b, 'pt-BR'),
-  )
+export interface EventListRow {
+  codigo_evento: string
+  nome: string | null
+  segmento: string | null
+  organizador: string | null
+  local: string | null
+  cidade: string | null
+  uf: string | null
+  vendas: number
+  gmv: number
+  receitaBt: number
+  value: number
 }
 
+const PAGE = 300
+
 export function useEventos(filters: EventFilters) {
-  const { sales, isLoading, isError, error } = useDataset()
+  const orgId = useOrgId()
   const { year, metric, dateBase, pdv } = useControls()
 
-  const allEvents = useMemo(() => {
-    const cur = filterSales(sales, { pdv, year, dateBase })
-    return aggregateEvents(cur, metric)
-  }, [sales, year, metric, dateBase, pdv])
+  const eventsQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['bi', 'events', orgId, year, dateBase, pdv, metric, filters],
+    queryFn: () =>
+      biEvents(orgId!, year, dateBase, pdv, {
+        search: filters.search,
+        segmento: filters.segmento,
+        organizador: filters.organizador,
+        local: filters.local,
+        cidade: filters.cidade,
+        uf: filters.uf,
+        codigo: filters.codigo,
+        order: metric,
+        limit: PAGE,
+      }),
+  })
 
-  const options = useMemo<EventOptions>(
-    () => ({
-      segmentos: uniqSorted(allEvents.map((e) => e.segmento)),
-      organizadores: uniqSorted(allEvents.map((e) => e.organizador)),
-      locais: uniqSorted(allEvents.map((e) => e.local)),
-      cidades: uniqSorted(allEvents.map((e) => e.cidade)),
-      ufs: uniqSorted(allEvents.map((e) => e.uf)),
-    }),
-    [allEvents],
+  const optionsQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'event-options', orgId, year, dateBase, pdv],
+    queryFn: () => biEventOptions(orgId!, year, dateBase, pdv),
+  })
+
+  const events = useMemo<EventListRow[]>(
+    () =>
+      (eventsQ.data ?? []).map((e) => ({
+        codigo_evento: e.codigo_evento,
+        nome: e.nome,
+        segmento: e.segmento,
+        organizador: e.organizador,
+        local: e.local,
+        cidade: e.cidade,
+        uf: e.uf,
+        vendas: Number(e.qtd),
+        gmv: Number(e.gmv),
+        receitaBt: Number(e.receita_bt),
+        value: metricOf(e, metric),
+      })),
+    [eventsQ.data, metric],
   )
 
-  const filtered = useMemo<EventAgg[]>(() => {
-    const q = filters.search.trim().toLowerCase()
-    return allEvents.filter((e) => {
-      if (filters.codigo && e.codigo_evento !== filters.codigo) return false
-      if (filters.segmento && (e.segmento ?? 'Sem segmento') !== filters.segmento)
-        return false
-      if (filters.organizador && e.organizador !== filters.organizador) return false
-      if (filters.local && e.local !== filters.local) return false
-      if (filters.cidade && e.cidade !== filters.cidade) return false
-      if (filters.uf && e.uf !== filters.uf) return false
-      if (q) {
-        const hay = `${e.nome ?? ''} ${e.codigo_evento} ${e.organizador ?? ''} ${e.local ?? ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [allEvents, filters])
+  const total = eventsQ.data?.[0]?.total_count
+    ? Number(eventsQ.data[0].total_count)
+    : events.length
 
-  return { events: filtered, options, isLoading, isError, error }
+  const options = useMemo<EventOptions>(() => {
+    const by = (dim: string) =>
+      (optionsQ.data ?? [])
+        .filter((o) => o.dim === dim)
+        .map((o) => o.value)
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    return {
+      segmentos: by('segmento'),
+      organizadores: by('organizador'),
+      locais: by('local'),
+      cidades: by('cidade'),
+      ufs: by('uf'),
+    }
+  }, [optionsQ.data])
+
+  return {
+    events,
+    options,
+    total,
+    truncated: total > events.length,
+    isLoading: eventsQ.isLoading,
+    isError: eventsQ.isError,
+    error: eventsQ.error,
+  }
 }

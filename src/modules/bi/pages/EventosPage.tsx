@@ -50,7 +50,7 @@ export function EventosPage() {
   const [params, setParams] = useSearchParams()
   const { metric } = useControls()
   const filters = useMemo(() => paramFilters(params), [params])
-  const { events, options, isLoading } = useEventos(filters)
+  const { events, options, isLoading, total, truncated } = useEventos(filters)
 
   function setFilter(key: keyof EventFilters, value: string) {
     const next = new URLSearchParams(params)
@@ -80,8 +80,9 @@ export function EventosPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Eventos</h1>
           <p className="text-sm text-muted-foreground">
-            {fmtInt(events.length)} eventos · {fmtBRL(totalValue)}{' '}
-            {METRIC_LABELS[metric]}
+            {fmtInt(total)} eventos
+            {truncated && ` (exibindo top ${fmtInt(events.length)})`} ·{' '}
+            {fmtBRL(totalValue)} {METRIC_LABELS[metric]}
           </p>
         </div>
         <div className="flex gap-2">

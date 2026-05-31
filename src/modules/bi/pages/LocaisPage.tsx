@@ -1,32 +1,28 @@
 import { useMemo } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingView } from '../components/RankingView'
-import { useDataset } from '../lib/dataset'
+import { useBiGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { filterSales } from '../lib/metrics'
-import { groupBy } from '../lib/aggregate'
+import { groupRowsToAgg } from '../lib/group-map'
 import { METRIC_LABELS } from '../lib/controls'
 
 export function LocaisPage() {
-  const { sales, isLoading } = useDataset()
-  const { year, metric, dateBase, pdv } = useControls()
-
-  const cur = useMemo(
-    () => filterSales(sales, { pdv, year, dateBase }),
-    [sales, year, dateBase, pdv],
-  )
+  const { year, metric } = useControls()
+  const localQ = useBiGroup('local')
+  const cidadeQ = useBiGroup('cidade')
+  const ufQ = useBiGroup('uf')
 
   const porLocal = useMemo(
-    () => groupBy(cur, (s) => s.local, metric, 'Sem local'),
-    [cur, metric],
+    () => groupRowsToAgg(localQ.data ?? [], metric, 'Sem local'),
+    [localQ.data, metric],
   )
   const porCidade = useMemo(
-    () => groupBy(cur, (s) => s.cidade, metric, 'Sem cidade'),
-    [cur, metric],
+    () => groupRowsToAgg(cidadeQ.data ?? [], metric, 'Sem cidade'),
+    [cidadeQ.data, metric],
   )
   const porUf = useMemo(
-    () => groupBy(cur, (s) => s.uf, metric, 'Sem UF'),
-    [cur, metric],
+    () => groupRowsToAgg(ufQ.data ?? [], metric, 'Sem UF'),
+    [ufQ.data, metric],
   )
 
   const metricLabel = METRIC_LABELS[metric]
@@ -52,7 +48,7 @@ export function LocaisPage() {
             groups={porLocal}
             metricLabel={metricLabel}
             drillParam="local"
-            loading={isLoading}
+            loading={localQ.isLoading}
           />
         </TabsContent>
         <TabsContent value="cidade" className="mt-4">
@@ -61,7 +57,7 @@ export function LocaisPage() {
             groups={porCidade}
             metricLabel={metricLabel}
             drillParam="cidade"
-            loading={isLoading}
+            loading={cidadeQ.isLoading}
           />
         </TabsContent>
         <TabsContent value="uf" className="mt-4">
@@ -70,7 +66,7 @@ export function LocaisPage() {
             groups={porUf}
             metricLabel={metricLabel}
             drillParam="uf"
-            loading={isLoading}
+            loading={ufQ.isLoading}
           />
         </TabsContent>
       </Tabs>

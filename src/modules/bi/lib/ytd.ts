@@ -1,6 +1,7 @@
 import type { SaleEnriched } from './dataset'
 import type { DateBase, Metric, Pdv } from './controls'
 import { matchesPdv, metricValue, saleMonth, saleYear } from './metrics'
+import type { YtdGroupRow, YtdMonthlyRow } from './rpc'
 
 export type YtdView = 'organizador' | 'segmento' | 'cidade' | 'uf' | 'local'
 
@@ -70,6 +71,77 @@ export interface YtdResult {
   deltaPct: number | null
   monthly: YtdMonthly[]
   byView: YtdGroup[]
+}
+
+/** Monta o resultado YTD a partir das linhas das RPCs bi_ytd_*. */
+export function buildYtdResult(
+  monthlyRows: YtdMonthlyRow[],
+  groupRows: YtdGroupRow[],
+  metric: Metric,
+  monthStart: number,
+  monthEnd: number,
+): YtdResult {
+  const metricKey = metric
+  const lo = Math.min(monthStart, monthEnd)
+  const hi = Math.max(monthStart, monthEnd)
+
+  const tByMonth = new Array(12).fill(0)
+  const bByMonth = new Array(12).fill(0)
+  for (const r of monthlyRows) {
+    const v = Number(r[metricKey] ?? 0)
+    if (r.month < 0 || r.month > 11) continue
+    if (r.is_target) tByMonth[r.month] += v
+    else bByMonth[r.month] += v
+  }
+
+  const monthly: YtdMonthly[] = []
+  let tAcc = 0
+  let bAcc = 0
+  let totalTarget = 0
+  let totalBase = 0
+  for (let m = lo; m <= hi; m++) {
+    tAcc += tByMonth[m]
+    bAcc += bByMonth[m]
+    totalTarget += tByMonth[m]
+    totalBase += bByMonth[m]
+    monthly.push({
+      month: m,
+      target: tByMonth[m],
+      base: bByMonth[m],
+      targetAcc: tAcc,
+      baseAcc: bAcc,
+      growth: bByMonth[m] !== 0 ? (tByMonth[m] - bByMonth[m]) / Math.abs(bByMonth[m]) : null,
+    })
+  }
+
+  const gMap = new Map<string, { target: number; base: number }>()
+  for (const r of groupRows) {
+    const key = (r.key as string | null)?.trim() || '—'
+    const v = Number(r[metricKey] ?? 0)
+    const g = gMap.get(key) ?? { target: 0, base: 0 }
+    if (r.is_target) g.target += v
+    else g.base += v
+    gMap.set(key, g)
+  }
+  const byView: YtdGroup[] = [...gMap.entries()]
+    .map(([key, g]) => ({
+      key,
+      label: key,
+      target: g.target,
+      base: g.base,
+      deltaAbs: g.target - g.base,
+      deltaPct: g.base !== 0 ? (g.target - g.base) / Math.abs(g.base) : null,
+    }))
+    .sort((a, b) => b.target - a.target)
+
+  return {
+    totalTarget,
+    totalBase,
+    deltaAbs: totalTarget - totalBase,
+    deltaPct: totalBase !== 0 ? (totalTarget - totalBase) / Math.abs(totalBase) : null,
+    monthly,
+    byView,
+  }
 }
 
 function inRange(month: number, start: number, end: number): boolean {
