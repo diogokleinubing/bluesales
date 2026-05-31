@@ -183,7 +183,13 @@ export function detectSheet(
   return found?.name ?? null
 }
 
-/** Auto-mapeia colunas -> campos por sinônimo. -1 = não encontrado. */
+/**
+ * Auto-mapeia colunas -> campos por sinônimo. -1 = não encontrado.
+ * Duas fases para os aliases específicos vencerem os genéricos:
+ *  1) match exato + aliases com 2+ tokens (ex.: "data_venda", "data do evento");
+ *  2) fallback de aliases de 1 token (ex.: "data") só para campos ainda livres.
+ * Assim "Data do Evento" não é roubada por um alias genérico "data".
+ */
 export function autoMap<F extends string>(
   headers: string[],
   defs: FieldDef<F>[],
@@ -192,9 +198,16 @@ export function autoMap<F extends string>(
   const headerTokens = headers.map(tokenize)
   const used = new Set<number>()
   const map = {} as ColumnMap<F>
+  for (const def of defs) map[def.field] = -1
+
+  const assign = (field: F, idx: number) => {
+    map[field] = idx
+    used.add(idx)
+  }
+
+  // Fase 1: exato + aliases específicos (>= 2 tokens)
   for (const def of defs) {
     let idx = -1
-    // 1) match exato por alias (forma normalizada)
     for (const alias of def.aliases) {
       const found = normHeaders.indexOf(alias)
       if (found >= 0 && !used.has(found)) {
@@ -202,19 +215,31 @@ export function autoMap<F extends string>(
         break
       }
     }
-    // 2) match por subconjunto de tokens (tolera "Código do Evento" etc.)
     if (idx < 0) {
       idx = headerTokens.findIndex((ht, i) => {
         if (used.has(i)) return false
         return def.aliases.some((alias) => {
           const at = tokenize(alias)
-          return at.length > 0 && at.every((t) => ht.includes(t))
+          return at.length >= 2 && at.every((t) => ht.includes(t))
         })
       })
     }
-    if (idx >= 0) used.add(idx)
-    map[def.field] = idx
+    if (idx >= 0) assign(def.field, idx)
   }
+
+  // Fase 2: fallback de aliases de 1 token, só para campos ainda não mapeados
+  for (const def of defs) {
+    if (map[def.field] >= 0) continue
+    const idx = headerTokens.findIndex((ht, i) => {
+      if (used.has(i)) return false
+      return def.aliases.some((alias) => {
+        const at = tokenize(alias)
+        return at.length === 1 && ht.includes(at[0])
+      })
+    })
+    if (idx >= 0) assign(def.field, idx)
+  }
+
   return map
 }
 
@@ -234,53 +259,94 @@ export function columnsFingerprint(headers: string[]): string {
 // Limpeza / conversão de valores
 // ----------------------------------------------------------------------------
 
-/** "YYYY-MM" (ou Date) -> "YYYY-MM-01". Retorna null se inválido. */
-export function parseEventDate(value: unknown): string | null {
-  if (value == null || value === '') return null
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime()) || value.getFullYear() < 2000) return null
-    const y = value.getFullYear()
-    const m = String(value.getMonth() + 1).padStart(2, '0')
-    return `${y}-${m}-01`
-  }
-  const s = String(value).trim()
-  // YYYY-MM (ou YYYY/MM, YYYY-MM-DD)
-  const iso = s.match(/^(\d{4})[-/.](\d{1,2})/)
-  if (iso) {
-    const month = String(Number(iso[2])).padStart(2, '0')
-    return `${iso[1]}-${month}-01`
-  }
-  // BR: DD/MM/YYYY -> usa ano-mês
-  const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-  if (br) {
-    const month = String(Number(br[2])).padStart(2, '0')
-    return `${br[3]}-${month}-01`
-  }
-  // BR: MM/YYYY
-  const my = s.match(/^(\d{1,2})\/(\d{4})$/)
-  if (my) {
-    const month = String(Number(my[1])).padStart(2, '0')
-    return `${my[2]}-${month}-01`
-  }
-  return null
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
 }
 
-/** Tenta parsear data/hora no formato brasileiro DD/MM/AAAA [HH:MM[:SS]]. */
-function parseBrDateTime(s: string): Date | null {
-  const m = s.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
-  )
-  if (!m) return null
-  const [, dd, mm, yyyy, hh, mi, ss] = m
-  const d = new Date(
-    Number(yyyy),
-    Number(mm) - 1,
-    Number(dd),
+/**
+ * Constrói a data em UTC (e não local) para preservar o dia/mês de calendário.
+ * Sem isso, "30/04 23:10" numa máquina em -03 viraria "01/05" ao serializar,
+ * jogando a venda no mês errado.
+ */
+function makeDate(
+  y: number,
+  mon: number,
+  day: number,
+  hh?: string,
+  mi?: string,
+  ss?: string,
+): Date | null {
+  const ts = Date.UTC(
+    y,
+    mon - 1,
+    day,
     Number(hh ?? 0),
     Number(mi ?? 0),
     Number(ss ?? 0),
   )
+  return Number.isNaN(ts) ? null : new Date(ts)
+}
+
+/**
+ * Parseia uma data em string nos formatos usados:
+ * - ISO ANO-primeiro com traço/ponto: `YYYY-MM-DD` ou `YY-MM-DD` (+ hora opcional).
+ *   Ano de 2 dígitos vira 20YY (ex.: "26-05-15" -> 2026-05-15).
+ * - BR DIA-primeiro com barra: `DD/MM/AAAA` (+ hora opcional).
+ * - Fallback: new Date(s).
+ * O separador desambigua: traço/ponto = ano primeiro; barra = dia primeiro.
+ */
+export function parseDateString(input: string): Date | null {
+  const s = input.trim()
+  if (!s) return null
+
+  // ISO ano-primeiro (traço ou ponto): [YY]YY-MM-DD [HH:MM[:SS]]
+  let m = s.match(
+    /^(\d{2,4})[-.](\d{1,2})[-.](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  )
+  if (m) {
+    let y = Number(m[1])
+    if (m[1].length <= 2) y += 2000
+    return makeDate(y, Number(m[2]), Number(m[3]), m[4], m[5], m[6])
+  }
+
+  // BR dia-primeiro (barra): DD/MM/[YY]YY [HH:MM[:SS]]
+  m = s.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  )
+  if (m) {
+    let y = Number(m[3])
+    if (m[3].length <= 2) y += 2000
+    return makeDate(y, Number(m[2]), Number(m[1]), m[4], m[5], m[6])
+  }
+
+  const d = new Date(s)
   return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** Data do evento -> "YYYY-MM-01". Aceita ano-mês, data completa, Date. */
+export function parseEventDate(value: unknown): string | null {
+  if (value == null || value === '') return null
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime()) || value.getFullYear() < 2000) return null
+    return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-01`
+  }
+  const s = String(value).trim()
+  // Ano-mês sem dia: YYYY-MM ou YY-MM
+  let m = s.match(/^(\d{2,4})[-/.](\d{1,2})$/)
+  if (m) {
+    let y = Number(m[1])
+    if (m[1].length <= 2) y += 2000
+    return `${y}-${pad2(Number(m[2]))}-01`
+  }
+  // MM/YYYY
+  m = s.match(/^(\d{1,2})\/(\d{4})$/)
+  if (m) return `${m[2]}-${pad2(Number(m[1]))}-01`
+  // Data completa em qualquer formato suportado (UTC para preservar o mês)
+  const d = parseDateString(s)
+  if (d && d.getUTCFullYear() >= 2000) {
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-01`
+  }
+  return null
 }
 
 /** Datetime de venda. Descarta anos < 2000 (corrompidos em 1900). */
@@ -288,20 +354,24 @@ export function parseSaleDate(value: unknown): string | null {
   if (value == null || value === '') return null
   let d: Date | null = null
   if (value instanceof Date) {
-    d = value
+    // Reconstrói em UTC a partir dos componentes locais (preserva dia/mês).
+    d = Number.isNaN(value.getTime())
+      ? null
+      : makeDate(
+          value.getFullYear(),
+          value.getMonth() + 1,
+          value.getDate(),
+          String(value.getHours()),
+          String(value.getMinutes()),
+          String(value.getSeconds()),
+        )
   } else if (typeof value === 'number') {
     // fallback: serial Excel (caso cellDates não tenha convertido)
     d = XLSX.SSF ? excelSerialToDate(value) : null
   } else {
-    const s = String(value).trim()
-    // BR (DD/MM/AAAA) primeiro, pois new Date() interpretaria como MM/DD.
-    d = parseBrDateTime(s)
-    if (!d) {
-      const parsed = new Date(s)
-      d = Number.isNaN(parsed.getTime()) ? null : parsed
-    }
+    d = parseDateString(String(value))
   }
-  if (!d || Number.isNaN(d.getTime()) || d.getFullYear() < 2000) return null
+  if (!d || Number.isNaN(d.getTime()) || d.getUTCFullYear() < 2000) return null
   return d.toISOString()
 }
 
