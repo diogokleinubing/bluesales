@@ -106,10 +106,14 @@ export function parseCsv(input: string): (string | null)[][] {
     row = []
   }
 
+  // True logo após o delimitador/início de linha — ou seja, no começo do campo.
+  let atFieldStart = true
+
   while (i < text.length) {
     const ch = text[i]
     if (inQuotes) {
       if (ch === '"') {
+        // "" = aspa escapada; senão, fecha o campo quoted.
         if (text[i + 1] === '"') {
           field += '"'
           i += 2
@@ -123,29 +127,37 @@ export function parseCsv(input: string): (string | null)[][] {
       i++
       continue
     }
-    if (ch === '"') {
+    // Aspas só abrem campo quoted no INÍCIO do campo. Aspas soltas no meio/fim
+    // (CSV mal-formado) são tratadas como texto literal — evita "engolir" o
+    // delimitador e as próximas linhas.
+    if (ch === '"' && atFieldStart) {
       inQuotes = true
+      atFieldStart = false
       i++
       continue
     }
     if (ch === delim) {
       pushField()
+      atFieldStart = true
       i++
       continue
     }
     if (ch === '\n') {
       pushRow()
+      atFieldStart = true
       i++
       continue
     }
     if (ch === '\r') {
       // \r ou \r\n
       pushRow()
+      atFieldStart = true
       if (text[i + 1] === '\n') i++
       i++
       continue
     }
     field += ch
+    atFieldStart = false
     i++
   }
   // último campo/linha
