@@ -41,7 +41,7 @@ import {
   type SaleSheetInput,
 } from './import'
 import { reclassifyEvents } from '../lib/rules-api'
-import { reclassifyFamilias } from '../lib/family-api'
+import { applyFamilyOverrides } from '../lib/family-api'
 import { loadMapping, loadType, saveMapping, saveType } from './mapping-cache'
 import {
   EVENT_FIELDS,
@@ -208,8 +208,10 @@ export function ImportWizard() {
       if (res.hadEvents) {
         setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
         await reclassifyEvents(org.data.id)
-        setProgress({ phase: 'Agrupando eventos recorrentes', current: 0, total: 1 })
-        await reclassifyFamilias(org.data.id)
+        // Aplica só os overrides (agrupamentos manuais). NÃO aplica a sugestão
+        // automática por nome — isso repoluiria os eventos não agrupados.
+        setProgress({ phase: 'Aplicando agrupamentos', current: 0, total: 1 })
+        await applyFamilyOverrides(org.data.id)
       }
 
       setResult({

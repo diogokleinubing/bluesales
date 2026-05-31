@@ -35,6 +35,19 @@ export async function deleteFamilyOverride(id: string) {
   if (error) throw new Error(error.message)
 }
 
+/**
+ * Aplica SOMENTE os overrides de família aos eventos (sem sugestão por nome).
+ * Usado após a importação: preserva os agrupamentos manuais e reconecta
+ * eventos recém-importados que já tenham override, sem repoluir os demais.
+ */
+export async function applyFamilyOverrides(orgId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('apply_family_overrides', {
+    p_org: orgId,
+  })
+  if (error) throw new Error(`apply_family_overrides: ${error.message}`)
+  return Number(data ?? 0)
+}
+
 /** Grava a família de uma lista específica de eventos (sem tocar nos outros). */
 export async function setEventFamilias(
   orgId: string,
