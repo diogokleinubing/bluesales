@@ -103,7 +103,9 @@ export function buildRecords(
         continue
       }
       const dataVenda = parseSaleDate(cell(row, map.data_venda))
-      if (dataVenda) years.add(new Date(dataVenda).getFullYear())
+      // UTC: data_venda é ISO UTC; getFullYear (local) jogaria 01/jan no ano
+      // anterior em fuso negativo, limpando o ano errado no modo merge.
+      if (dataVenda) years.add(new Date(dataVenda).getUTCFullYear())
       sales.push({
         org_id: orgId,
         event_id: null,
@@ -174,8 +176,8 @@ export async function runImport({
         .from('sales')
         .delete()
         .eq('org_id', orgId)
-        .gte('data_venda', `${y}-01-01`)
-        .lt('data_venda', `${y + 1}-01-01`)
+        .gte('data_venda', `${y}-01-01T00:00:00Z`)
+        .lt('data_venda', `${y + 1}-01-01T00:00:00Z`)
     }
   }
   onProgress?.({ phase: 'Preparando base', current: 1, total: 1 })
