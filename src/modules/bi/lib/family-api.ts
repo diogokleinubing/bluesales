@@ -35,6 +35,29 @@ export async function deleteFamilyOverride(id: string) {
   if (error) throw new Error(error.message)
 }
 
+/** Grava a família de uma lista específica de eventos (sem tocar nos outros). */
+export async function setEventFamilias(
+  orgId: string,
+  codigos: string[],
+  familia: string,
+): Promise<number> {
+  if (codigos.length === 0) return 0
+  const fam = familia.slice(0, 200)
+  let updated = 0
+  const BATCH = 1000
+  for (let i = 0; i < codigos.length; i += BATCH) {
+    const slice = codigos.slice(i, i + BATCH)
+    const { data, error } = await supabase.rpc('set_event_families', {
+      p_org: orgId,
+      p_codigos: slice,
+      p_familias: slice.map(() => fam),
+    })
+    if (error) throw new Error(`set_event_families: ${error.message}`)
+    updated += Number(data ?? 0)
+  }
+  return updated
+}
+
 /**
  * Zera todos os agrupamentos: apaga overrides e limpa events.familia.
  * Usa RPC server-side (transação única, sem o timeout/limites do PostgREST no

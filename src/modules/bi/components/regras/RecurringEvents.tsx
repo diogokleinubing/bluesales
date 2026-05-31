@@ -20,7 +20,7 @@ import { useOrgId } from '../../hooks/useBi'
 import { biBiggestEvents } from '../../lib/rpc'
 import {
   clearAllFamilias,
-  reclassifyFamilias,
+  setEventFamilias,
   setFamilyOverride,
 } from '../../lib/family-api'
 import { suggestFamily } from '../../lib/family'
@@ -153,16 +153,19 @@ export function RecurringEvents() {
     setSaving(true)
     try {
       const familia = familiaInput.trim()
-      for (const codigo of selected) {
+      const codigos = [...selected]
+      // Grava override + família APENAS dos selecionados. Não reclassifica a
+      // base inteira (isso aplicaria a sugestão por nome a todos os outros).
+      for (const codigo of codigos) {
         await setFamilyOverride(orgId, codigo, familia)
       }
-      await reclassifyFamilias(orgId)
+      await setEventFamilias(orgId, codigos, familia)
       setSelected(new Set())
       setFamiliaInput('')
       setUserEdited(false)
       await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success('Eventos agrupados', {
-        description: `${selected.size} eventos → "${familia}".`,
+        description: `${codigos.length} eventos → "${familia}".`,
       })
     } catch (e) {
       toast.error('Erro ao agrupar', { description: (e as Error).message })
