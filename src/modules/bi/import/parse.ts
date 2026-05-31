@@ -9,6 +9,7 @@ import {
   type SaleField,
   type SheetData,
 } from './types'
+import { tokenize } from './detect'
 import type { TipoPdv } from '@/lib/database.types'
 
 // ----------------------------------------------------------------------------
@@ -77,20 +78,30 @@ export function autoMap<F extends string>(
   defs: FieldDef<F>[],
 ): ColumnMap<F> {
   const normHeaders = headers.map(normalizeHeader)
+  const headerTokens = headers.map(tokenize)
+  const used = new Set<number>()
   const map = {} as ColumnMap<F>
   for (const def of defs) {
     let idx = -1
-    // 1) match exato por alias
+    // 1) match exato por alias (forma normalizada)
     for (const alias of def.aliases) {
-      idx = normHeaders.indexOf(alias)
-      if (idx >= 0) break
+      const found = normHeaders.indexOf(alias)
+      if (found >= 0 && !used.has(found)) {
+        idx = found
+        break
+      }
     }
-    // 2) match parcial (header contém alias)
+    // 2) match por subconjunto de tokens (tolera "Código do Evento" etc.)
     if (idx < 0) {
-      idx = normHeaders.findIndex((h) =>
-        def.aliases.some((a) => h.includes(a)),
-      )
+      idx = headerTokens.findIndex((ht, i) => {
+        if (used.has(i)) return false
+        return def.aliases.some((alias) => {
+          const at = tokenize(alias)
+          return at.length > 0 && at.every((t) => ht.includes(t))
+        })
+      })
     }
+    if (idx >= 0) used.add(idx)
     map[def.field] = idx
   }
   return map

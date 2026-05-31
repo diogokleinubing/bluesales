@@ -1,7 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react'
+import {
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  Info,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -10,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -24,13 +31,18 @@ import {
   autoMapEvents,
   autoMapSales,
   columnsFingerprint,
-  detectSheet,
   readWorkbook,
 } from './parse'
-import { buildRecords, runImport } from './import'
+import { detectSheetType, type SheetType } from './detect'
+import {
+  buildRecords,
+  runImport,
+  type EventSheetInput,
+  type SaleSheetInput,
+} from './import'
 import { reclassifyEvents } from '../lib/rules-api'
 import { refreshRollup } from '../lib/rpc'
-import { loadMapping, saveMapping } from './mapping-cache'
+import { loadMapping, loadType, saveMapping, saveType } from './mapping-cache'
 import {
   EVENT_FIELDS,
   SALE_FIELDS,
@@ -38,13 +50,48 @@ import {
   type EventField,
   type ImportMode,
   type ImportProgress,
-  type ParsedWorkbook,
   type SaleField,
+  type SheetData,
 } from './types'
 
 type Step = 'upload' | 'configure' | 'running' | 'done'
+type Choice = 'eventos' | 'vendas' | 'ignorar'
+
+interface SheetEntry {
+  id: string
+  fileName: string
+  sheet: SheetData
+  detected: SheetType
+  choice: Choice
+  eventsMap: ColumnMap<EventField>
+  salesMap: ColumnMap<SaleField>
+}
 
 const NONE = '__none__'
+
+function initialChoice(detected: SheetType, cached: SheetType | null): Choice {
+  const t = cached ?? detected
+  return t === 'desconhecido' ? 'ignorar' : t
+}
+
+function makeEntry(fileName: string, sheet: SheetData, index: number): SheetEntry {
+  const detected = detectSheetType(sheet.headers)
+  const fp = columnsFingerprint(sheet.headers)
+  const cachedType = loadType(fp)
+  return {
+    id: `${fileName}::${sheet.name}::${index}`,
+    fileName,
+    sheet,
+    detected,
+    choice: initialChoice(detected, cachedType),
+    eventsMap:
+      (loadMapping(fp, 'events') as ColumnMap<EventField>) ??
+      autoMapEvents(sheet.headers),
+    salesMap:
+      (loadMapping(fp, 'sales') as ColumnMap<SaleField>) ??
+      autoMapSales(sheet.headers),
+  }
+}
 
 export function ImportWizard() {
   const org = useDefaultOrg()
@@ -52,11 +99,8 @@ export function ImportWizard() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<Step>('upload')
-  const [wb, setWb] = useState<ParsedWorkbook | null>(null)
-  const [eventsSheet, setEventsSheet] = useState<string>('')
-  const [salesSheet, setSalesSheet] = useState<string>('')
-  const [eventsMap, setEventsMap] = useState<ColumnMap<EventField> | null>(null)
-  const [salesMap, setSalesMap] = useState<ColumnMap<SaleField> | null>(null)
+  const [entries, setEntries] = useState<SheetEntry[]>([])
+  const [fileNames, setFileNames] = useState<string[]>([])
   const [mode, setMode] = useState<ImportMode>('merge')
   const [progress, setProgress] = useState<ImportProgress | null>(null)
   const [result, setResult] = useState<{
@@ -64,106 +108,116 @@ export function ImportWizard() {
     sales: number
     skipped: number
     years: number[]
+    orphanSales: number
+    backfilled: number
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const sheetByName = useCallback(
-    (name: string) => wb?.sheets.find((s) => s.name === name) ?? null,
-    [wb],
-  )
-
-  async function handleFile(file: File) {
+  async function handleFiles(files: FileList | File[]) {
     setError(null)
     try {
-      const parsed = await readWorkbook(file)
-      const evName = detectSheet(parsed.sheets, 'eventos') ?? parsed.sheets[0]?.name ?? ''
-      const saName =
-        detectSheet(parsed.sheets, 'vendas') ??
-        parsed.sheets.find((s) => s.name !== evName)?.name ??
-        ''
-      setWb(parsed)
-      applySheetSelection(parsed, evName, saName)
+      const arr = Array.from(files)
+      const newEntries: SheetEntry[] = []
+      for (const file of arr) {
+        const parsed = await readWorkbook(file)
+        parsed.sheets.forEach((sheet, i) => {
+          if (sheet.headers.length === 0 || sheet.rows.length === 0) return
+          newEntries.push(makeEntry(parsed.fileName, sheet, i))
+        })
+      }
+      if (newEntries.length === 0) {
+        setError('Nenhuma planilha com dados encontrada nos arquivos.')
+        return
+      }
+      setEntries((prev) => [...prev, ...newEntries])
+      setFileNames((prev) => [...new Set([...prev, ...arr.map((f) => f.name)])])
       setStep('configure')
     } catch (e) {
       setError(`Não foi possível ler o arquivo: ${(e as Error).message}`)
     }
   }
 
-  function applySheetSelection(
-    parsed: ParsedWorkbook,
-    evName: string,
-    saName: string,
-  ) {
-    setEventsSheet(evName)
-    setSalesSheet(saName)
-    const ev = parsed.sheets.find((s) => s.name === evName)
-    const sa = parsed.sheets.find((s) => s.name === saName)
-    if (ev) {
-      const fp = columnsFingerprint(ev.headers)
-      setEventsMap(
-        (loadMapping(fp, 'events') as ColumnMap<EventField>) ??
-          autoMapEvents(ev.headers),
-      )
-    }
-    if (sa) {
-      const fp = columnsFingerprint(sa.headers)
-      setSalesMap(
-        (loadMapping(fp, 'sales') as ColumnMap<SaleField>) ??
-          autoMapSales(sa.headers),
-      )
-    }
+  function setChoice(id: string, choice: Choice) {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, choice } : e)),
+    )
   }
 
-  const eventsData = sheetByName(eventsSheet)
-  const salesData = sheetByName(salesSheet)
+  function setEntryMap(id: string, choice: Choice, field: string, idx: number) {
+    setEntries((prev) =>
+      prev.map((e) => {
+        if (e.id !== id) return e
+        if (choice === 'eventos')
+          return { ...e, eventsMap: { ...e.eventsMap, [field]: idx } as ColumnMap<EventField> }
+        return { ...e, salesMap: { ...e.salesMap, [field]: idx } as ColumnMap<SaleField> }
+      }),
+    )
+  }
+
+  const active = entries.filter((e) => e.choice !== 'ignorar')
 
   const missingRequired = useMemo(() => {
     const miss: string[] = []
-    if (!eventsMap || (eventsMap.codigo_evento ?? -1) < 0)
-      miss.push('Eventos: Código do evento')
-    if (!salesMap || (salesMap.codigo_evento ?? -1) < 0)
-      miss.push('Vendas: Código do evento')
+    for (const e of active) {
+      const map = e.choice === 'eventos' ? e.eventsMap : e.salesMap
+      if ((map.codigo_evento ?? -1) < 0)
+        miss.push(`${e.sheet.name}: Código do evento`)
+    }
     return miss
-  }, [eventsMap, salesMap])
+  }, [active])
 
   async function handleRun() {
-    if (!wb || !eventsData || !salesData || !eventsMap || !salesMap) return
     if (!org.data) {
       setError('Organização não carregada.')
       return
     }
+    if (active.length === 0) {
+      setError('Selecione ao menos uma planilha (Eventos ou Vendas).')
+      return
+    }
     setStep('running')
     setError(null)
-    setProgress({ phase: 'Lendo planilha', current: 0, total: 1 })
+    setProgress({ phase: 'Lendo planilhas', current: 0, total: 1 })
     try {
-      // Persiste o mapeamento para reuso futuro.
-      saveMapping(columnsFingerprint(eventsData.headers), 'events', eventsMap)
-      saveMapping(columnsFingerprint(salesData.headers), 'sales', salesMap)
+      const eventSheets: EventSheetInput[] = []
+      const saleSheets: SaleSheetInput[] = []
+      for (const e of active) {
+        const fp = columnsFingerprint(e.sheet.headers)
+        if (e.choice === 'eventos') {
+          saveMapping(fp, 'events', e.eventsMap)
+          saveType(fp, 'eventos')
+          eventSheets.push({ sheet: e.sheet, map: e.eventsMap })
+        } else {
+          saveMapping(fp, 'sales', e.salesMap)
+          saveType(fp, 'vendas')
+          saleSheets.push({ sheet: e.sheet, map: e.salesMap })
+        }
+      }
 
-      const build = buildRecords(
-        org.data.id,
-        eventsData,
-        eventsMap,
-        salesData,
-        salesMap,
-      )
+      const build = buildRecords(org.data.id, eventSheets, saleSheets)
       const res = await runImport({
         orgId: org.data.id,
-        fileName: wb.fileName,
+        fileName: fileNames.join(', '),
         build,
         mode,
         onProgress: setProgress,
       })
-      // Atualiza o consolidador (rollup) e classifica os segmentos.
+
       setProgress({ phase: 'Consolidando dados', current: 0, total: 1 })
       await refreshRollup()
-      setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
-      await reclassifyEvents(org.data.id)
+      // Reclassifica só se vieram eventos.
+      if (res.hadEvents) {
+        setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
+        await reclassifyEvents(org.data.id)
+      }
+
       setResult({
         events: res.eventsUpserted,
         sales: res.salesInserted,
         skipped: build.skippedSales,
         years: build.years,
+        orphanSales: res.orphanSales,
+        backfilled: res.backfilled,
       })
       await queryClient.invalidateQueries()
       setStep('done')
@@ -180,9 +234,8 @@ export function ImportWizard() {
   }
 
   function reset() {
-    setWb(null)
-    setEventsMap(null)
-    setSalesMap(null)
+    setEntries([])
+    setFileNames([])
     setResult(null)
     setError(null)
     setProgress(null)
@@ -196,7 +249,8 @@ export function ImportWizard() {
         <CardHeader>
           <CardTitle className="text-base">Nova base</CardTitle>
           <CardDescription>
-            Envie um arquivo Excel (.xlsx) com as abas de Eventos e Vendas.
+            Envie um ou mais arquivos Excel (.xlsx). Cada planilha pode conter
+            só eventos, só vendas, ou as duas — o tipo é detectado pelas colunas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -206,24 +260,23 @@ export function ImportWizard() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault()
-              const f = e.dataTransfer.files?.[0]
-              if (f) handleFile(f)
+              if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files)
             }}
             className="flex w-full flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 py-12 text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
           >
             <Upload className="size-8" />
             <span className="text-sm">
-              Clique ou arraste o arquivo <strong>.xlsx</strong> aqui
+              Clique ou arraste arquivos <strong>.xlsx</strong> aqui
             </span>
           </button>
           <input
             ref={inputRef}
             type="file"
             accept=".xlsx,.xls"
+            multiple
             className="hidden"
             onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) handleFile(f)
+              if (e.target.files?.length) handleFiles(e.target.files)
             }}
           />
           {error && (
@@ -277,6 +330,21 @@ export function ImportWizard() {
             <Stat label="Ignoradas" value={result.skipped} />
             <Stat label="Anos" value={result.years.join(', ') || '—'} />
           </div>
+          {result.orphanSales > 0 && (
+            <p className="flex items-start gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 p-3 text-sm text-[var(--warning)]">
+              <Info className="mt-0.5 size-4 shrink-0" />
+              {fmtInt(result.orphanSales)} vendas referenciam eventos ainda não
+              importados. Elas foram gravadas e serão vinculadas automaticamente
+              quando você importar os eventos correspondentes.
+            </p>
+          )}
+          {result.backfilled > 0 && (
+            <p className="flex items-start gap-2 rounded-md border border-[var(--success)]/40 bg-[var(--success)]/10 p-3 text-sm text-[var(--success)]">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+              {fmtInt(result.backfilled)} vendas que estavam sem evento foram
+              reconectadas pelos eventos desta importação.
+            </p>
+          )}
           <Button onClick={reset}>Importar outro arquivo</Button>
         </CardContent>
       </Card>
@@ -290,62 +358,80 @@ export function ImportWizard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileSpreadsheet className="size-4" />
-            {wb?.fileName}
+            {entries.length} planilha(s) de {fileNames.length} arquivo(s)
           </CardTitle>
           <CardDescription>
-            Confirme as abas e o mapeamento das colunas.
+            Confirme o tipo detectado de cada planilha e o mapeamento das
+            colunas. Use “Ignorar” para pular uma planilha.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Seleção de abas */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Aba de Eventos</Label>
-              <SheetSelect
-                value={eventsSheet}
-                sheets={wb?.sheets.map((s) => s.name) ?? []}
-                onChange={(v) => wb && applySheetSelection(wb, v, salesSheet)}
-              />
-              <span className="text-xs text-muted-foreground">
-                {fmtInt(eventsData?.rows.length)} linhas
-              </span>
-            </div>
-            <div className="space-y-2">
-              <Label>Aba de Vendas</Label>
-              <SheetSelect
-                value={salesSheet}
-                sheets={wb?.sheets.map((s) => s.name) ?? []}
-                onChange={(v) => wb && applySheetSelection(wb, eventsSheet, v)}
-              />
-              <span className="text-xs text-muted-foreground">
-                {fmtInt(salesData?.rows.length)} linhas
-              </span>
-            </div>
-          </div>
+          {entries.map((e) => (
+            <div key={e.id} className="space-y-3 rounded-lg border border-border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{e.sheet.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {e.fileName} · {fmtInt(e.sheet.rows.length)} linhas
+                  </span>
+                  <DetectedBadge type={e.detected} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Tipo</Label>
+                  <Select
+                    value={e.choice}
+                    onValueChange={(v) => setChoice(e.id, v as Choice)}
+                  >
+                    <SelectTrigger className="h-8 w-32" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eventos">Eventos</SelectItem>
+                      <SelectItem value="vendas">Vendas</SelectItem>
+                      <SelectItem value="ignorar">Ignorar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-          {/* Mapeamento de colunas */}
-          {eventsData && eventsMap && (
-            <FieldMapper
-              title="Colunas — Eventos"
-              headers={eventsData.headers}
-              fields={EVENT_FIELDS}
-              map={eventsMap}
-              onChange={(f, idx) =>
-                setEventsMap({ ...eventsMap, [f]: idx } as ColumnMap<EventField>)
-              }
-            />
-          )}
-          {salesData && salesMap && (
-            <FieldMapper
-              title="Colunas — Vendas"
-              headers={salesData.headers}
-              fields={SALE_FIELDS}
-              map={salesMap}
-              onChange={(f, idx) =>
-                setSalesMap({ ...salesMap, [f]: idx } as ColumnMap<SaleField>)
-              }
-            />
-          )}
+              {e.choice === 'eventos' && (
+                <FieldMapper
+                  title="Colunas — Eventos"
+                  headers={e.sheet.headers}
+                  fields={EVENT_FIELDS}
+                  map={e.eventsMap}
+                  onChange={(f, idx) => setEntryMap(e.id, 'eventos', f, idx)}
+                />
+              )}
+              {e.choice === 'vendas' && (
+                <FieldMapper
+                  title="Colunas — Vendas"
+                  headers={e.sheet.headers}
+                  fields={SALE_FIELDS}
+                  map={e.salesMap}
+                  onChange={(f, idx) => setEntryMap(e.id, 'vendas', f, idx)}
+                />
+              )}
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="w-full rounded-md border border-dashed border-border py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground"
+          >
+            + Adicionar mais arquivos
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) handleFiles(e.target.files)
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -360,7 +446,7 @@ export function ImportWizard() {
               active={mode === 'merge'}
               onClick={() => setMode('merge')}
               title="Mesclar"
-              desc="Substitui os anos do arquivo, mantém os demais"
+              desc="Substitui os anos presentes nos dados, mantém os demais"
             />
             <ModeButton
               active={mode === 'replace'}
@@ -385,7 +471,11 @@ export function ImportWizard() {
           <div className="flex gap-2">
             <Button
               onClick={handleRun}
-              disabled={missingRequired.length > 0 || org.isLoading}
+              disabled={
+                missingRequired.length > 0 ||
+                active.length === 0 ||
+                org.isLoading
+              }
             >
               Importar
             </Button>
@@ -403,28 +493,15 @@ export function ImportWizard() {
 // Subcomponentes
 // ----------------------------------------------------------------------------
 
-function SheetSelect({
-  value,
-  sheets,
-  onChange,
-}: {
-  value: string
-  sheets: string[]
-  onChange: (v: string) => void
-}) {
+function DetectedBadge({ type }: { type: SheetType }) {
+  if (type === 'eventos')
+    return <Badge className="bg-[var(--info)]/15 text-[var(--info)]" variant="secondary">Detectado: Eventos</Badge>
+  if (type === 'vendas')
+    return <Badge className="bg-primary/15 text-primary" variant="secondary">Detectado: Vendas</Badge>
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Selecione a aba" />
-      </SelectTrigger>
-      <SelectContent>
-        {sheets.map((s) => (
-          <SelectItem key={s} value={s}>
-            {s}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Badge className="bg-[var(--warning)]/15 text-[var(--warning)]" variant="secondary">
+      Desconhecido
+    </Badge>
   )
 }
 

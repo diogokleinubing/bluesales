@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { EventRow, SaleRow } from '@/lib/database.types'
+import { backfillEventLinks } from '../lib/rpc'
 import {
   parseCodigo,
   parseEventDate,
@@ -23,72 +24,92 @@ type EventInsert = Omit<EventRow, 'id' | 'created_at' | 'segmento'> & {
 }
 type SaleInsert = Omit<SaleRow, 'id' | 'gmv' | 'receita_bt' | 'receita_liq'>
 
+export interface EventSheetInput {
+  sheet: SheetData
+  map: ColumnMap<EventField>
+}
+export interface SaleSheetInput {
+  sheet: SheetData
+  map: ColumnMap<SaleField>
+}
+
 export interface BuildResult {
   events: EventInsert[]
   sales: SaleInsert[]
   years: number[]
   skippedSales: number
+  hasEvents: boolean
+  hasSales: boolean
 }
 
 function cell(row: unknown[], idx: number): unknown {
   return idx >= 0 ? row[idx] : null
 }
 
-/** Transforma as linhas cruas das abas em registros prontos para o banco. */
+function strOrNull(v: unknown): string | null {
+  if (v == null) return null
+  const s = String(v).trim()
+  return s.length ? s : null
+}
+
+/**
+ * Transforma as planilhas (uma ou várias, de eventos e/ou vendas) em registros.
+ * Eventos e vendas podem vir separados; qualquer combinação é válida.
+ */
 export function buildRecords(
   orgId: string,
-  eventsSheet: SheetData,
-  eventsMap: ColumnMap<EventField>,
-  salesSheet: SheetData,
-  salesMap: ColumnMap<SaleField>,
+  eventSheets: EventSheetInput[],
+  saleSheets: SaleSheetInput[],
 ): BuildResult {
-  // Eventos — dedup por codigo_evento (último vence).
+  // Eventos — dedup por codigo_evento (último vence), de todas as planilhas.
   const eventsByCodigo = new Map<string, EventInsert>()
-  for (const row of eventsSheet.rows) {
-    const codigo = parseCodigo(cell(row, eventsMap.codigo_evento))
-    if (!codigo) continue
-    eventsByCodigo.set(codigo, {
-      org_id: orgId,
-      codigo_evento: codigo,
-      organizador: strOrNull(cell(row, eventsMap.organizador)),
-      nome: strOrNull(cell(row, eventsMap.nome)),
-      local: strOrNull(cell(row, eventsMap.local)),
-      data_evento: parseEventDate(cell(row, eventsMap.data_evento)),
-      cidade: strOrNull(cell(row, eventsMap.cidade)),
-      uf: strOrNull(cell(row, eventsMap.uf)),
-      segmento: null,
-    })
+  for (const { sheet, map } of eventSheets) {
+    for (const row of sheet.rows) {
+      const codigo = parseCodigo(cell(row, map.codigo_evento))
+      if (!codigo) continue
+      eventsByCodigo.set(codigo, {
+        org_id: orgId,
+        codigo_evento: codigo,
+        organizador: strOrNull(cell(row, map.organizador)),
+        nome: strOrNull(cell(row, map.nome)),
+        local: strOrNull(cell(row, map.local)),
+        data_evento: parseEventDate(cell(row, map.data_evento)),
+        cidade: strOrNull(cell(row, map.cidade)),
+        uf: strOrNull(cell(row, map.uf)),
+        segmento: null,
+      })
+    }
   }
 
-  // Vendas
+  // Vendas — de todas as planilhas de vendas.
   const sales: SaleInsert[] = []
   const years = new Set<number>()
   let skippedSales = 0
-  for (const row of salesSheet.rows) {
-    const codigo = parseCodigo(cell(row, salesMap.codigo_evento))
-    if (!codigo) {
-      skippedSales++
-      continue
+  for (const { sheet, map } of saleSheets) {
+    for (const row of sheet.rows) {
+      const codigo = parseCodigo(cell(row, map.codigo_evento))
+      if (!codigo) {
+        skippedSales++
+        continue
+      }
+      const dataVenda = parseSaleDate(cell(row, map.data_venda))
+      if (dataVenda) years.add(new Date(dataVenda).getFullYear())
+      sales.push({
+        org_id: orgId,
+        event_id: null,
+        codigo_evento: codigo,
+        data_venda: dataVenda,
+        tipo_pdv: parsePdv(cell(row, map.tipo_pdv)),
+        valor_ingressos: parseNumber(cell(row, map.valor_ingressos)),
+        valor_conveniencia: parseNumber(cell(row, map.valor_conveniencia)),
+        comissao_site: parseNumber(cell(row, map.comissao_site)),
+        valor_juros: parseNumber(cell(row, map.valor_juros)),
+        rebate: parseNumber(cell(row, map.rebate)),
+        mdr: parseNumber(cell(row, map.mdr)),
+        receita_intermediacao: parseNumber(cell(row, map.receita_intermediacao)),
+        import_batch_id: null,
+      })
     }
-    const dataVenda = parseSaleDate(cell(row, salesMap.data_venda))
-    if (dataVenda) years.add(new Date(dataVenda).getFullYear())
-    sales.push({
-      org_id: orgId,
-      event_id: null,
-      codigo_evento: codigo,
-      data_venda: dataVenda,
-      tipo_pdv: parsePdv(cell(row, salesMap.tipo_pdv)),
-      valor_ingressos: parseNumber(cell(row, salesMap.valor_ingressos)),
-      valor_conveniencia: parseNumber(cell(row, salesMap.valor_conveniencia)),
-      comissao_site: parseNumber(cell(row, salesMap.comissao_site)),
-      valor_juros: parseNumber(cell(row, salesMap.valor_juros)),
-      rebate: parseNumber(cell(row, salesMap.rebate)),
-      mdr: parseNumber(cell(row, salesMap.mdr)),
-      receita_intermediacao: parseNumber(
-        cell(row, salesMap.receita_intermediacao),
-      ),
-      import_batch_id: null,
-    })
   }
 
   return {
@@ -96,13 +117,9 @@ export function buildRecords(
     sales,
     years: [...years].sort(),
     skippedSales,
+    hasEvents: eventSheets.length > 0,
+    hasSales: saleSheets.length > 0,
   }
-}
-
-function strOrNull(v: unknown): string | null {
-  if (v == null) return null
-  const s = String(v).trim()
-  return s.length ? s : null
 }
 
 export interface RunImportArgs {
@@ -117,9 +134,14 @@ export interface RunImportResult {
   batchId: string
   eventsUpserted: number
   salesInserted: number
+  /** Vendas desta importação sem evento correspondente na base (event_id null). */
+  orphanSales: number
+  /** Vendas órfãs ANTERIORES reconectadas pelos eventos desta importação. */
+  backfilled: number
+  hadEvents: boolean
 }
 
-/** Aplica a importação no Supabase (events -> sales -> import_batch). */
+/** Aplica a importação no Supabase com vínculo resiliente evento<->venda. */
 export async function runImport({
   orgId,
   fileName,
@@ -134,8 +156,8 @@ export async function runImport({
   if (mode === 'replace') {
     await supabase.from('sales').delete().eq('org_id', orgId)
     await supabase.from('events').delete().eq('org_id', orgId)
-  } else {
-    // merge: remove apenas as vendas dos anos presentes no arquivo
+  } else if (build.hasSales) {
+    // merge: remove apenas as vendas dos anos presentes nos dados importados
     for (const y of years) {
       await supabase
         .from('sales')
@@ -161,10 +183,16 @@ export async function runImport({
     })
   }
 
-  // 3) Mapa codigo_evento -> event_id (para vincular as vendas)
-  const codeToId = await fetchEventIdMap(orgId)
+  // 3) Backfill: reconecta vendas órfãs anteriores aos eventos agora disponíveis.
+  let backfilled = 0
+  if (build.hasEvents) {
+    backfilled = await backfillEventLinks(orgId)
+  }
 
-  // 4) Cria o registro do lote
+  // 4) Mapa codigo_evento -> event_id (para vincular as vendas desta importação)
+  const codeToId = build.hasSales ? await fetchEventIdMap(orgId) : new Map()
+
+  // 5) Cria o registro do lote
   const { data: batch, error: batchErr } = await supabase
     .from('import_batches')
     .insert({
@@ -179,13 +207,14 @@ export async function runImport({
     throw new Error(`Erro ao registrar lote: ${batchErr?.message}`)
   const batchId = batch.id as string
 
-  // 5) Insert de vendas (em chunks), com event_id e batch
+  // 6) Insert de vendas (em chunks). Sem evento -> event_id null (órfã).
+  let orphanSales = 0
   for (let i = 0; i < sales.length; i += CHUNK) {
-    const slice = sales.slice(i, i + CHUNK).map((s) => ({
-      ...s,
-      event_id: codeToId.get(s.codigo_evento) ?? null,
-      import_batch_id: batchId,
-    }))
+    const slice = sales.slice(i, i + CHUNK).map((s) => {
+      const eventId = codeToId.get(s.codigo_evento) ?? null
+      if (!eventId) orphanSales++
+      return { ...s, event_id: eventId, import_batch_id: batchId }
+    })
     const { error } = await supabase.from('sales').insert(slice)
     if (error) throw new Error(`Erro ao gravar vendas: ${error.message}`)
     onProgress?.({
@@ -199,6 +228,9 @@ export async function runImport({
     batchId,
     eventsUpserted: events.length,
     salesInserted: sales.length,
+    orphanSales,
+    backfilled,
+    hadEvents: build.hasEvents,
   }
 }
 

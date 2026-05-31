@@ -354,3 +354,8 @@ export async function biBaseTotals(orgId: string): Promise<BaseTotals> {
 export async function refreshRollup(): Promise<void> {
   await rpc<null>('refresh_sales_rollup', {})
 }
+
+/** Reconecta vendas órfãs (event_id null) aos eventos. Retorna qtd vinculada. */
+export async function backfillEventLinks(orgId: string): Promise<number> {
+  return rpc<number>('backfill_event_links', { p_org: orgId })
+}
