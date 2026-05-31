@@ -6,6 +6,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -135,6 +136,41 @@ export function CompositionDonut({ data }: { data: Slice[] }) {
         />
         <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
       </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** Múltiplas linhas por mês (ex.: evolução por segmento). */
+export function MultiLineChart({
+  data,
+  series,
+}: {
+  data: Array<Record<string, number>>
+  series: string[]
+}) {
+  const chartData = data.map((d) => ({ ...d, mes: MONTH_LABELS[d.month] }))
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <XAxis dataKey="mes" {...axisProps} />
+        <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(value, name) => [fmtBRL(Number(value)), name]}
+        />
+        <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
+        {series.map((s, i) => (
+          <Line
+            key={s}
+            type="monotone"
+            dataKey={s}
+            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            strokeWidth={2}
+            dot={false}
+          />
+        ))}
+      </LineChart>
     </ResponsiveContainer>
   )
 }

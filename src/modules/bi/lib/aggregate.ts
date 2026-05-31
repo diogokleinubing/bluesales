@@ -197,6 +197,35 @@ export function aggregateEvents(
   return [...map.values()].sort((a, b) => b.value - a.value)
 }
 
+/** Série mensal com uma coluna por grupo (para gráfico multi-linha). */
+export function monthlyByGroup(
+  sales: SaleEnriched[],
+  dateBase: DateBase,
+  metric: Metric,
+  keyFn: (s: SaleEnriched) => string | null,
+  fallbackLabel: string,
+  topGroups: string[],
+): Array<Record<string, number>> {
+  const allowed = new Set(topGroups)
+  const rows: Array<Record<string, number>> = Array.from(
+    { length: 12 },
+    (_, month) => {
+      const base: Record<string, number> = { month }
+      for (const g of topGroups) base[g] = 0
+      return base
+    },
+  )
+  for (const s of sales) {
+    const m = saleMonth(s, dateBase)
+    if (m == null) continue
+    const raw = keyFn(s)
+    const key = raw && raw.trim() ? raw.trim() : fallbackLabel
+    if (!allowed.has(key)) continue
+    rows[m][key] = (rows[m][key] ?? 0) + metricValue(s, metric)
+  }
+  return rows
+}
+
 /** Lista de anos disponíveis na base, conforme a base de data. */
 export function availableYears(
   sales: SaleEnriched[],

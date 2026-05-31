@@ -28,6 +28,7 @@ import {
   readWorkbook,
 } from './parse'
 import { buildRecords, runImport } from './import'
+import { reclassifyEvents } from '../lib/rules-api'
 import { loadMapping, saveMapping } from './mapping-cache'
 import {
   EVENT_FIELDS,
@@ -152,6 +153,9 @@ export function ImportWizard() {
         mode,
         onProgress: setProgress,
       })
+      // Classifica os segmentos com as regras atuais.
+      setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
+      await reclassifyEvents(org.data.id)
       setResult({
         events: res.eventsUpserted,
         sales: res.salesInserted,
