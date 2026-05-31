@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,7 +29,8 @@ import {
 import { MONTH_LABELS } from '../components/chart-theme'
 import { useControls } from '@/modules/shared/controls-context'
 import { useBiYears, useOrgId } from '../hooks/useBi'
-import { biYtdMonthly, biYtdGroup } from '../lib/rpc'
+import { biYtdMonthly, biYtdGroup, biMonthsElapsed } from '../lib/rpc'
+import { cn } from '@/lib/utils'
 import {
   buildYtdResult,
   YTD_VIEW_LABELS,
@@ -55,6 +57,25 @@ export function YtdPage() {
   const [dateBase, setDateBase] = useState<DateBase>(gDateBase)
   const [view, setView] = useState<YtdView>('organizador')
   const [metric, setMetric] = useState<Metric>(gMetric)
+
+  // Default: abre no último ano com vendas e no último mês com vendas.
+  const latestYear = years[0]
+  const initMonthsQuery = useQuery({
+    enabled: !!orgId && years.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'ytd-init-months', orgId, latestYear, gDateBase, pdv],
+    queryFn: () => biMonthsElapsed(orgId!, latestYear, gDateBase, pdv),
+  })
+  const [didInit, setDidInit] = useState(false)
+  useEffect(() => {
+    if (didInit) return
+    if (!yearsQuery.data || yearsQuery.data.length === 0) return
+    if (initMonthsQuery.data == null) return
+    setTargetYear(latestYear)
+    setMonthStart(0)
+    setMonthEnd(Math.min(11, Math.max(0, initMonthsQuery.data - 1)))
+    setDidInit(true)
+  }, [didInit, yearsQuery.data, initMonthsQuery.data, latestYear])
 
   const ytdQuery = useQuery({
     enabled: !!orgId,
@@ -92,6 +113,73 @@ export function YtdPage() {
   function drill(label: string) {
     if (label && label !== '—')
       navigate(`/eventos?${YTD_VIEW_PARAM[view]}=${encodeURIComponent(label)}`)
+  }
+
+  // Ordenação da tabela por clique no cabeçalho.
+  type SortKey = 'label' | 'target' | 'base' | 'deltaAbs' | 'deltaPct'
+  const [sortKey, setSortKey] = useState<SortKey>('target')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(k: SortKey) {
+    if (k === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(k)
+      setSortDir(k === 'label' ? 'asc' : 'desc')
+    }
+  }
+
+  const sortedRows = useMemo(() => {
+    const rows = [...result.byView]
+    rows.sort((a, b) => {
+      let cmp: number
+      if (sortKey === 'label') {
+        cmp = a.label.localeCompare(b.label, 'pt-BR')
+      } else {
+        const av = a[sortKey] ?? 0
+        const bv = b[sortKey] ?? 0
+        cmp = av - bv
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return rows
+  }, [result.byView, sortKey, sortDir])
+
+  function SortHead({
+    k,
+    align = 'left',
+    children,
+  }: {
+    k: SortKey
+    align?: 'left' | 'right'
+    children: React.ReactNode
+  }) {
+    const active = sortKey === k
+    return (
+      <TableHead
+        className={cn(
+          'cursor-pointer select-none whitespace-nowrap',
+          align === 'right' && 'text-right',
+        )}
+        onClick={() => toggleSort(k)}
+      >
+        <span
+          className={cn(
+            'inline-flex items-center gap-1',
+            align === 'right' && 'flex-row-reverse',
+            active ? 'text-foreground' : '',
+          )}
+        >
+          {children}
+          {active &&
+            (sortDir === 'asc' ? (
+              <ArrowUp className="size-3" />
+            ) : (
+              <ArrowDown className="size-3" />
+            ))}
+        </span>
+      </TableHead>
+    )
   }
 
   return (
@@ -214,15 +302,23 @@ export function YtdPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{YTD_VIEW_LABELS[view]}</TableHead>
-                  <TableHead className="text-right">{targetYear}</TableHead>
-                  <TableHead className="text-right">{baseYear}</TableHead>
-                  <TableHead className="text-right">Δ R$</TableHead>
-                  <TableHead className="text-right">Δ %</TableHead>
+                  <SortHead k="label">{YTD_VIEW_LABELS[view]}</SortHead>
+                  <SortHead k="target" align="right">
+                    {targetYear}
+                  </SortHead>
+                  <SortHead k="base" align="right">
+                    {baseYear}
+                  </SortHead>
+                  <SortHead k="deltaAbs" align="right">
+                    Δ R$
+                  </SortHead>
+                  <SortHead k="deltaPct" align="right">
+                    Δ %
+                  </SortHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.byView.map((g) => (
+                {sortedRows.map((g) => (
                   <TableRow key={g.key}>
                     <TableCell>
                       <button
