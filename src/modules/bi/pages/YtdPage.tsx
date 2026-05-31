@@ -38,7 +38,7 @@ import {
   type YtdView,
 } from '../lib/ytd'
 import { METRIC_LABELS, type Metric, type DateBase } from '../lib/controls'
-import { fmtBRL, fmtDelta, fmtInt } from '@/lib/format'
+import { fmtBRL, fmtDelta } from '@/lib/format'
 
 export function YtdPage() {
   const { year, metric: gMetric, dateBase: gDateBase, pdv } = useControls()
@@ -129,8 +129,18 @@ export function YtdPage() {
     }
   }
 
+  // Na visão "Evento recorrente", mostra só os que têm família (agrupados);
+  // o grupo "—" reúne os eventos sem agrupamento e é ocultado.
+  const viewRows = useMemo(
+    () =>
+      view === 'familia'
+        ? result.byView.filter((g) => g.key && g.key !== '—')
+        : result.byView,
+    [result.byView, view],
+  )
+
   const sortedRows = useMemo(() => {
-    const rows = [...result.byView]
+    const rows = [...viewRows]
     rows.sort((a, b) => {
       let cmp: number
       if (sortKey === 'label') {
@@ -143,7 +153,7 @@ export function YtdPage() {
       return sortDir === 'asc' ? cmp : -cmp
     })
     return rows
-  }, [result.byView, sortKey, sortDir])
+  }, [viewRows, sortKey, sortDir])
 
   function SortHead({
     k,
@@ -351,7 +361,9 @@ export function YtdPage() {
                 {result.byView.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                      Sem dados no período. {fmtInt(0)}
+                      {view === 'familia'
+                        ? 'Nenhum evento agrupado no período. Agrupe em Regras → Eventos recorrentes.'
+                        : 'Sem dados no período.'}
                     </TableCell>
                   </TableRow>
                 )}
