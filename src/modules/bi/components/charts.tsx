@@ -180,6 +180,125 @@ interface RankDatum {
   value: number
 }
 
+interface WaterfallDatum {
+  name: string
+  offset: number
+  height: number
+  positive: boolean
+  value: number
+}
+
+/** Gráfico waterfall (offset transparente + barra colorida empilhada). */
+export function WaterfallChart({ data }: { data: WaterfallDatum[] }) {
+  const absoluteNames = new Set([data[0]?.name, data[data.length - 1]?.name])
+  function colorFor(d: WaterfallDatum): string {
+    if (absoluteNames.has(d.name)) return CHART_COLORS[0]
+    return d.positive ? CHART_COLORS[1] : CHART_COLORS[4]
+  }
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <XAxis dataKey="name" {...axisProps} />
+        <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          formatter={(_value, _name, item) => {
+            const p = (item?.payload ?? {}) as WaterfallDatum
+            return [fmtBRL(p.value), p.name]
+          }}
+        />
+        <Bar dataKey="offset" stackId="w" fill="transparent" />
+        <Bar dataKey="height" stackId="w" radius={[4, 4, 0, 0]}>
+          {data.map((d, i) => (
+            <Cell key={i} fill={colorFor(d)} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** Barras de crescimento % por mês (verde positivo, vermelho negativo). */
+export function GrowthBars({
+  data,
+}: {
+  data: Array<{ month: number; growth: number | null }>
+}) {
+  const chartData = data.map((d) => ({
+    mes: MONTH_LABELS[d.month],
+    growth: d.growth == null ? 0 : d.growth * 100,
+  }))
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <XAxis dataKey="mes" {...axisProps} />
+        <YAxis {...axisProps} tickFormatter={(v) => `${v}%`} width={50} />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Crescimento']}
+        />
+        <Bar dataKey="growth" radius={[4, 4, 0, 0]}>
+          {chartData.map((d, i) => (
+            <Cell
+              key={i}
+              fill={d.growth >= 0 ? CHART_COLORS[1] : CHART_COLORS[4]}
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** Comparativo agrupado (ano-alvo vs ano-base) por categoria. */
+export function ComparisonBars({
+  data,
+  targetLabel,
+  baseLabel,
+  onClickBar,
+}: {
+  data: Array<{ label: string; target: number; base: number }>
+  targetLabel: string
+  baseLabel: string
+  onClickBar?: (label: string) => void
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(280, data.length * 34)}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+        onClick={(state) => {
+          const label = (state as { activeLabel?: string })?.activeLabel
+          if (onClickBar && label) onClickBar(label)
+        }}
+      >
+        <CartesianGrid stroke={GRID_COLOR} horizontal={false} />
+        <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtShort(v)} />
+        <YAxis
+          type="category"
+          dataKey="label"
+          {...axisProps}
+          width={150}
+          tickFormatter={(v: string) => (v.length > 22 ? `${v.slice(0, 21)}…` : v)}
+        />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          formatter={(value, name) => [fmtBRL(Number(value)), name as string]}
+        />
+        <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
+        <Bar dataKey="base" name={baseLabel} fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} />
+        <Bar dataKey="target" name={targetLabel} fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 /** Barras horizontais para rankings (top eventos, organizadores, etc.). */
 export function HorizontalRankBar({
   data,

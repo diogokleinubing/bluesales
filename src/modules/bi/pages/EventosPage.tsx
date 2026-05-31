@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X } from 'lucide-react'
+import { Search, X, Download } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +24,7 @@ import {
 import { useEventos, type EventFilters } from '../hooks/useEventos'
 import { useControls } from '@/modules/shared/controls-context'
 import { METRIC_LABELS } from '../lib/controls'
+import { exportToXlsx } from '../lib/export'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 const ALL = '__all__'
@@ -83,11 +84,39 @@ export function EventosPage() {
             {METRIC_LABELS[metric]}
           </p>
         </div>
-        {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearAll}>
-            <X className="size-4" /> Limpar filtros
+        <div className="flex gap-2">
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearAll}>
+              <X className="size-4" /> Limpar filtros
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={events.length === 0}
+            onClick={() =>
+              exportToXlsx('blueticket-eventos', [
+                {
+                  name: 'Eventos',
+                  rows: events.map((e) => ({
+                    Código: e.codigo_evento,
+                    Evento: e.nome ?? '',
+                    Segmento: e.segmento ?? 'Sem segmento',
+                    Organizador: e.organizador ?? '',
+                    Local: e.local ?? '',
+                    Cidade: e.cidade ?? '',
+                    UF: e.uf ?? '',
+                    Vendas: e.vendas,
+                    GMV: e.gmv,
+                    'Receita BT': e.receitaBt,
+                  })),
+                },
+              ])
+            }
+          >
+            <Download className="size-4" /> Exportar
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Filtros */}
