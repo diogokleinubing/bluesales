@@ -17,6 +17,13 @@ export interface FamiliableEvent {
   nome: string | null
 }
 
+/** Tamanho máximo da família (cabe no índice B-tree e é suficiente p/ agrupar). */
+export const FAMILIA_MAX = 200
+
+function cap(s: string): string {
+  return s.length > FAMILIA_MAX ? s.slice(0, FAMILIA_MAX).trim() : s
+}
+
 /** Sugere a família a partir do nome: remove ano e marcadores de edição. */
 export function familiaFromName(nome: string | null): string | null {
   if (!nome) return null
@@ -30,7 +37,7 @@ export function familiaFromName(nome: string | null): string | null {
   s = s.replace(/[\s\-–—_|]+/g, ' ').trim()
   // remove pontuação solta nas pontas
   s = s.replace(/^[\s.,;:/-]+|[\s.,;:/-]+$/g, '').trim()
-  return s.length ? s : null
+  return s.length ? cap(s) : null
 }
 
 /** Família final de um evento: override manual tem prioridade sobre a sugestão. */
@@ -39,6 +46,6 @@ export function classifyFamilia(
   rules: FamilyRules,
 ): string | null {
   const override = rules.overrides.get(event.codigo_evento)
-  if (override && override.trim()) return override.trim()
+  if (override && override.trim()) return cap(override.trim())
   return familiaFromName(event.nome)
 }
