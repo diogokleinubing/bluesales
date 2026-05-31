@@ -129,12 +129,16 @@ export function YtdPage() {
     }
   }
 
-  // Na visão "Evento recorrente", mostra só os que têm família (agrupados);
-  // o grupo "—" reúne os eventos sem agrupamento e é ocultado.
+  // Na visão "Evento recorrente", mostra só famílias realmente recorrentes:
+  // com edição no ano-alvo E no ano-base (apareceu em 2+ anos). Isso descarta
+  // o grupo "—" (sem agrupamento) e eventos de edição única que ganharam uma
+  // família automática pela sugestão.
   const viewRows = useMemo(
     () =>
       view === 'familia'
-        ? result.byView.filter((g) => g.key && g.key !== '—')
+        ? result.byView.filter(
+            (g) => g.key && g.key !== '—' && g.target > 0 && g.base > 0,
+          )
         : result.byView,
     [result.byView, view],
   )
