@@ -17,6 +17,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Arquivos de teste/importação locais
+*.xlsx
+*.xls
+
 # Claude Code local settings
 .claude/settings.local.json
 
