@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react'
 import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -11,6 +12,8 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/lib/auth'
 import { useControls } from './controls-context'
+import { useDataset } from '@/modules/bi/lib/dataset'
+import { availableYears } from '@/modules/bi/lib/aggregate'
 import {
   ALL_PDV,
   CURRENT_YEAR,
@@ -22,12 +25,23 @@ import {
   type Pdv,
 } from '@/modules/bi/lib/controls'
 
-// Faixa de anos provisória (substituída pelos anos reais da base na Fase 3).
-const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - 4 + i)
-
 export function Header() {
   const { user, signOut } = useAuth()
   const { year, metric, dateBase, pdv, setControls } = useControls()
+  const { sales } = useDataset()
+
+  // Anos reais da base (conforme a base de data). Fallback: ano atual.
+  const years = useMemo(() => {
+    const ys = availableYears(sales, dateBase)
+    return ys.length ? ys : [CURRENT_YEAR]
+  }, [sales, dateBase])
+
+  // Corrige o ano selecionado se ele não existir mais na base.
+  useEffect(() => {
+    if (years.length && !years.includes(year)) {
+      setControls({ year: years[0] })
+    }
+  }, [years, year, setControls])
 
   function togglePdv(value: Pdv, checked: boolean) {
     const next = checked
@@ -48,7 +62,7 @@ export function Header() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {YEARS.map((y) => (
+            {years.map((y) => (
               <SelectItem key={y} value={String(y)}>
                 {y}
               </SelectItem>
