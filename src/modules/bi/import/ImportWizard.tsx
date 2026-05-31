@@ -109,7 +109,6 @@ export function ImportWizard() {
     years: number[]
     orphanSales: number
     backfilled: number
-    eventDatesFilled: number
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -217,7 +216,6 @@ export function ImportWizard() {
         years: build.years,
         orphanSales: res.orphanSales,
         backfilled: res.backfilled,
-        eventDatesFilled: res.eventDatesFilled,
       })
       await queryClient.invalidateQueries()
       setStep('done')
@@ -345,13 +343,6 @@ export function ImportWizard() {
               <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
               {fmtInt(result.backfilled)} vendas que estavam sem evento foram
               reconectadas pelos eventos desta importação.
-            </p>
-          )}
-          {result.eventDatesFilled > 0 && (
-            <p className="flex items-start gap-2 rounded-md border border-[var(--info)]/40 bg-[var(--info)]/10 p-3 text-sm text-[var(--info)]">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              {fmtInt(result.eventDatesFilled)} eventos tiveram a data preenchida
-              a partir das vendas (habilita relatórios por “Mês do Evento”).
             </p>
           )}
           <Button onClick={reset}>Importar outro arquivo</Button>

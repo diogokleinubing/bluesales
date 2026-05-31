@@ -381,17 +381,3 @@ export async function clearRollup(orgId: string): Promise<void> {
 export async function backfillEventLinks(orgId: string): Promise<number> {
   return rpc<number>('backfill_event_links', { p_org: orgId })
 }
-
-/** Preenche events.data_evento a partir das datas vindas nas vendas. */
-export async function upsertEventDates(
-  orgId: string,
-  codigos: string[],
-  dates: string[],
-): Promise<number> {
-  if (codigos.length === 0) return 0
-  return rpc<number>('upsert_event_dates', {
-    p_org: orgId,
-    p_codigos: codigos,
-    p_dates: dates,
-  })
-}

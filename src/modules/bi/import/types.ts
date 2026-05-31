@@ -12,7 +12,6 @@ export type EventField =
 export type SaleField =
   | 'codigo_evento'
   | 'data_venda'
-  | 'data_evento'
   | 'tipo_pdv'
   | 'valor_ingressos'
   | 'valor_conveniencia'
@@ -42,8 +41,7 @@ export const EVENT_FIELDS: FieldDef<EventField>[] = [
 
 export const SALE_FIELDS: FieldDef<SaleField>[] = [
   { field: 'codigo_evento', label: 'Código do evento', required: true, aliases: ['codigo_evento', 'codigoevento', 'codigo', 'cod_evento', 'id_evento'] },
-  { field: 'data_venda', label: 'Data da venda', required: false, aliases: ['data_venda', 'datavenda', 'data_hora', 'datahora', 'data_compra', 'data'] },
-  { field: 'data_evento', label: 'Data do evento', required: false, aliases: ['data_evento', 'dataevento', 'data_do_evento', 'data_show', 'data_espetaculo', 'data_sessao'] },
+  { field: 'data_venda', label: 'Data da venda', required: false, aliases: ['data_venda', 'datavenda', 'data_hora', 'datahora', 'data_compra', 'competencia', 'data'] },
   { field: 'tipo_pdv', label: 'Tipo PDV', required: false, aliases: ['tipo_pdv', 'tipopdv', 'pdv', 'canal', 'tipo'] },
   { field: 'valor_ingressos', label: 'Valor ingressos', required: false, aliases: ['valor_ingressos', 'valoringressos', 'ingressos', 'valor_ingresso', 'face'] },
   { field: 'valor_conveniencia', label: 'Valor conveniência', required: false, aliases: ['valor_conveniencia', 'conveniencia', 'taxa', 'taxa_conveniencia'] },

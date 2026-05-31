@@ -5,7 +5,6 @@ import {
   clearRollup,
   pruneRollupYear,
   refreshRollupCodigos,
-  upsertEventDates,
 } from '../lib/rpc'
 import {
   parseCodigo,
@@ -46,10 +45,6 @@ export interface BuildResult {
   skippedSales: number
   hasEvents: boolean
   hasSales: boolean
-  /** Datas de evento vindas das vendas (código -> data), preenchem events.data_evento. */
-  eventDates: { codigos: string[]; dates: string[] }
-  /** Quantidade de eventos criados/atualizados só pela data vinda das vendas. */
-  derivedEvents: number
 }
 
 function cell(row: unknown[], idx: number): unknown {
@@ -91,10 +86,8 @@ export function buildRecords(
     }
   }
 
-  // Vendas — de todas as planilhas de vendas.
-  // Se a planilha de vendas trouxer a data do evento, coletamos por código
-  // para criar/atualizar o registro do evento (relatórios por mês do evento).
-  const saleEventDates = new Map<string, string>()
+  // Vendas — de todas as planilhas de vendas. A data do evento NÃO vem aqui;
+  // ela é importada na base de Eventos.
   const sales: SaleInsert[] = []
   const years = new Set<number>()
   let skippedSales = 0
@@ -107,9 +100,6 @@ export function buildRecords(
       }
       const dataVenda = parseSaleDate(cell(row, map.data_venda))
       if (dataVenda) years.add(new Date(dataVenda).getFullYear())
-      const dataEvento = parseEventDate(cell(row, map.data_evento))
-      if (dataEvento && !saleEventDates.has(codigo))
-        saleEventDates.set(codigo, dataEvento)
       sales.push({
         org_id: orgId,
         event_id: null,
@@ -128,28 +118,14 @@ export function buildRecords(
     }
   }
 
-  // Datas de evento vindas das vendas, exceto as já cobertas por uma planilha
-  // de eventos explícita (essa tem prioridade). Vão por RPC que só preenche a
-  // data, sem apagar nome/local de um evento existente.
-  const codigos: string[] = []
-  const dates: string[] = []
-  for (const [codigo, dataEvento] of saleEventDates) {
-    if (eventsByCodigo.has(codigo)) continue
-    codigos.push(codigo)
-    dates.push(dataEvento)
-  }
-
   const events = [...eventsByCodigo.values()]
   return {
     events,
     sales,
     years: [...years].sort(),
     skippedSales,
-    // Há eventos a gravar se vieram planilhas de eventos OU datas vindas das vendas.
-    hasEvents: events.length > 0 || codigos.length > 0,
+    hasEvents: events.length > 0,
     hasSales: saleSheets.length > 0,
-    eventDates: { codigos, dates },
-    derivedEvents: codigos.length,
   }
 }
 
@@ -169,8 +145,6 @@ export interface RunImportResult {
   orphanSales: number
   /** Vendas órfãs ANTERIORES reconectadas pelos eventos desta importação. */
   backfilled: number
-  /** Eventos que tiveram a data preenchida a partir das vendas. */
-  eventDatesFilled: number
   hadEvents: boolean
 }
 
@@ -214,17 +188,6 @@ export async function runImport({
       current: Math.min(i + CHUNK, events.length),
       total: events.length,
     })
-  }
-
-  // 2b) Datas de evento vindas das vendas (preenche events.data_evento sem
-  //     apagar nome/local de eventos já existentes; cria mínimos se faltarem).
-  let eventDatesFilled = 0
-  if (build.eventDates.codigos.length > 0) {
-    eventDatesFilled = await upsertEventDates(
-      orgId,
-      build.eventDates.codigos,
-      build.eventDates.dates,
-    )
   }
 
   // 3) Backfill: reconecta vendas órfãs anteriores aos eventos agora disponíveis.
@@ -273,7 +236,6 @@ export async function runImport({
   const touched = new Set<string>()
   for (const e of events) touched.add(e.codigo_evento)
   for (const s of sales) touched.add(s.codigo_evento)
-  for (const c of build.eventDates.codigos) touched.add(c)
 
   if (mode === 'replace') {
     await clearRollup(orgId)
@@ -300,7 +262,6 @@ export async function runImport({
     salesInserted: sales.length,
     orphanSales,
     backfilled,
-    eventDatesFilled,
     hadEvents: build.hasEvents,
   }
 }
