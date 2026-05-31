@@ -35,6 +35,22 @@ export async function deleteFamilyOverride(id: string) {
   if (error) throw new Error(error.message)
 }
 
+/** Zera todos os agrupamentos: apaga overrides e limpa events.familia. */
+export async function clearAllFamilias(orgId: string): Promise<void> {
+  const del = await supabase
+    .from('event_family_override')
+    .delete()
+    .eq('org_id', orgId)
+  if (del.error) throw new Error(del.error.message)
+
+  const upd = await supabase
+    .from('events')
+    .update({ familia: null })
+    .eq('org_id', orgId)
+    .not('familia', 'is', null)
+  if (upd.error) throw new Error(upd.error.message)
+}
+
 /**
  * Recalcula a família de todos os eventos (sugestão pelo nome + overrides) e
  * grava em events.familia via RPC set-based. Retorna a quantidade atualizada.

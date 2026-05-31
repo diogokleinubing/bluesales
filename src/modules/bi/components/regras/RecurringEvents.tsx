@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Layers } from 'lucide-react'
+import { RefreshCw, Layers, Eraser } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,11 @@ import {
 import { supabase } from '@/lib/supabase'
 import { useOrgId } from '../../hooks/useBi'
 import { biBiggestEvents } from '../../lib/rpc'
-import { reclassifyFamilias, setFamilyOverride } from '../../lib/family-api'
+import {
+  clearAllFamilias,
+  reclassifyFamilias,
+  setFamilyOverride,
+} from '../../lib/family-api'
 import { suggestFamily } from '../../lib/family'
 import { norm } from '../../lib/classify'
 import { fmtBRL, fmtInt } from '@/lib/format'
@@ -179,6 +183,31 @@ export function RecurringEvents() {
     }
   }
 
+  async function limparTudo() {
+    if (!orgId) return
+    if (
+      !window.confirm(
+        'Limpar TODOS os agrupamentos? Isso apaga os ajustes manuais e zera as famílias. Não pode ser desfeito.',
+      )
+    )
+      return
+    setSaving(true)
+    try {
+      await clearAllFamilias(orgId)
+      setSelected(new Set())
+      setFamiliaInput('')
+      setUserEdited(false)
+      await qc.invalidateQueries({ queryKey: ['bi'] })
+      toast.success('Agrupamentos limpos', {
+        description: 'Todas as famílias foram removidas.',
+      })
+    } catch (e) {
+      toast.error('Erro ao limpar', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -218,6 +247,14 @@ export function RecurringEvents() {
           <Button variant="secondary" onClick={reagruparAuto} disabled={saving}>
             <RefreshCw className={`size-4 ${saving ? 'animate-spin' : ''}`} />
             Reagrupar (sugestão)
+          </Button>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={limparTudo}
+            disabled={saving}
+          >
+            <Eraser className="size-4" /> Limpar agrupamentos
           </Button>
         </div>
       </div>
