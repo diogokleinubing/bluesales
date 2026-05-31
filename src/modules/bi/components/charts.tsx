@@ -14,19 +14,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import {
-  AXIS_COLOR,
-  CHART_COLORS,
-  GRID_COLOR,
-  MONTH_LABELS,
-  tooltipStyle,
-} from './chart-theme'
+import { MONTH_LABELS } from './chart-theme'
+import { useChartColors, type ChartColors } from './useChartColors'
 import { fmtBRL, fmtShort } from '@/lib/format'
 
-const axisProps = {
-  stroke: AXIS_COLOR,
-  tick: { fill: AXIS_COLOR, fontSize: 12 },
-  tickLine: false,
+/** Props de eixo derivadas das cores do tema atual. */
+function useAxis(c: ChartColors) {
+  return {
+    stroke: c.axis,
+    tick: { fill: c.axis, fontSize: 12 },
+    tickLine: false,
+  }
 }
 
 interface MonthlyDatum {
@@ -42,19 +40,21 @@ export function MonthlyBarChart({
   data: MonthlyDatum[]
   metricLabel: string
 }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   const chartData = data.map((d) => ({ ...d, mes: MONTH_LABELS[d.month] }))
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="mes" {...axisProps} />
         <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(value) => [fmtBRL(Number(value)), metricLabel]}
         />
-        <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="value" fill={c.series[0]} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -68,16 +68,18 @@ interface ComboDatum {
 
 /** GMV (barras) + Receita BT (linha) por mês. */
 export function GmvReceitaCombo({ data }: { data: ComboDatum[] }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   const chartData = data.map((d) => ({ ...d, mes: MONTH_LABELS[d.month] }))
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="mes" {...axisProps} />
         <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(value, name) => [
             fmtBRL(Number(value)),
             name === 'gmv' ? 'GMV' : 'Receita BT',
@@ -85,13 +87,13 @@ export function GmvReceitaCombo({ data }: { data: ComboDatum[] }) {
         />
         <Legend
           formatter={(v) => (v === 'gmv' ? 'GMV' : 'Receita BT')}
-          wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }}
+          wrapperStyle={{ fontSize: 12, color: c.axis }}
         />
-        <Bar dataKey="gmv" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="gmv" fill={c.series[0]} radius={[4, 4, 0, 0]} />
         <Line
           type="monotone"
           dataKey="receitaBt"
-          stroke={CHART_COLORS[1]}
+          stroke={c.series[1]}
           strokeWidth={2}
           dot={false}
         />
@@ -108,6 +110,7 @@ interface Slice {
 
 /** Doughnut de composição. */
 export function CompositionDonut({ data }: { data: Slice[] }) {
+  const c = useChartColors()
   const total = data.reduce((a, b) => a + b.value, 0)
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -121,11 +124,11 @@ export function CompositionDonut({ data }: { data: Slice[] }) {
           paddingAngle={2}
         >
           {data.map((s, i) => (
-            <Cell key={s.key} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+            <Cell key={s.key} fill={c.series[i % c.series.length]} />
           ))}
         </Pie>
         <Tooltip
-          contentStyle={tooltipStyle}
+          contentStyle={c.tooltip}
           formatter={(value, n) => {
             const v = Number(value)
             return [
@@ -134,7 +137,7 @@ export function CompositionDonut({ data }: { data: Slice[] }) {
             ]
           }}
         />
-        <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: c.axis }} />
       </PieChart>
     </ResponsiveContainer>
   )
@@ -148,24 +151,26 @@ export function MultiLineChart({
   data: Array<Record<string, number>>
   series: string[]
 }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   const chartData = data.map((d) => ({ ...d, mes: MONTH_LABELS[d.month] }))
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="mes" {...axisProps} />
         <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
         <Tooltip
-          contentStyle={tooltipStyle}
+          contentStyle={c.tooltip}
           formatter={(value, name) => [fmtBRL(Number(value)), name]}
         />
-        <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
+        <Legend wrapperStyle={{ fontSize: 12, color: c.axis }} />
         {series.map((s, i) => (
           <Line
             key={s}
             type="monotone"
             dataKey={s}
-            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            stroke={c.series[i % c.series.length]}
             strokeWidth={2}
             dot={false}
           />
@@ -190,20 +195,22 @@ interface WaterfallDatum {
 
 /** Gráfico waterfall (offset transparente + barra colorida empilhada). */
 export function WaterfallChart({ data }: { data: WaterfallDatum[] }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   const absoluteNames = new Set([data[0]?.name, data[data.length - 1]?.name])
   function colorFor(d: WaterfallDatum): string {
-    if (absoluteNames.has(d.name)) return CHART_COLORS[0]
-    return d.positive ? CHART_COLORS[1] : CHART_COLORS[4]
+    if (absoluteNames.has(d.name)) return c.series[0]
+    return d.positive ? c.series[1] : c.series[4]
   }
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="name" {...axisProps} />
         <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(_value, _name, item) => {
             const p = (item?.payload ?? {}) as WaterfallDatum
             return [fmtBRL(p.value), p.name]
@@ -226,6 +233,8 @@ export function GrowthBars({
 }: {
   data: Array<{ month: number; growth: number | null }>
 }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   const chartData = data.map((d) => ({
     mes: MONTH_LABELS[d.month],
     growth: d.growth == null ? 0 : d.growth * 100,
@@ -233,20 +242,17 @@ export function GrowthBars({
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+        <CartesianGrid stroke={c.grid} vertical={false} />
         <XAxis dataKey="mes" {...axisProps} />
         <YAxis {...axisProps} tickFormatter={(v) => `${v}%`} width={50} />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(value) => [`${Number(value).toFixed(1)}%`, 'Crescimento']}
         />
         <Bar dataKey="growth" radius={[4, 4, 0, 0]}>
           {chartData.map((d, i) => (
-            <Cell
-              key={i}
-              fill={d.growth >= 0 ? CHART_COLORS[1] : CHART_COLORS[4]}
-            />
+            <Cell key={i} fill={d.growth >= 0 ? c.success : c.destructive} />
           ))}
         </Bar>
       </BarChart>
@@ -266,6 +272,8 @@ export function ComparisonBars({
   baseLabel: string
   onClickBar?: (label: string) => void
 }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   return (
     <ResponsiveContainer width="100%" height={Math.max(280, data.length * 34)}>
       <BarChart
@@ -277,7 +285,7 @@ export function ComparisonBars({
           if (onClickBar && label) onClickBar(label)
         }}
       >
-        <CartesianGrid stroke={GRID_COLOR} horizontal={false} />
+        <CartesianGrid stroke={c.grid} horizontal={false} />
         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtShort(v)} />
         <YAxis
           type="category"
@@ -287,13 +295,13 @@ export function ComparisonBars({
           tickFormatter={(v: string) => (v.length > 22 ? `${v.slice(0, 21)}…` : v)}
         />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(value, name) => [fmtBRL(Number(value)), name as string]}
         />
-        <Legend wrapperStyle={{ fontSize: 12, color: AXIS_COLOR }} />
-        <Bar dataKey="base" name={baseLabel} fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} />
-        <Bar dataKey="target" name={targetLabel} fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+        <Legend wrapperStyle={{ fontSize: 12, color: c.axis }} />
+        <Bar dataKey="base" name={baseLabel} fill={c.series[3]} radius={[0, 4, 4, 0]} />
+        <Bar dataKey="target" name={targetLabel} fill={c.series[0]} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -309,6 +317,8 @@ export function HorizontalRankBar({
   onClickBar?: (label: string) => void
   height?: number
 }) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
@@ -320,7 +330,7 @@ export function HorizontalRankBar({
           if (onClickBar && label) onClickBar(label)
         }}
       >
-        <CartesianGrid stroke={GRID_COLOR} horizontal={false} />
+        <CartesianGrid stroke={c.grid} horizontal={false} />
         <XAxis type="number" {...axisProps} tickFormatter={(v) => fmtShort(v)} />
         <YAxis
           type="category"
@@ -332,13 +342,13 @@ export function HorizontalRankBar({
           }
         />
         <Tooltip
-          contentStyle={tooltipStyle}
-          cursor={{ fill: 'rgba(26,127,232,0.08)' }}
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
           formatter={(value) => fmtBRL(Number(value))}
         />
         <Bar
           dataKey="value"
-          fill={CHART_COLORS[2]}
+          fill={c.series[2]}
           radius={[0, 4, 4, 0]}
           cursor={onClickBar ? 'pointer' : undefined}
         />

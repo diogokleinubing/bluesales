@@ -4,93 +4,119 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  Blueticket Analytics — design tokens.
-  Tema dark é o padrão. Paleta de referência:
-    fundo #0a0f1e | superfície #0d1526 | borda #1e2d4a
-    primário #1a7fe8 | verde #4ade80 | roxo #a78bfa | vermelho #f87171
-    âmbar #f59e0b | texto #e2e8f0 | texto secundário #6b88b0
+  Blueticket — design tokens (claro/escuro).
+  Tema dirigido por CSS variables semânticas. Accents de marca consistentes
+  nos dois modos: azul #1a7fe8, verde, roxo, vermelho, âmbar.
+  :root = tema claro | .dark = paleta Blueticket escura.
 */
 :root {
   --radius: 0.625rem;
 
-  --background: #0a0f1e;
-  --foreground: #e2e8f0;
+  /* ---- Tema CLARO ---- */
+  --background: #f6f8fb;
+  --foreground: #0f1c34;
 
-  --card: #0d1526;
-  --card-foreground: #e2e8f0;
+  --card: #ffffff;
+  --card-foreground: #0f1c34;
 
-  --popover: #0d1526;
-  --popover-foreground: #e2e8f0;
+  --popover: #ffffff;
+  --popover-foreground: #0f1c34;
 
   --primary: #1a7fe8;
-  --primary-foreground: #f8fafc;
+  --primary-foreground: #ffffff;
 
-  --secondary: #16203a;
-  --secondary-foreground: #e2e8f0;
+  --secondary: #eef2f8;
+  --secondary-foreground: #0f1c34;
 
-  --muted: #111a30;
-  --muted-foreground: #6b88b0;
+  --muted: #eef2f8;
+  --muted-foreground: #5a7290;
 
-  --accent: #16203a;
-  --accent-foreground: #e2e8f0;
+  --accent: #e8eef7;
+  --accent-foreground: #0f1c34;
 
-  --destructive: #f87171;
-  --destructive-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
-  --success: #4ade80;
-  --warning: #f59e0b;
-  --info: #a78bfa;
+  --success: #16a34a;
+  --warning: #d97706;
+  --info: #7c5cf0;
 
-  --border: #1e2d4a;
-  --input: #1e2d4a;
+  --border: #d8e0ec;
+  --input: #d8e0ec;
   --ring: #1a7fe8;
 
-  /* Cores de gráfico (Recharts) */
+  /* Cores de gráfico (Recharts) — accents de marca */
   --chart-1: #1a7fe8;
-  --chart-2: #4ade80;
+  --chart-2: #22c55e;
   --chart-3: #a78bfa;
   --chart-4: #f59e0b;
-  --chart-5: #f87171;
+  --chart-5: #ef4444;
 
-  --sidebar: #0d1526;
-  --sidebar-foreground: #e2e8f0;
+  /* Tokens auxiliares dos gráficos */
+  --chart-axis: #5a7290;
+  --chart-grid: #e2e8f0;
+  --chart-cursor: rgba(26, 127, 232, 0.08);
+  --tooltip-bg: #ffffff;
+  --tooltip-border: #d8e0ec;
+  --tooltip-fg: #0f1c34;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f1c34;
   --sidebar-primary: #1a7fe8;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #16203a;
-  --sidebar-accent-foreground: #e2e8f0;
-  --sidebar-border: #1e2d4a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2f8;
+  --sidebar-accent-foreground: #0f1c34;
+  --sidebar-border: #d8e0ec;
   --sidebar-ring: #1a7fe8;
 }
 
-/* O app é dark-first; a classe .dark espelha o :root para o seletor do shadcn. */
+/* ---- Tema ESCURO (paleta Blueticket) ---- */
 .dark {
   --background: #0a0f1e;
   --foreground: #e2e8f0;
+
   --card: #0d1526;
   --card-foreground: #e2e8f0;
+
   --popover: #0d1526;
   --popover-foreground: #e2e8f0;
+
   --primary: #1a7fe8;
   --primary-foreground: #f8fafc;
+
   --secondary: #16203a;
   --secondary-foreground: #e2e8f0;
+
   --muted: #111a30;
   --muted-foreground: #6b88b0;
+
   --accent: #16203a;
   --accent-foreground: #e2e8f0;
+
   --destructive: #f87171;
   --destructive-foreground: #f8fafc;
+
   --success: #4ade80;
   --warning: #f59e0b;
   --info: #a78bfa;
+
   --border: #1e2d4a;
   --input: #1e2d4a;
   --ring: #1a7fe8;
+
   --chart-1: #1a7fe8;
   --chart-2: #4ade80;
   --chart-3: #a78bfa;
   --chart-4: #f59e0b;
   --chart-5: #f87171;
+
+  --chart-axis: #6b88b0;
+  --chart-grid: #1e2d4a;
+  --chart-cursor: rgba(26, 127, 232, 0.12);
+  --tooltip-bg: #0d1526;
+  --tooltip-border: #1e2d4a;
+  --tooltip-fg: #e2e8f0;
+
   --sidebar: #0d1526;
   --sidebar-foreground: #e2e8f0;
   --sidebar-primary: #1a7fe8;
