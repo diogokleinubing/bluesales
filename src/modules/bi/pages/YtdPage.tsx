@@ -358,7 +358,7 @@ export function YtdPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {result.byView.length === 0 && (
+                {sortedRows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                       {view === 'familia'
