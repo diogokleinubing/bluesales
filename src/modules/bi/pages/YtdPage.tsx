@@ -293,7 +293,7 @@ export function YtdPage() {
           <Skeleton className="h-[300px] w-full" />
         ) : (
           <ComparisonBars
-            data={result.byView.slice(0, 15).map((g) => ({
+            data={sortedRows.slice(0, 15).map((g) => ({
               label: g.label,
               target: g.target,
               base: g.base,
