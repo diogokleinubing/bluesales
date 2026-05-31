@@ -106,7 +106,7 @@ export function DashboardPage() {
                     )
                     if (ev)
                       navigate(
-                        `/eventos?codigo=${encodeURIComponent(ev.codigo_evento)}`,
+                        `/bi/eventos?codigo=${encodeURIComponent(ev.codigo_evento)}`,
                       )
                   }}
                 />
@@ -122,7 +122,7 @@ export function DashboardPage() {
                     value: s.value,
                   }))}
                   onClickBar={(label) =>
-                    navigate(`/eventos?segmento=${encodeURIComponent(label)}`)
+                    navigate(`/bi/eventos?segmento=${encodeURIComponent(label)}`)
                   }
                 />
               )}

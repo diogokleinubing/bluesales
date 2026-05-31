@@ -1,6 +1,4 @@
 import { useEffect, useMemo } from 'react'
-import { LogOut } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
@@ -10,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useAuth } from '@/lib/auth'
 import { useControls } from './controls-context'
 import { useBiYears } from '@/modules/bi/hooks/useBi'
 import {
@@ -24,18 +21,16 @@ import {
   type Pdv,
 } from '@/modules/bi/lib/controls'
 
-export function Header() {
-  const { user, signOut } = useAuth()
+/** Barra de filtros globais do BI (Ano, Métrica, Base de data, PDV). */
+export function BiFilters() {
   const { year, metric, dateBase, pdv, setControls } = useControls()
   const yearsQuery = useBiYears(dateBase)
 
-  // Anos reais da base (conforme a base de data). Fallback: ano atual.
   const years = useMemo(() => {
     const ys = yearsQuery.data ?? []
     return ys.length ? ys : [CURRENT_YEAR]
   }, [yearsQuery.data])
 
-  // Corrige o ano selecionado se ele não existir mais na base.
   useEffect(() => {
     if (years.length && !years.includes(year)) {
       setControls({ year: years[0] })
@@ -46,12 +41,11 @@ export function Header() {
     const next = checked
       ? [...new Set([...pdv, value])]
       : pdv.filter((p) => p !== value)
-    // Garante ao menos um PDV selecionado.
     setControls({ pdv: next.length > 0 ? next : pdv })
   }
 
   return (
-    <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border bg-card/40 px-6 py-3">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border bg-card/40 px-6 py-3">
       <ControlBlock label="Ano">
         <Select
           value={String(year)}
@@ -122,16 +116,7 @@ export function Header() {
           ))}
         </div>
       </ControlBlock>
-
-      <div className="ml-auto flex items-center gap-3">
-        <span className="hidden text-sm text-muted-foreground sm:inline">
-          {user?.email}
-        </span>
-        <Button variant="ghost" size="icon" onClick={() => signOut()}>
-          <LogOut className="size-4" />
-        </Button>
-      </div>
-    </header>
+    </div>
   )
 }
 

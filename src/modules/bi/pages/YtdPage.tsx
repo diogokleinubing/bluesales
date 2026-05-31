@@ -112,7 +112,7 @@ export function YtdPage() {
 
   function drill(label: string) {
     if (label && label !== '—')
-      navigate(`/eventos?${YTD_VIEW_PARAM[view]}=${encodeURIComponent(label)}`)
+      navigate(`/bi/eventos?${YTD_VIEW_PARAM[view]}=${encodeURIComponent(label)}`)
   }
 
   // Ordenação da tabela por clique no cabeçalho.

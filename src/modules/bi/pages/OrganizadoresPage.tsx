@@ -28,6 +28,7 @@ export function OrganizadoresPage() {
         metricLabel={METRIC_LABELS[metric]}
         drillParam="organizador"
         loading={query.isLoading}
+        crmLink
       />
     </div>
   )

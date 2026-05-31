@@ -59,7 +59,7 @@ export function SegmentosPage() {
               <button
                 key={g.key}
                 onClick={() =>
-                  navigate(`/eventos?segmento=${encodeURIComponent(g.label)}`)
+                  navigate(`/bi/eventos?segmento=${encodeURIComponent(g.label)}`)
                 }
                 className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary"
               >
