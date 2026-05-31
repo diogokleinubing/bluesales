@@ -67,6 +67,7 @@ export function RecurringEvents() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const [onlyUngrouped, setOnlyUngrouped] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [familiaInput, setFamiliaInput] = useState('')
   const [userEdited, setUserEdited] = useState(false)
@@ -96,6 +97,7 @@ export function RecurringEvents() {
     const q = norm(search)
     return events
       .filter((e) => (showAll ? true : hasYearInTitle(e.nome)))
+      .filter((e) => (onlyUngrouped ? !e.familia : true))
       .filter(
         (e) =>
           !q ||
@@ -104,7 +106,7 @@ export function RecurringEvents() {
           e.codigo_evento.includes(q),
       )
       .slice(0, 500)
-  }, [events, search, showAll])
+  }, [events, search, showAll, onlyUngrouped])
 
   const resumo = useMemo(() => {
     const counts = new Map<string, number>()
@@ -237,6 +239,13 @@ export function RecurringEvents() {
           <Layers className="size-4" /> Agrupar selecionados
         </Button>
         <div className="ml-auto flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+            <Checkbox
+              checked={onlyUngrouped}
+              onCheckedChange={(c) => setOnlyUngrouped(c === true)}
+            />
+            Apenas sem agrupamento
+          </label>
           <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
             <Checkbox
               checked={showAll}
