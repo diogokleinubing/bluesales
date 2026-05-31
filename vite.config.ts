@@ -11,4 +11,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 5173,
+    // Falha em vez de pular para outra porta se a 5173 estiver ocupada,
+    // assim o dev server abre sempre no mesmo endereço.
+    strictPort: true,
+  },
 })
