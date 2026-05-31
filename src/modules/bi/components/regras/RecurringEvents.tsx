@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { RefreshCw, Layers } from 'lucide-react'
@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { useOrgId } from '../../hooks/useBi'
 import { biBiggestEvents } from '../../lib/rpc'
 import { reclassifyFamilias, setFamilyOverride } from '../../lib/family-api'
+import { suggestFamily } from '../../lib/family'
 import { norm } from '../../lib/classify'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
@@ -34,6 +35,7 @@ export function hasYearInTitle(nome: string | null): boolean {
   if (!nome) return false
   return /\b(20(2\d|30))\b/.test(nome)
 }
+
 
 async function fetchEventsBase(
   orgId: string,
@@ -63,6 +65,7 @@ export function RecurringEvents() {
   const [showAll, setShowAll] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [familiaInput, setFamiliaInput] = useState('')
+  const [userEdited, setUserEdited] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const baseQ = useQuery({
@@ -110,6 +113,19 @@ export function RecurringEvents() {
     return { familias: counts.size, recorrentes }
   }, [events])
 
+  // Sugestão = trecho em comum dos nomes selecionados (sem o ano).
+  const suggestion = useMemo(() => {
+    const names = [...selected]
+      .map((c) => events.find((e) => e.codigo_evento === c)?.nome ?? '')
+      .filter(Boolean)
+    return suggestFamily(names)
+  }, [selected, events])
+
+  // Preenche o campo com a sugestão enquanto o usuário não digitar manualmente.
+  useEffect(() => {
+    if (!userEdited) setFamiliaInput(suggestion)
+  }, [suggestion, userEdited])
+
   function toggle(codigo: string) {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -137,6 +153,7 @@ export function RecurringEvents() {
       await reclassifyFamilias(orgId)
       setSelected(new Set())
       setFamiliaInput('')
+      setUserEdited(false)
       await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success('Eventos agrupados', {
         description: `${selected.size} eventos → "${familia}".`,
@@ -162,14 +179,6 @@ export function RecurringEvents() {
     }
   }
 
-  // Pré-preenche o nome do grupo com a família mais comum entre os selecionados.
-  function suggestFromSelection() {
-    const fams = [...selected]
-      .map((c) => events.find((e) => e.codigo_evento === c)?.familia)
-      .filter(Boolean) as string[]
-    if (fams.length) setFamiliaInput(fams[0])
-  }
-
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -185,10 +194,12 @@ export function RecurringEvents() {
         <Badge variant="secondary">{selected.size} selecionados</Badge>
         <Input
           placeholder="Nome da família (ex.: Festa do Pinhão)"
-          className="h-9 w-64"
+          className="h-9 w-72"
           value={familiaInput}
-          onChange={(e) => setFamiliaInput(e.target.value)}
-          onFocus={() => !familiaInput && suggestFromSelection()}
+          onChange={(e) => {
+            setFamiliaInput(e.target.value)
+            setUserEdited(true)
+          }}
         />
         <Button
           onClick={aplicarFamilia}
@@ -232,7 +243,7 @@ export function RecurringEvents() {
                       onCheckedChange={toggleAll}
                     />
                   </TableHead>
-                  <TableHead>Evento</TableHead>
+                  <TableHead className="min-w-[28rem]">Evento</TableHead>
                   <TableHead>Código</TableHead>
                   <TableHead className="text-right">Receita</TableHead>
                   <TableHead>Família atual</TableHead>
@@ -266,7 +277,7 @@ export function RecurringEvents() {
                           onCheckedChange={() => toggle(e.codigo_evento)}
                         />
                       </TableCell>
-                      <TableCell className="max-w-72 truncate font-medium">
+                      <TableCell className="min-w-[28rem] max-w-[40rem] truncate font-medium">
                         {e.nome ?? '—'}
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">

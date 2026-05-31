@@ -40,6 +40,32 @@ export function familiaFromName(nome: string | null): string | null {
   return s.length ? cap(s) : null
 }
 
+/** Maior prefixo de PALAVRAS em comum entre os nomes. */
+export function commonWordPrefix(names: string[]): string {
+  const lists = names
+    .filter(Boolean)
+    .map((n) => n.trim().split(/\s+/).filter(Boolean))
+  if (lists.length === 0) return ''
+  const first = lists[0]
+  let i = 0
+  for (; i < first.length; i++) {
+    const tok = first[i].toLowerCase()
+    if (!lists.every((l) => (l[i] ?? '').toLowerCase() === tok)) break
+  }
+  return first.slice(0, i).join(' ')
+}
+
+/** Sugere a família a partir do trecho em comum dos nomes (sem o ano). */
+export function suggestFamily(names: string[]): string {
+  const valid = names.filter(Boolean)
+  if (valid.length === 0) return ''
+  // Um único evento: sugere a família dele. Vários: só o trecho em comum
+  // (se não houver nada em comum, não sugere nada).
+  if (valid.length === 1) return familiaFromName(valid[0]) ?? ''
+  const prefix = commonWordPrefix(valid)
+  return prefix ? (familiaFromName(prefix) ?? '') : ''
+}
+
 /** Família final de um evento: override manual tem prioridade sobre a sugestão. */
 export function classifyFamilia(
   event: FamiliableEvent,
