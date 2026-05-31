@@ -16,22 +16,29 @@ import {
 } from '@/components/ui/table'
 import { supabase } from '@/lib/supabase'
 import { useOrgId } from '../../hooks/useBi'
-import {
-  reclassifyFamilias,
-  setFamilyOverride,
-} from '../../lib/family-api'
+import { biBiggestEvents } from '../../lib/rpc'
+import { reclassifyFamilias, setFamilyOverride } from '../../lib/family-api'
 import { familiaFromName } from '../../lib/family'
 import { norm } from '../../lib/classify'
-import { fmtInt } from '@/lib/format'
+import { fmtBRL, fmtInt } from '@/lib/format'
 
 interface EvRow {
   codigo_evento: string
   nome: string | null
   familia: string | null
+  receita: number
 }
 
-async function fetchFamilyEvents(orgId: string): Promise<EvRow[]> {
-  const all: EvRow[] = []
+/** Título tem um ano entre 2020 e 2030? (candidato a evento recorrente) */
+export function hasYearInTitle(nome: string | null): boolean {
+  if (!nome) return false
+  return /\b(20(2\d|30))\b/.test(nome)
+}
+
+async function fetchEventsBase(
+  orgId: string,
+): Promise<{ codigo_evento: string; nome: string | null; familia: string | null }[]> {
+  const all: { codigo_evento: string; nome: string | null; familia: string | null }[] = []
   const PAGE = 1000
   let from = 0
   for (;;) {
@@ -39,10 +46,9 @@ async function fetchFamilyEvents(orgId: string): Promise<EvRow[]> {
       .from('events')
       .select('codigo_evento, nome, familia')
       .eq('org_id', orgId)
-      .order('familia', { ascending: true })
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
-    const rows = (data ?? []) as EvRow[]
+    const rows = (data ?? []) as typeof all
     all.push(...rows)
     if (rows.length < PAGE) break
     from += PAGE
@@ -61,7 +67,19 @@ export function RecurringEvents() {
     enabled: !!orgId,
     staleTime: 60 * 1000,
     queryKey: ['bi', 'family-events', orgId],
-    queryFn: () => fetchFamilyEvents(orgId!),
+    queryFn: async (): Promise<EvRow[]> => {
+      const [evs, rev] = await Promise.all([
+        fetchEventsBase(orgId!),
+        biBiggestEvents(orgId!, '', 10000),
+      ])
+      const revMap = new Map(
+        rev.map((r) => [r.codigo_evento, Number(r.receita_bt)]),
+      )
+      return evs
+        .filter((e) => hasYearInTitle(e.nome))
+        .map((e) => ({ ...e, receita: revMap.get(e.codigo_evento) ?? 0 }))
+        .sort((a, b) => b.receita - a.receita)
+    },
   })
 
   const events = eventsQ.data ?? []
@@ -79,7 +97,6 @@ export function RecurringEvents() {
     return list.slice(0, 500)
   }, [events, search])
 
-  // Resumo: quantas famílias e quantas têm 2+ edições.
   const resumo = useMemo(() => {
     const counts = new Map<string, number>()
     for (const e of events) {
@@ -97,7 +114,9 @@ export function RecurringEvents() {
     try {
       const n = await reclassifyFamilias(orgId)
       await qc.invalidateQueries({ queryKey: ['bi'] })
-      toast.success('Eventos reagrupados', { description: `${n} eventos atualizados.` })
+      toast.success('Eventos reagrupados', {
+        description: `${n} eventos atualizados.`,
+      })
     } catch (e) {
       toast.error('Erro ao reagrupar', { description: (e as Error).message })
     } finally {
@@ -117,7 +136,6 @@ export function RecurringEvents() {
       await reclassifyFamilias(orgId)
       setEdits({})
       await qc.invalidateQueries({ queryKey: ['bi'] })
-      await qc.invalidateQueries({ queryKey: ['bi', 'family-events', orgId] })
       toast.success('Famílias atualizadas', {
         description: `${entries.length} override(s) aplicado(s).`,
       })
@@ -135,8 +153,8 @@ export function RecurringEvents() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {fmtInt(resumo.familias)} famílias · {fmtInt(resumo.recorrentes)} com
-          2+ edições. Edite a família para mesclar/corrigir; o nome sem o ano é
-          sugerido automaticamente.
+          2+ edições. Apenas eventos com ano (2020–2030) no título. Edite a
+          família para mesclar/corrigir.
         </p>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={reagruparAuto} disabled={saving}>
@@ -144,7 +162,8 @@ export function RecurringEvents() {
             Reagrupar (sugestão)
           </Button>
           <Button onClick={salvarEdicoes} disabled={saving || pendentes === 0}>
-            <Save className="size-4" /> Salvar {pendentes > 0 ? `(${pendentes})` : ''}
+            <Save className="size-4" /> Salvar{' '}
+            {pendentes > 0 ? `(${pendentes})` : ''}
           </Button>
         </div>
       </div>
@@ -164,14 +183,27 @@ export function RecurringEvents() {
                 <TableRow>
                   <TableHead>Evento</TableHead>
                   <TableHead>Código</TableHead>
+                  <TableHead className="text-right">Receita</TableHead>
                   <TableHead className="w-80">Família (recorrente)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {eventsQ.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={4}
+                      className="py-8 text-center text-muted-foreground"
+                    >
                       Carregando…
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="py-8 text-center text-muted-foreground"
+                    >
+                      Nenhum evento com ano no título.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -185,6 +217,9 @@ export function RecurringEvents() {
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {e.codigo_evento}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtBRL(e.receita)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
