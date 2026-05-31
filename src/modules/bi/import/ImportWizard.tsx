@@ -249,8 +249,9 @@ export function ImportWizard() {
         <CardHeader>
           <CardTitle className="text-base">Nova base</CardTitle>
           <CardDescription>
-            Envie um ou mais arquivos Excel (.xlsx). Cada planilha pode conter
-            só eventos, só vendas, ou as duas — o tipo é detectado pelas colunas.
+            Envie um ou mais arquivos Excel (.xlsx) ou CSV (.csv). Cada arquivo
+            pode conter só eventos, só vendas, ou as duas — o tipo é detectado
+            pelas colunas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -266,13 +267,14 @@ export function ImportWizard() {
           >
             <Upload className="size-8" />
             <span className="text-sm">
-              Clique ou arraste arquivos <strong>.xlsx</strong> aqui
+              Clique ou arraste arquivos <strong>.xlsx</strong> ou{' '}
+              <strong>.csv</strong> aqui
             </span>
           </button>
           <input
             ref={inputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             multiple
             className="hidden"
             onChange={(e) => {
@@ -425,7 +427,7 @@ export function ImportWizard() {
           <input
             ref={inputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             multiple
             className="hidden"
             onChange={(e) => {

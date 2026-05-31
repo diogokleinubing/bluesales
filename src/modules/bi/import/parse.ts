@@ -16,12 +16,35 @@ import type { TipoPdv } from '@/lib/database.types'
 // Leitura do arquivo
 // ----------------------------------------------------------------------------
 
+function isCsv(file: File): boolean {
+  return (
+    /\.csv$/i.test(file.name) ||
+    file.type === 'text/csv' ||
+    file.type === 'application/csv'
+  )
+}
+
 /**
- * Lê o .xlsx no browser. IMPORTANTE: cellDates:true para receber Date nativo
- * nas datas (e não o serial do Excel). O sheet_to_json usa raw:true para não
- * receber strings localizadas tipo "Jan-26" que quebram o parsing.
+ * Lê um arquivo Excel (.xlsx) OU CSV no browser e devolve as planilhas como
+ * matrizes (cabeçalho + linhas).
+ *
+ * - XLSX: via SheetJS com cellDates:true (datas viram Date nativo) e raw:true.
+ * - CSV: parse próprio (UTF-8, delimitador auto, aspas), mantendo as células
+ *   como STRING. Assim valores BR como "120,5" não são corrompidos pelo
+ *   SheetJS (que interpretaria a vírgula como milhar) e os parsers de
+ *   data/numero cuidam da tipagem.
  */
 export async function readWorkbook(file: File): Promise<ParsedWorkbook> {
+  if (isCsv(file)) {
+    const text = await file.text()
+    const matrix = parseCsv(text)
+    const headerRow = matrix[0] ?? []
+    const headers = headerRow.map((h) => (h == null ? '' : String(h).trim()))
+    const rows = matrix.slice(1)
+    const name = file.name.replace(/\.[^.]+$/, '') || 'CSV'
+    return { fileName: file.name, sheets: [{ name, headers, rows }] }
+  }
+
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true })
 
@@ -40,6 +63,94 @@ export async function readWorkbook(file: File): Promise<ParsedWorkbook> {
   })
 
   return { fileName: file.name, sheets }
+}
+
+/** Detecta o delimitador mais provável a partir da primeira linha não vazia. */
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) ?? ''
+  const candidates = [';', ',', '\t', '|']
+  let best = ','
+  let bestCount = -1
+  for (const d of candidates) {
+    const count = firstLine.split(d).length - 1
+    if (count > bestCount) {
+      bestCount = count
+      best = d
+    }
+  }
+  return best
+}
+
+/**
+ * Parser de CSV simples e robusto: detecta o delimitador, trata aspas duplas
+ * (incl. aspas escapadas "" e delimitadores/quebras dentro de aspas) e remove
+ * BOM. Devolve uma matriz de strings (células vazias -> null).
+ */
+export function parseCsv(input: string): (string | null)[][] {
+  const text = input.replace(/^﻿/, '')
+  const delim = detectDelimiter(text)
+  const rows: (string | null)[][] = []
+  let row: (string | null)[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+
+  const pushField = () => {
+    row.push(field.length ? field : null)
+    field = ''
+  }
+  const pushRow = () => {
+    pushField()
+    // ignora linhas totalmente vazias
+    if (!(row.length === 1 && row[0] === null)) rows.push(row)
+    row = []
+  }
+
+  while (i < text.length) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i++
+        continue
+      }
+      field += ch
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inQuotes = true
+      i++
+      continue
+    }
+    if (ch === delim) {
+      pushField()
+      i++
+      continue
+    }
+    if (ch === '\n') {
+      pushRow()
+      i++
+      continue
+    }
+    if (ch === '\r') {
+      // \r ou \r\n
+      pushRow()
+      if (text[i + 1] === '\n') i++
+      i++
+      continue
+    }
+    field += ch
+    i++
+  }
+  // último campo/linha
+  if (field.length > 0 || row.length > 0) pushRow()
+  return rows
 }
 
 // ----------------------------------------------------------------------------
@@ -133,12 +244,43 @@ export function parseEventDate(value: unknown): string | null {
     return `${y}-${m}-01`
   }
   const s = String(value).trim()
-  const m = s.match(/^(\d{4})[-/.](\d{1,2})/)
-  if (m) {
-    const month = String(Number(m[2])).padStart(2, '0')
-    return `${m[1]}-${month}-01`
+  // YYYY-MM (ou YYYY/MM, YYYY-MM-DD)
+  const iso = s.match(/^(\d{4})[-/.](\d{1,2})/)
+  if (iso) {
+    const month = String(Number(iso[2])).padStart(2, '0')
+    return `${iso[1]}-${month}-01`
+  }
+  // BR: DD/MM/YYYY -> usa ano-mês
+  const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (br) {
+    const month = String(Number(br[2])).padStart(2, '0')
+    return `${br[3]}-${month}-01`
+  }
+  // BR: MM/YYYY
+  const my = s.match(/^(\d{1,2})\/(\d{4})$/)
+  if (my) {
+    const month = String(Number(my[1])).padStart(2, '0')
+    return `${my[2]}-${month}-01`
   }
   return null
+}
+
+/** Tenta parsear data/hora no formato brasileiro DD/MM/AAAA [HH:MM[:SS]]. */
+function parseBrDateTime(s: string): Date | null {
+  const m = s.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  )
+  if (!m) return null
+  const [, dd, mm, yyyy, hh, mi, ss] = m
+  const d = new Date(
+    Number(yyyy),
+    Number(mm) - 1,
+    Number(dd),
+    Number(hh ?? 0),
+    Number(mi ?? 0),
+    Number(ss ?? 0),
+  )
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
 /** Datetime de venda. Descarta anos < 2000 (corrompidos em 1900). */
@@ -151,8 +293,13 @@ export function parseSaleDate(value: unknown): string | null {
     // fallback: serial Excel (caso cellDates não tenha convertido)
     d = XLSX.SSF ? excelSerialToDate(value) : null
   } else {
-    const parsed = new Date(String(value))
-    d = Number.isNaN(parsed.getTime()) ? null : parsed
+    const s = String(value).trim()
+    // BR (DD/MM/AAAA) primeiro, pois new Date() interpretaria como MM/DD.
+    d = parseBrDateTime(s)
+    if (!d) {
+      const parsed = new Date(s)
+      d = Number.isNaN(parsed.getTime()) ? null : parsed
+    }
   }
   if (!d || Number.isNaN(d.getTime()) || d.getFullYear() < 2000) return null
   return d.toISOString()

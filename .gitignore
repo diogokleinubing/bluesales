@@ -20,6 +20,7 @@ dist-ssr
 # Arquivos de teste/importação locais
 *.xlsx
 *.xls
+*.csv
 
 # Claude Code local settings
 .claude/settings.local.json
