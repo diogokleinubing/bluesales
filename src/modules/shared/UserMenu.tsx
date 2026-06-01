@@ -41,7 +41,7 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
 ]
 
 export function UserMenu() {
-  const { user, signOut } = useAuth()
+  const { user, isAdmin, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -79,10 +79,12 @@ export function UserMenu() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
-              <Settings className="size-4" />
-              Configurações
-            </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
+                <Settings className="size-4" />
+                Configurações
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Sun className="size-4" />

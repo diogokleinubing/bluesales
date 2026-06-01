@@ -12,6 +12,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
+import { logLogin } from '@/lib/login-log'
 
 export function LoginPage() {
   const { session, loading, signInWithPassword } = useAuth()
@@ -37,6 +39,8 @@ export function LoginPage() {
       setError('Falha no login. Verifique email e senha.')
       return
     }
+    const { data } = await supabase.auth.getUser()
+    if (data.user) await logLogin(data.user.id, data.user.email)
     navigate(from, { replace: true })
   }
 
@@ -47,7 +51,7 @@ export function LoginPage() {
           <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-lg bg-primary">
             <Ticket className="size-6 text-primary-foreground" />
           </div>
-          <CardTitle>Blueticket Analytics</CardTitle>
+          <CardTitle>Blueticket</CardTitle>
           <CardDescription>Acesse com seu email e senha</CardDescription>
         </CardHeader>
         <CardContent>

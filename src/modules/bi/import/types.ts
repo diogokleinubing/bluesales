@@ -20,6 +20,9 @@ export type SaleField =
   | 'rebate'
   | 'mdr'
   | 'receita_intermediacao'
+  | 'forma_pagamento'
+  | 'parcelas'
+  | 'operadora'
 
 export interface FieldDef<F extends string> {
   field: F
@@ -50,6 +53,9 @@ export const SALE_FIELDS: FieldDef<SaleField>[] = [
   { field: 'rebate', label: 'Rebate', required: false, aliases: ['rebate'] },
   { field: 'mdr', label: 'MDR', required: false, aliases: ['mdr'] },
   { field: 'receita_intermediacao', label: 'Receita intermediação', required: false, aliases: ['receita_intermediacao', 'intermediacao', 'receita_interm'] },
+  { field: 'forma_pagamento', label: 'Forma de pagamento', required: false, aliases: ['forma_pagamento', 'formapagamento', 'forma_pgto', 'forma', 'pagamento', 'meio_pagamento'] },
+  { field: 'parcelas', label: 'Parcelas', required: false, aliases: ['parcelas', 'parcela', 'qtd_parcelas', 'num_parcelas'] },
+  { field: 'operadora', label: 'Operadora', required: false, aliases: ['operadora', 'adquirente', 'bandeira'] },
 ]
 
 /** Mapeamento campo -> índice da coluna na planilha (-1 = não mapeado). */

@@ -381,3 +381,34 @@ export async function clearRollup(orgId: string): Promise<void> {
 export async function backfillEventLinks(orgId: string): Promise<number> {
   return rpc<number>('backfill_event_links', { p_org: orgId })
 }
+
+// --- Meios de pagamento ---
+
+export async function refreshPaymentsRollup(): Promise<void> {
+  await rpc<null>('refresh_payments_rollup', {})
+}
+
+export async function biPaymentYears(orgId: string): Promise<number[]> {
+  return rpc<number[]>('bi_payment_years', { p_org: orgId })
+}
+
+export type PaymentDim = 'forma' | 'operadora' | 'parcelas'
+
+export interface PaymentGroupRow extends MetricSums {
+  key: string | null
+  qtd: number
+}
+
+export async function biPaymentsGroup(
+  orgId: string,
+  year: number,
+  pdv: Pdv[],
+  dim: PaymentDim,
+): Promise<PaymentGroupRow[]> {
+  return rpc<PaymentGroupRow[]>('bi_payments_group', {
+    p_org: orgId,
+    p_year: year,
+    p_pdv: pdv.length > 0 ? pdv : null,
+    p_dim: dim,
+  })
+}

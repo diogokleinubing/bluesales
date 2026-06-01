@@ -47,11 +47,29 @@ export interface SaleRow {
   rebate: number
   mdr: number
   receita_intermediacao: number
+  forma_pagamento: string | null
+  parcelas: number | null
+  operadora: string | null
   import_batch_id: string | null
   // Colunas geradas (read-only):
   gmv: number
   receita_bt: number
   receita_liq: number
+}
+
+export interface ProfileRow {
+  id: string
+  email: string | null
+  is_admin: boolean
+  created_at: string
+}
+
+export interface LoginEventRow {
+  id: number
+  user_id: string | null
+  email: string | null
+  user_agent: string | null
+  created_at: string
 }
 
 export interface ImportBatchRow {

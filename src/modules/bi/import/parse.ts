@@ -436,3 +436,33 @@ export function parseNumber(value: unknown): number {
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
 }
+
+/**
+ * Normaliza a forma de pagamento para o código canônico:
+ * CC = Cartão de Crédito, PIX = Pix, CD = Cartão de Débito, BB = Boleto Bancário.
+ * Aceita os próprios códigos ou descrições por extenso. null se desconhecido.
+ */
+export function parseFormaPagamento(value: unknown): string | null {
+  if (value == null || value === '') return null
+  const s = String(value).trim().toLowerCase()
+  if (!s) return null
+  if (s === 'cc') return 'CC'
+  if (s === 'cd') return 'CD'
+  if (s === 'pix') return 'PIX'
+  if (s === 'bb') return 'BB'
+  if (s.includes('pix')) return 'PIX'
+  if (s.includes('debito') || s.includes('débito') || s.includes('debit'))
+    return 'CD'
+  if (s.includes('credito') || s.includes('crédito') || s.includes('credit'))
+    return 'CC'
+  if (s.includes('boleto') || s.includes('bancario') || s.includes('bancário'))
+    return 'BB'
+  return null
+}
+
+/** Número de parcelas (>=1). null se vazio/inválido. */
+export function parseParcelas(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = Math.trunc(Number(String(value).replace(/\D/g, '')))
+  return Number.isFinite(n) && n > 0 ? n : null
+}

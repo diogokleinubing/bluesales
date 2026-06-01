@@ -21,6 +21,7 @@ import {
   CheckSquare,
   Route as RouteIcon,
   UsersRound,
+  CreditCard,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial'
@@ -63,6 +64,7 @@ export const MODULES: ModuleDef[] = [
           { to: '/bi/organizadores', label: 'Organizadores', icon: Users },
           { to: '/bi/locais', label: 'Locais', icon: MapPin },
           { to: '/bi/eventos', label: 'Eventos', icon: Ticket },
+          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard },
           { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp },
           { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet },
         ],

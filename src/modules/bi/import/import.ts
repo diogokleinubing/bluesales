@@ -5,11 +5,14 @@ import {
   clearRollup,
   pruneRollupYear,
   refreshRollupCodigos,
+  refreshPaymentsRollup,
 } from '../lib/rpc'
 import {
   parseCodigo,
   parseEventDate,
+  parseFormaPagamento,
   parseNumber,
+  parseParcelas,
   parsePdv,
   parseSaleDate,
 } from './parse'
@@ -119,6 +122,9 @@ export function buildRecords(
         rebate: parseNumber(cell(row, map.rebate)),
         mdr: parseNumber(cell(row, map.mdr)),
         receita_intermediacao: parseNumber(cell(row, map.receita_intermediacao)),
+        forma_pagamento: parseFormaPagamento(cell(row, map.forma_pagamento)),
+        parcelas: parseParcelas(cell(row, map.parcelas)),
+        operadora: strOrNull(cell(row, map.operadora)),
         import_batch_id: null,
       })
     }
@@ -260,6 +266,12 @@ export async function runImport({
       current: Math.min(i + ROLLUP_BATCH, codigos.length),
       total: codigos.length,
     })
+  }
+
+  // Rollup de meios de pagamento (rebuild completo — tabela pequena por org).
+  if (build.hasSales) {
+    onProgress?.({ phase: 'Consolidando pagamentos', current: 0, total: 1 })
+    await refreshPaymentsRollup()
   }
 
   return {
