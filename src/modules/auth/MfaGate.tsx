@@ -12,21 +12,31 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
+import { trustDevice } from '@/lib/trusted-device'
 
 /**
  * Portão de 2FA. Renderizado dentro da área protegida quando:
  * - needsMfaEnroll: usuário sem fator -> obrigatório cadastrar (1º login)
  * - needsMfaChallenge: tem fator, sessão em aal1 -> pedir o código
+ *
+ * Ao concluir (enroll ou challenge), marca este navegador como confiável para
+ * pular o desafio nos próximos logins (apenas neste navegador).
  */
 export function MfaGate() {
-  const { needsMfaEnroll, signOut, refreshMfa } = useAuth()
+  const { needsMfaEnroll, user, signOut, refreshMfa } = useAuth()
+
+  function handleDone() {
+    trustDevice(user?.id)
+    refreshMfa()
+  }
+
   return needsMfaEnroll ? (
     <Shell title="Configurar verificação em duas etapas">
-      <EnrollFlow onDone={refreshMfa} onCancel={signOut} />
+      <EnrollFlow onDone={handleDone} onCancel={signOut} />
     </Shell>
   ) : (
     <Shell title="Verificação em duas etapas">
-      <ChallengeFlow onDone={refreshMfa} onCancel={signOut} />
+      <ChallengeFlow onDone={handleDone} onCancel={signOut} />
     </Shell>
   )
 }

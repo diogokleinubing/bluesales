@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { isTrustedDevice } from '@/lib/trusted-device'
 
 /** Nível de garantia de autenticação (MFA). aal2 = 2FA verificado. */
 type Aal = 'aal1' | 'aal2' | null
@@ -95,7 +96,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const mfaSatisfied = aal === 'aal2'
   const needsMfaEnroll = !!session && !hasMfa
-  const needsMfaChallenge = !!session && hasMfa && aal === 'aal1'
+  // Desafio só é exigido se o navegador NÃO for confiável (lembrar dispositivo).
+  const trusted = isTrustedDevice(session?.user?.id)
+  const needsMfaChallenge =
+    !!session && hasMfa && aal === 'aal1' && !trusted
 
   const value = useMemo<AuthContextValue>(
     () => ({
