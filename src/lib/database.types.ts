@@ -70,6 +70,7 @@ export interface ProfileRow {
   id: string
   email: string | null
   is_admin: boolean
+  must_change_password: boolean
   created_at: string
 }
 

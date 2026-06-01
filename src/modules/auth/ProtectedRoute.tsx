@@ -1,9 +1,16 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { MfaGate } from './MfaGate'
+import { ForcePasswordChange } from './ForcePasswordChange'
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, needsMfaEnroll, needsMfaChallenge } = useAuth()
+  const {
+    session,
+    loading,
+    needsMfaEnroll,
+    needsMfaChallenge,
+    needsPasswordChange,
+  } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -21,6 +28,11 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // 2FA obrigatório: enrolar (novo usuário) ou desafiar (sessão aal1).
   if (needsMfaEnroll || needsMfaChallenge) {
     return <MfaGate />
+  }
+
+  // Senha resetada pelo admin: força a definição de uma nova senha.
+  if (needsPasswordChange) {
+    return <ForcePasswordChange />
   }
 
   return <>{children}</>

@@ -26,6 +26,10 @@ interface AuthContextValue {
   needsMfaEnroll: boolean
   /** Precisa inserir o código 2FA (tem fator, sessão em aal1). */
   needsMfaChallenge: boolean
+  /** Senha foi resetada pelo admin — precisa definir uma nova. */
+  needsPasswordChange: boolean
+  /** Recarrega o perfil (papel admin + flag de troca de senha). */
+  refreshProfile: () => Promise<void>
   signInWithPassword: (
     email: string,
     password: string,
@@ -40,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [mustChangePassword, setMustChangePassword] = useState(false)
   const [hasMfa, setHasMfa] = useState(false)
   const [aal, setAal] = useState<Aal>(null)
 
@@ -55,14 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (uid: string | undefined) => {
     if (!uid) {
       setIsAdmin(false)
+      setMustChangePassword(false)
       return
     }
     const { data } = await supabase
       .from('profiles')
-      .select('is_admin')
+      .select('is_admin, must_change_password')
       .eq('id', uid)
       .maybeSingle()
     setIsAdmin(!!data?.is_admin)
+    setMustChangePassword(!!data?.must_change_password)
   }, [])
 
   useEffect(() => {
@@ -86,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshMfa()
       } else {
         setIsAdmin(false)
+        setMustChangePassword(false)
         setHasMfa(false)
         setAal(null)
       }
@@ -100,6 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const trusted = isTrustedDevice(session?.user?.id)
   const needsMfaChallenge =
     !!session && hasMfa && aal === 'aal1' && !trusted
+  const needsPasswordChange = !!session && mustChangePassword
+
+  const refreshProfile = useCallback(
+    () => loadProfile(session?.user?.id),
+    [loadProfile, session?.user?.id],
+  )
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -111,6 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mfaSatisfied,
       needsMfaEnroll,
       needsMfaChallenge,
+      needsPasswordChange,
+      refreshProfile,
       signInWithPassword: async (email, password) => {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -131,6 +147,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mfaSatisfied,
       needsMfaEnroll,
       needsMfaChallenge,
+      needsPasswordChange,
+      refreshProfile,
       refreshMfa,
     ],
   )

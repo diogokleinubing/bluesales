@@ -17,6 +17,7 @@ import { useTheme, type Theme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { UsersPanel } from './UsersPanel'
 import { LoginLogPanel } from './LoginLogPanel'
+import { ChangePasswordCard } from './ChangePasswordCard'
 
 const THEME_OPTIONS: {
   value: Theme
@@ -134,6 +135,10 @@ export function ConfiguracoesPage() {
               </Button>
             </CardContent>
           </Card>
+
+          <div className="mt-4">
+            <ChangePasswordCard />
+          </div>
         </TabsContent>
 
         {/* Usuários (admin) */}
