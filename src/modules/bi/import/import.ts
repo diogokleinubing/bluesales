@@ -11,6 +11,7 @@ import {
   parseCodigo,
   parseEventDate,
   parseFormaPagamento,
+  parseOperadora,
   parseNumber,
   parseParcelas,
   parsePdv,
@@ -130,7 +131,7 @@ export function buildRecords(
         receita_intermediacao: parseNumber(cell(row, map.receita_intermediacao)),
         forma_pagamento: parseFormaPagamento(cell(row, map.forma_pagamento)),
         parcelas: parseParcelas(cell(row, map.parcelas)),
-        operadora: strOrNull(cell(row, map.operadora)),
+        operadora: parseOperadora(cell(row, map.operadora)),
         import_batch_id: null,
       })
     }

@@ -446,11 +446,18 @@ export function parseFormaPagamento(value: unknown): string | null {
   if (value == null || value === '') return null
   const s = String(value).trim().toLowerCase()
   if (!s) return null
-  if (s === 'cc') return 'CC'
+  // Códigos diretos. CP ("também é cartão de crédito") canoniza para CC.
+  if (s === 'cc' || s === 'cp') return 'CC'
   if (s === 'cd') return 'CD'
   if (s === 'pix') return 'PIX'
   if (s === 'bb') return 'BB'
+  if (s === 'mp') return 'MP'
+  if (s === 'pn') return 'PN'
+  // Por extenso / variações.
   if (s.includes('pix')) return 'PIX'
+  if (s.includes('multiplo') || s.includes('múltiplo') || s.includes('multiplos'))
+    return 'MP'
+  if (s.includes('painel')) return 'PN'
   if (s.includes('debito') || s.includes('débito') || s.includes('debit'))
     return 'CD'
   if (s.includes('credito') || s.includes('crédito') || s.includes('credit'))
@@ -458,6 +465,22 @@ export function parseFormaPagamento(value: unknown): string | null {
   if (s.includes('boleto') || s.includes('bancario') || s.includes('bancário'))
     return 'BB'
   return null
+}
+
+/** Operadoras conhecidas (código numérico -> nome). */
+const OPERADORA_MAP: Record<string, string> = {
+  '1': 'Pagarme',
+  '3': 'PagSeguro',
+  '9': 'Itaú',
+  '15': 'Mercado Pago',
+}
+
+/** Normaliza a operadora: mapeia códigos conhecidos para nomes; senão mantém. */
+export function parseOperadora(value: unknown): string | null {
+  if (value == null || value === '') return null
+  const s = String(value).trim()
+  if (!s) return null
+  return OPERADORA_MAP[s] ?? s
 }
 
 /** Número de parcelas (>=1). null se vazio/inválido. */

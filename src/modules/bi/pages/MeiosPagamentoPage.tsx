@@ -23,6 +23,8 @@ const FORMA_LABELS: Record<string, string> = {
   CD: 'Cartão de débito',
   PIX: 'Pix',
   BB: 'Boleto bancário',
+  MP: 'Múltiplos pagamentos',
+  PN: 'Painel',
   NA: 'Não informado',
 }
 
