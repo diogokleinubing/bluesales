@@ -1,15 +1,12 @@
-import { supabase } from '@/lib/supabase'
+import { deleteSalesYear } from './rpc'
 
-/** Apaga todas as vendas de um ano (pela data_venda) de uma org. */
+/**
+ * Apaga todas as vendas de um ano (e o rollup do ano) de uma org.
+ * Roda no servidor, em lotes, para não estourar o timeout em bases grandes.
+ */
 export async function deleteYearData(
   orgId: string,
   year: number,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('sales')
-    .delete()
-    .eq('org_id', orgId)
-    .gte('data_venda', `${year}-01-01T00:00:00Z`)
-    .lt('data_venda', `${year + 1}-01-01T00:00:00Z`)
-  if (error) throw new Error(error.message)
+  await deleteSalesYear(orgId, year)
 }

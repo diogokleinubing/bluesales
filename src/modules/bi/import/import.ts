@@ -3,6 +3,7 @@ import type { EventRow, SaleRow } from '@/lib/database.types'
 import {
   backfillEventLinks,
   clearRollup,
+  deleteSalesYear,
   pruneRollupYear,
   refreshRollupCodigos,
   refreshPaymentsRollup,
@@ -183,14 +184,11 @@ export async function runImport({
     await supabase.from('sales').delete().eq('org_id', orgId)
     await supabase.from('events').delete().eq('org_id', orgId)
   } else if (build.hasSales) {
-    // merge: remove apenas as vendas dos anos presentes nos dados importados
+    // merge: remove apenas as vendas dos anos presentes nos dados importados.
+    // Via RPC no servidor (em lotes, sem timeout). Se falhar, ABORTA — antes
+    // o erro era silencioso e as vendas eram reinseridas, multiplicando tudo.
     for (const y of years) {
-      await supabase
-        .from('sales')
-        .delete()
-        .eq('org_id', orgId)
-        .gte('data_venda', `${y}-01-01T00:00:00Z`)
-        .lt('data_venda', `${y + 1}-01-01T00:00:00Z`)
+      await deleteSalesYear(orgId, y)
     }
   }
   onProgress?.({ phase: 'Preparando base', current: 1, total: 1 })

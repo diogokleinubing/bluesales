@@ -376,6 +376,17 @@ export async function pruneRollupYear(
   await rpc<null>('prune_rollup_year', { p_org: orgId, p_year: year })
 }
 
+/**
+ * Apaga todas as vendas de um ano (no servidor, em lotes, sem timeout) e já
+ * remove o rollup do ano. Retorna a quantidade aproximada de vendas removidas.
+ */
+export async function deleteSalesYear(
+  orgId: string,
+  year: number,
+): Promise<number> {
+  return rpc<number>('delete_sales_year', { p_org: orgId, p_year: year })
+}
+
 /** Limpa todo o rollup da org (modo replace). */
 export async function clearRollup(orgId: string): Promise<void> {
   await rpc<null>('clear_rollup', { p_org: orgId })

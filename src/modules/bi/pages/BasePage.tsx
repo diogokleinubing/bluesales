@@ -30,7 +30,6 @@ import { useDefaultOrg } from '@/lib/org'
 import { useBiBase } from '../hooks/useBi'
 import { useReclassify } from '../hooks/useReclassify'
 import { deleteYearData } from '../lib/base-api'
-import { pruneRollupYear } from '../lib/rpc'
 import { exportToXlsx } from '../lib/export'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
@@ -55,8 +54,8 @@ export function BasePage() {
       return
     setBusyYear(year)
     try {
+      // Apaga vendas + rollup do ano no servidor (em lotes, sem timeout).
       await deleteYearData(orgId, year)
-      await pruneRollupYear(orgId, year)
       await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success(`Vendas de ${year} apagadas.`)
     } catch (e) {
