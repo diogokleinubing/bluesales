@@ -12,10 +12,10 @@ export function useRules() {
   })
   const empty: RulesBundle = {
     segments: [],
+    generos: [],
     keywordRules: [],
     venueRules: [],
     venueMap: [],
-    overrides: [],
   }
   return { ...query, orgId, rules: query.data ?? empty }
 }

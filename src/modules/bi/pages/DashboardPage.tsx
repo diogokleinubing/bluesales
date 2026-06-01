@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Card,
@@ -6,6 +7,13 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { KpiCard } from '../components/KpiCard'
 import {
   CompositionDonut,
@@ -20,6 +28,9 @@ import { fmtBRL, fmtInt, fmtPct, fmtShort } from '@/lib/format'
 export function DashboardPage() {
   const { year, metric } = useControls()
   const navigate = useNavigate()
+  const [donut, setDonut] = useState<'composicao' | 'segmento' | 'genero'>(
+    'composicao',
+  )
   const {
     kpis,
     delta,
@@ -27,6 +38,7 @@ export function DashboardPage() {
     composition,
     topEvents,
     segments,
+    generos,
     isLoading,
     isError,
     error,
@@ -84,9 +96,49 @@ export function DashboardPage() {
             <ChartCard title={`${metricLabel} por mês`}>
               {isLoading ? <ChartSkeleton /> : <MonthlyBarChart data={monthly} metricLabel={metricLabel} />}
             </ChartCard>
-            <ChartCard title="Composição da Receita BT">
-              {isLoading ? <ChartSkeleton /> : <CompositionDonut data={composition} />}
-            </ChartCard>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {donut === 'composicao'
+                    ? 'Composição da Receita BT'
+                    : donut === 'segmento'
+                      ? `Por segmento · ${metricLabel}`
+                      : `Por gênero · ${metricLabel}`}
+                </CardTitle>
+                <Select
+                  value={donut}
+                  onValueChange={(v) => setDonut(v as typeof donut)}
+                >
+                  <SelectTrigger className="h-7 w-36" size="sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="composicao">Composição</SelectItem>
+                    <SelectItem value="segmento">Segmento</SelectItem>
+                    <SelectItem value="genero">Gênero</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <ChartSkeleton />
+                ) : (
+                  <CompositionDonut
+                    data={
+                      donut === 'composicao'
+                        ? composition
+                        : (donut === 'segmento' ? segments : generos)
+                            .slice(0, 8)
+                            .map((g) => ({
+                              key: g.key,
+                              label: g.label,
+                              value: g.value,
+                            }))
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Rankings */}

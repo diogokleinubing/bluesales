@@ -22,6 +22,7 @@ import {
   Route as RouteIcon,
   UsersRound,
   CreditCard,
+  Music,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial'
@@ -61,6 +62,7 @@ export const MODULES: ModuleDef[] = [
           { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange },
           { to: '/bi/segmentos', label: 'Segmentos', icon: Layers },
+          { to: '/bi/generos', label: 'Gêneros', icon: Music },
           { to: '/bi/organizadores', label: 'Organizadores', icon: Users },
           { to: '/bi/locais', label: 'Locais', icon: MapPin },
           { to: '/bi/eventos', label: 'Eventos', icon: Ticket },

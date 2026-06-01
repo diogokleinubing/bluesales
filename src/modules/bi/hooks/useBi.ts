@@ -30,14 +30,16 @@ export function useBiDashboard() {
     staleTime: STALE,
     queryKey: ['bi', 'dashboard', orgId, year, dateBase, pdv],
     queryFn: async () => {
-      const [cur, prev, monthly, segments, topEvents] = await Promise.all([
-        rpc.biSummary(orgId!, year, dateBase, pdv),
-        rpc.biSummary(orgId!, year - 1, dateBase, pdv),
-        rpc.biMonthly(orgId!, year, dateBase, pdv),
-        rpc.biGroup(orgId!, year, dateBase, pdv, 'segmento'),
-        rpc.biEvents(orgId!, year, dateBase, pdv, { limit: 10 }),
-      ])
-      return { cur, prev, monthly, segments, topEvents }
+      const [cur, prev, monthly, segments, generos, topEvents] =
+        await Promise.all([
+          rpc.biSummary(orgId!, year, dateBase, pdv),
+          rpc.biSummary(orgId!, year - 1, dateBase, pdv),
+          rpc.biMonthly(orgId!, year, dateBase, pdv),
+          rpc.biGroup(orgId!, year, dateBase, pdv, 'segmento'),
+          rpc.biGroup(orgId!, year, dateBase, pdv, 'genero'),
+          rpc.biEvents(orgId!, year, dateBase, pdv, { limit: 10 }),
+        ])
+      return { cur, prev, monthly, segments, generos, topEvents }
     },
   })
 }

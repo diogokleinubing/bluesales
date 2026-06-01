@@ -1,99 +1,197 @@
-// Motor de classificação de segmentos (função pura e testável).
+// Motor de classificação de eventos (função pura e testável).
 //
-// Ordem de prioridade:
-//   1. override manual por evento (codigo_evento)
-//   2. mapa local -> segmento (local exato)
-//   3. regra de palavra-chave no NOME do evento
-//   4. regra de palavra-chave no LOCAL
-//   5. "Outros"
+// Duas dimensões resolvidas INDEPENDENTEMENTE: segmento e gênero. Para cada
+// dimensão, aplica a hierarquia na ordem; uma regra pode preencher só uma das
+// duas, e o motor continua descendo para a outra até preencher ou cair no
+// fallback.
+//
+// Hierarquia (por dimensão):
+//   1. campo manual do evento (segmento_manual / genero_manual)
+//   2. venue_segment_map: match exato no `local`
+//   3. keyword_rules: keyword no NOME do evento (menor `ordem` vence)
+//   4. venue_rules: keyword no `local` (menor `ordem` vence)
+//   5. fallback: segmento = "Outros"; gênero = null
 
 export const SEGMENTO_PADRAO = 'Outros'
 
+export type ClassSource =
+  | 'manual'
+  | 'venue_map'
+  | 'keyword'
+  | 'venue_rule'
+  | 'fallback'
+  | null
+
 export interface KeywordRule {
   keyword: string
-  segmento: string
+  segmento: string | null
+  genero: string | null
   ordem?: number
 }
 
-export interface ClassifyRules {
-  /** codigo_evento -> segmento */
-  eventOverrides: Map<string, string>
-  /** local (normalizado) -> segmento */
-  venueMap: Map<string, string>
-  /** regras por palavra no nome do evento */
+export interface VenueMapEntry {
+  local: string
+  segmento: string | null
+  genero: string | null
+}
+
+export interface ClassificationRules {
   keywordRules: KeywordRule[]
-  /** regras por palavra no nome do local */
   venueRules: KeywordRule[]
+  venueMap: VenueMapEntry[]
 }
 
 export interface ClassifiableEvent {
-  codigo_evento: string
   nome: string | null
   local: string | null
+  segmento_manual?: string | null
+  genero_manual?: string | null
 }
 
-/** Normaliza texto para comparação (sem acento, minúsculo, trim). */
-export function norm(s: string | null | undefined): string {
-  return (s ?? '')
+export interface ClassificationResult {
+  segmento: string | null
+  segmentoSource: ClassSource
+  genero: string | null
+  generoSource: ClassSource
+}
+
+/** Normaliza texto para comparação (sem acento, minúsculo, espaços). */
+export function normalize(text: string | null | undefined): string {
+  return (text ?? '')
+    .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
+    .replace(/[-_\s]+/g, ' ')
     .trim()
 }
+
+/** Alias histórico usado em outros módulos. */
+export const norm = normalize
 
 function sortByOrder(rules: KeywordRule[]): KeywordRule[] {
   return [...rules].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
 }
 
-function matchKeyword(text: string, rules: KeywordRule[]): string | null {
-  for (const r of sortByOrder(rules)) {
-    const kw = norm(r.keyword)
-    if (kw && text.includes(kw)) return r.segmento
-  }
-  return null
+/** Pré-computa o mapa local-normalizado -> entrada (último vence). */
+function buildVenueMapIndex(
+  venueMap: VenueMapEntry[],
+): Map<string, VenueMapEntry> {
+  const m = new Map<string, VenueMapEntry>()
+  for (const v of venueMap) m.set(normalize(v.local), v)
+  return m
 }
 
-/** Classifica um evento conforme as regras, na ordem de prioridade. */
+/**
+ * Classifica um evento nas duas dimensões. `rules` pode ser passado já com o
+ * índice de venueMap (ClassificationRules) — recalcula o índice a cada chamada,
+ * então para muitos eventos prefira reclassifyMany (abaixo).
+ */
 export function classifyEvent(
   event: ClassifiableEvent,
-  rules: ClassifyRules,
-): string {
-  // 1. Override manual por evento
-  const override = rules.eventOverrides.get(event.codigo_evento)
-  if (override) return override
-
-  // 2. Mapa local -> segmento
-  const localNorm = norm(event.local)
-  if (localNorm) {
-    const mapped = rules.venueMap.get(localNorm)
-    if (mapped) return mapped
-  }
-
-  // 3. Palavra-chave no nome do evento
-  const byName = matchKeyword(norm(event.nome), rules.keywordRules)
-  if (byName) return byName
-
-  // 4. Palavra-chave no local
-  const byVenue = matchKeyword(localNorm, rules.venueRules)
-  if (byVenue) return byVenue
-
-  // 5. Padrão
-  return SEGMENTO_PADRAO
+  rules: ClassificationRules,
+): ClassificationResult {
+  return classifyWithIndex(event, {
+    keywordRules: sortByOrder(rules.keywordRules),
+    venueRules: sortByOrder(rules.venueRules),
+    venueIndex: buildVenueMapIndex(rules.venueMap),
+  })
 }
 
-/** Constrói o objeto de regras a partir das linhas das tabelas. */
-export function buildRules(input: {
-  overrides: { codigo_evento: string; segmento: string }[]
-  venueMap: { local: string; segmento: string }[]
-  keywordRules: KeywordRule[]
-  venueRules: KeywordRule[]
-}): ClassifyRules {
-  return {
-    eventOverrides: new Map(
-      input.overrides.map((o) => [o.codigo_evento, o.segmento]),
-    ),
-    venueMap: new Map(input.venueMap.map((v) => [norm(v.local), v.segmento])),
-    keywordRules: input.keywordRules,
-    venueRules: input.venueRules,
+interface IndexedRules {
+  keywordRules: KeywordRule[] // já ordenadas
+  venueRules: KeywordRule[] // já ordenadas
+  venueIndex: Map<string, VenueMapEntry>
+}
+
+function classifyWithIndex(
+  event: ClassifiableEvent,
+  idx: IndexedRules,
+): ClassificationResult {
+  const nomeNorm = normalize(event.nome)
+  const localNorm = normalize(event.local)
+
+  let segmento: string | null = null
+  let segmentoSource: ClassSource = null
+  let genero: string | null = null
+  let generoSource: ClassSource = null
+
+  // 1. Manual (por dimensão).
+  if (event.segmento_manual && event.segmento_manual.trim()) {
+    segmento = event.segmento_manual.trim()
+    segmentoSource = 'manual'
   }
+  if (event.genero_manual && event.genero_manual.trim()) {
+    genero = event.genero_manual.trim()
+    generoSource = 'manual'
+  }
+
+  // 2. venue_segment_map (match exato no local).
+  if ((segmento == null || genero == null) && localNorm) {
+    const entry = idx.venueIndex.get(localNorm)
+    if (entry) {
+      if (segmento == null && entry.segmento) {
+        segmento = entry.segmento
+        segmentoSource = 'venue_map'
+      }
+      if (genero == null && entry.genero) {
+        genero = entry.genero
+        generoSource = 'venue_map'
+      }
+    }
+  }
+
+  // 3. keyword_rules (no nome).
+  if (segmento == null || genero == null) {
+    for (const r of idx.keywordRules) {
+      const kw = normalize(r.keyword)
+      if (!kw || !nomeNorm.includes(kw)) continue
+      if (segmento == null && r.segmento) {
+        segmento = r.segmento
+        segmentoSource = 'keyword'
+      }
+      if (genero == null && r.genero) {
+        genero = r.genero
+        generoSource = 'keyword'
+      }
+      if (segmento != null && genero != null) break
+    }
+  }
+
+  // 4. venue_rules (no local).
+  if ((segmento == null || genero == null) && localNorm) {
+    for (const r of idx.venueRules) {
+      const kw = normalize(r.keyword)
+      if (!kw || !localNorm.includes(kw)) continue
+      if (segmento == null && r.segmento) {
+        segmento = r.segmento
+        segmentoSource = 'venue_rule'
+      }
+      if (genero == null && r.genero) {
+        genero = r.genero
+        generoSource = 'venue_rule'
+      }
+      if (segmento != null && genero != null) break
+    }
+  }
+
+  // 5. Fallback (só segmento).
+  if (segmento == null) {
+    segmento = SEGMENTO_PADRAO
+    segmentoSource = 'fallback'
+  }
+
+  return { segmento, segmentoSource, genero, generoSource }
+}
+
+/** Classifica muitos eventos reutilizando o índice de regras (perf). */
+export function classifyMany(
+  events: ClassifiableEvent[],
+  rules: ClassificationRules,
+): ClassificationResult[] {
+  const idx: IndexedRules = {
+    keywordRules: sortByOrder(rules.keywordRules),
+    venueRules: sortByOrder(rules.venueRules),
+    venueIndex: buildVenueMapIndex(rules.venueMap),
+  }
+  return events.map((e) => classifyWithIndex(e, idx))
 }

@@ -1,184 +1,154 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus, Trash2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import {
   addKeywordRule,
-  addSegment,
-  deleteEventOverride,
   deleteKeywordRule,
-  deleteSegment,
-  deleteVenueSegment,
+  deleteVenueClassification,
+  setVenueClassification,
+  updateKeywordRule,
 } from '../../lib/rules-api'
-import type { KeywordRuleRow } from '@/lib/database.types'
+import { ClassSelect } from './ClassSelect'
+import type { KeywordRuleRow, VenueSegmentMapRow } from '@/lib/database.types'
 
 export function RulesEditor() {
-  const { rules, orgId, isLoading } = useRules()
+  const { rules, orgId } = useRules()
   const qc = useQueryClient()
   const reclassify = useReclassify(orgId)
 
-  const segNames = rules.segments.map((s) => s.nome)
-  const refresh = () => qc.invalidateQueries({ queryKey: ['rules'] })
-
-  async function run(fn: () => Promise<void>) {
-    try {
-      await fn()
-      refresh()
-    } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
-    }
-  }
+  const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
+  const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
+  const refreshRules = () => qc.invalidateQueries({ queryKey: ['rules'] })
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Edite as regras e clique em reclassificar para aplicar aos eventos.
-        </p>
+      <p className="text-sm text-muted-foreground">
+        Cada termo ou local pode classificar segmento, gênero, ou os dois. Ao
+        salvar, os eventos são reclassificados automaticamente (definições
+        manuais são preservadas).
+      </p>
+
+      {/* Termos no NOME do evento */}
+      <KeywordRuleCard
+        title="Termos no nome do evento"
+        hint="Aplicados ao nome do evento (ex.: artista). Salvar reclassifica todos os eventos."
+        table="keyword_rules"
+        rows={rules.keywordRules}
+        segNames={segNames}
+        genNames={genNames}
+        orgId={orgId}
+        afterChange={() => {
+          refreshRules()
+          reclassify.mutate('all')
+        }}
+      />
+
+      {/* Locais (venue_segment_map) */}
+      <VenueMapCard
+        rows={rules.venueMap}
+        segNames={segNames}
+        genNames={genNames}
+        orgId={orgId}
+        onReclassifyLocal={(local) => reclassify.mutate({ local })}
+        refreshRules={refreshRules}
+      />
+
+      {/* Termos no LOCAL */}
+      <KeywordRuleCard
+        title="Termos no local"
+        hint="Aplicados ao nome do local do evento. Salvar reclassifica todos os eventos."
+        table="venue_rules"
+        rows={rules.venueRules}
+        segNames={segNames}
+        genNames={genNames}
+        orgId={orgId}
+        afterChange={() => {
+          refreshRules()
+          reclassify.mutate('all')
+        }}
+      />
+
+      <div className="flex justify-end">
         <Button
-          onClick={() => reclassify.mutate()}
-          disabled={reclassify.isPending || isLoading}
+          variant="secondary"
+          onClick={() => reclassify.mutate('all')}
+          disabled={reclassify.isPending}
         >
           <RefreshCw
             className={`size-4 ${reclassify.isPending ? 'animate-spin' : ''}`}
           />
-          Salvar e reclassificar
+          Reclassificar todos
         </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Segmentos */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Segmentos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {rules.segments.length === 0 && (
-                <span className="text-sm text-muted-foreground">
-                  Nenhum segmento cadastrado.
-                </span>
-              )}
-              {rules.segments.map((s) => (
-                <Badge key={s.id} variant="secondary" className="gap-1">
-                  {s.nome}
-                  <button onClick={() => run(() => deleteSegment(s.id))}>
-                    <Trash2 className="size-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <AddInline
-              placeholder="Novo segmento"
-              onAdd={(nome) => orgId && run(() => addSegment(orgId, nome))}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Overrides + mapa de locais (somente leitura/remoção aqui) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Overrides ativos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <div className="mb-1 text-xs uppercase text-muted-foreground">
-                Por evento ({rules.overrides.length})
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {rules.overrides.slice(0, 30).map((o) => (
-                  <Badge key={o.id} variant="outline" className="gap-1">
-                    {o.codigo_evento}: {o.segmento}
-                    <button onClick={() => run(() => deleteEventOverride(o.id))}>
-                      <Trash2 className="size-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {rules.overrides.length === 0 && (
-                  <span className="text-muted-foreground">Nenhum</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 text-xs uppercase text-muted-foreground">
-                Por local ({rules.venueMap.length})
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {rules.venueMap.slice(0, 30).map((v) => (
-                  <Badge key={v.id} variant="outline" className="gap-1">
-                    {v.local}: {v.segmento}
-                    <button onClick={() => run(() => deleteVenueSegment(v.id))}>
-                      <Trash2 className="size-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {rules.venueMap.length === 0 && (
-                  <span className="text-muted-foreground">Nenhum</span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Regras por nome do evento */}
-        <KeywordRuleCard
-          title="Regras por palavra no NOME do evento"
-          table="keyword_rules"
-          rows={rules.keywordRules}
-          segNames={segNames}
-          orgId={orgId}
-          onChanged={refresh}
-        />
-
-        {/* Regras por nome do local */}
-        <KeywordRuleCard
-          title="Regras por palavra no LOCAL"
-          table="venue_rules"
-          rows={rules.venueRules}
-          segNames={segNames}
-          orgId={orgId}
-          onChanged={refresh}
-        />
       </div>
     </div>
   )
 }
 
+// ---------------------------------------------------------------------------
+// Termos (keyword_rules / venue_rules)
+// ---------------------------------------------------------------------------
 function KeywordRuleCard({
   title,
+  hint,
   table,
   rows,
   segNames,
+  genNames,
   orgId,
-  onChanged,
+  afterChange,
 }: {
   title: string
+  hint: string
   table: 'keyword_rules' | 'venue_rules'
   rows: KeywordRuleRow[]
   segNames: string[]
+  genNames: string[]
   orgId: string | undefined
-  onChanged: () => void
+  afterChange: () => void
 }) {
   const [keyword, setKeyword] = useState('')
-  const [segmento, setSegmento] = useState('')
+  const [segmento, setSegmento] = useState<string | null>(null)
+  const [genero, setGenero] = useState<string | null>(null)
 
   async function add() {
-    if (!orgId || !keyword.trim() || !segmento.trim()) return
+    if (!orgId || !keyword.trim() || (!segmento && !genero)) {
+      toast.error('Informe o termo e ao menos segmento ou gênero.')
+      return
+    }
     try {
       await addKeywordRule(table, orgId, {
         keyword: keyword.trim(),
-        segmento: segmento.trim(),
-        ordem: rows.length,
+        segmento,
+        genero,
+        ordem: rows.length * 10 + 10,
       })
       setKeyword('')
-      setSegmento('')
-      onChanged()
+      setSegmento(null)
+      setGenero(null)
+      afterChange()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  async function patch(id: string, p: Partial<KeywordRuleRow>) {
+    try {
+      await updateKeywordRule(table, id, p)
+      afterChange()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -187,7 +157,7 @@ function KeywordRuleCard({
   async function remove(id: string) {
     try {
       await deleteKeywordRule(table, id)
-      onChanged()
+      afterChange()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -197,90 +167,221 @@ function KeywordRuleCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">{title}</CardTitle>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-1">
-          {rows.length === 0 && (
-            <span className="text-sm text-muted-foreground">Nenhuma regra.</span>
-          )}
-          {rows.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center justify-between rounded-md border border-border px-2 py-1 text-sm"
-            >
-              <span>
-                <span className="font-mono">{r.keyword}</span>
-                <span className="text-muted-foreground"> → </span>
-                <span className="font-medium">{r.segmento}</span>
-              </span>
-              <button onClick={() => remove(r.id)}>
-                <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="palavra-chave"
-            className="h-8"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-          <Input
-            placeholder="segmento"
-            className="h-8"
-            list="seg-names"
-            value={segmento}
-            onChange={(e) => setSegmento(e.target.value)}
-          />
-          <Button size="sm" variant="secondary" onClick={add}>
-            <Plus className="size-4" />
-          </Button>
-        </div>
-        <datalist id="seg-names">
-          {segNames.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Termo</TableHead>
+              <TableHead className="w-48">Segmento</TableHead>
+              <TableHead className="w-48">Gênero musical</TableHead>
+              <TableHead className="w-20">Ordem</TableHead>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">
+                  Nenhum termo.
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-mono text-xs">{r.keyword}</TableCell>
+                <TableCell>
+                  <ClassSelect
+                    value={r.segmento}
+                    options={segNames}
+                    onChange={(v) => patch(r.id, { segmento: v })}
+                  />
+                </TableCell>
+                <TableCell>
+                  <ClassSelect
+                    value={r.genero}
+                    options={genNames}
+                    onChange={(v) => patch(r.id, { genero: v })}
+                  />
+                </TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">
+                  {r.ordem}
+                </TableCell>
+                <TableCell>
+                  <button onClick={() => remove(r.id)}>
+                    <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {/* Linha de adição */}
+            <TableRow>
+              <TableCell>
+                <Input
+                  placeholder="novo termo"
+                  className="h-8"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && add()}
+                />
+              </TableCell>
+              <TableCell>
+                <ClassSelect value={segmento} options={segNames} onChange={setSegmento} />
+              </TableCell>
+              <TableCell>
+                <ClassSelect value={genero} options={genNames} onChange={setGenero} />
+              </TableCell>
+              <TableCell colSpan={2}>
+                <Button size="sm" variant="secondary" onClick={add}>
+                  <Plus className="size-4" /> Adicionar
+                </Button>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   )
 }
 
-function AddInline({
-  placeholder,
-  onAdd,
+// ---------------------------------------------------------------------------
+// Locais (venue_segment_map)
+// ---------------------------------------------------------------------------
+function VenueMapCard({
+  rows,
+  segNames,
+  genNames,
+  orgId,
+  onReclassifyLocal,
+  refreshRules,
 }: {
-  placeholder: string
-  onAdd: (value: string) => void
+  rows: VenueSegmentMapRow[]
+  segNames: string[]
+  genNames: string[]
+  orgId: string | undefined
+  onReclassifyLocal: (local: string) => void
+  refreshRules: () => void
 }) {
-  const [value, setValue] = useState('')
+  const [local, setLocal] = useState('')
+  const [segmento, setSegmento] = useState<string | null>(null)
+  const [genero, setGenero] = useState<string | null>(null)
+
+  async function save(
+    targetLocal: string,
+    seg: string | null,
+    gen: string | null,
+  ) {
+    if (!orgId || !targetLocal.trim()) return
+    try {
+      await setVenueClassification(orgId, targetLocal.trim(), seg, gen)
+      refreshRules()
+      onReclassifyLocal(targetLocal.trim())
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  async function remove(id: string) {
+    try {
+      await deleteVenueClassification(id)
+      refreshRules()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
   return (
-    <div className="flex gap-2">
-      <Input
-        placeholder={placeholder}
-        className="h-8"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && value.trim()) {
-            onAdd(value.trim())
-            setValue('')
-          }
-        }}
-      />
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => {
-          if (value.trim()) {
-            onAdd(value.trim())
-            setValue('')
-          }
-        }}
-      >
-        <Plus className="size-4" />
-      </Button>
-    </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Locais</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Classificação por local exato. Salvar reclassifica só os eventos
+          daquele local.
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Local</TableHead>
+              <TableHead className="w-48">Segmento</TableHead>
+              <TableHead className="w-48">Gênero musical</TableHead>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="py-4 text-center text-muted-foreground">
+                  Nenhum local classificado.
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.map((v) => (
+              <TableRow key={v.id}>
+                <TableCell className="max-w-64 truncate font-medium">
+                  {v.local}
+                </TableCell>
+                <TableCell>
+                  <ClassSelect
+                    value={v.segmento}
+                    options={segNames}
+                    onChange={(val) => save(v.local, val, v.genero)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <ClassSelect
+                    value={v.genero}
+                    options={genNames}
+                    onChange={(val) => save(v.local, v.segmento, val)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <button onClick={() => remove(v.id)}>
+                    <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {/* Linha de adição */}
+            <TableRow>
+              <TableCell>
+                <Input
+                  placeholder="nome do local"
+                  className="h-8"
+                  value={local}
+                  onChange={(e) => setLocal(e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <ClassSelect value={segmento} options={segNames} onChange={setSegmento} />
+              </TableCell>
+              <TableCell>
+                <ClassSelect value={genero} options={genNames} onChange={setGenero} />
+              </TableCell>
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    if (!local.trim() || (!segmento && !genero)) {
+                      toast.error('Informe o local e ao menos segmento ou gênero.')
+                      return
+                    }
+                    save(local, segmento, genero)
+                    setLocal('')
+                    setSegmento(null)
+                    setGenero(null)
+                  }}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }

@@ -29,6 +29,9 @@ const EventosPage = lazy(() =>
 const MeiosPagamentoPage = lazy(() =>
   import('@/modules/bi/pages/MeiosPagamentoPage').then((m) => ({ default: m.MeiosPagamentoPage })),
 )
+const GenerosPage = lazy(() =>
+  import('@/modules/bi/pages/GenerosPage').then((m) => ({ default: m.GenerosPage })),
+)
 const YtdPage = lazy(() =>
   import('@/modules/bi/pages/YtdPage').then((m) => ({ default: m.YtdPage })),
 )
@@ -102,6 +105,7 @@ export const router = createBrowserRouter([
       { path: 'bi/dashboard', element: <DashboardPage /> },
       { path: 'bi/mensal', element: <MensalPage /> },
       { path: 'bi/segmentos', element: <SegmentosPage /> },
+      { path: 'bi/generos', element: <GenerosPage /> },
       { path: 'bi/organizadores', element: <OrganizadoresPage /> },
       { path: 'bi/locais', element: <LocaisPage /> },
       { path: 'bi/eventos', element: <EventosPage /> },

@@ -3,6 +3,7 @@ import { RulesEditor } from '../components/regras/RulesEditor'
 import { PopularVenues } from '../components/regras/PopularVenues'
 import { BiggestEvents } from '../components/regras/BiggestEvents'
 import { RecurringEvents } from '../components/regras/RecurringEvents'
+import { TaxonomyPanel } from '../components/regras/TaxonomyPanel'
 
 export function RegrasPage() {
   return (
@@ -10,20 +11,28 @@ export function RegrasPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Regras</h1>
         <p className="text-sm text-muted-foreground">
-          Classificação de segmentos: ordem de prioridade override por evento →
-          mapa de local → palavra no nome → palavra no local → Outros.
+          Classificação de eventos por segmento e gênero musical. Prioridade:
+          definição manual → local → termo no nome → termo no local → padrão.
         </p>
       </div>
 
-      <Tabs defaultValue="regras">
+      <Tabs defaultValue="classificacao">
         <TabsList>
-          <TabsTrigger value="regras">Regras</TabsTrigger>
+          <TabsTrigger value="classificacao">Classificação</TabsTrigger>
+          <TabsTrigger value="segmentos">Segmentos</TabsTrigger>
+          <TabsTrigger value="generos">Gêneros</TabsTrigger>
           <TabsTrigger value="locais">Locais populares</TabsTrigger>
           <TabsTrigger value="eventos">Maiores eventos</TabsTrigger>
           <TabsTrigger value="recorrentes">Eventos recorrentes</TabsTrigger>
         </TabsList>
-        <TabsContent value="regras" className="mt-4">
+        <TabsContent value="classificacao" className="mt-4">
           <RulesEditor />
+        </TabsContent>
+        <TabsContent value="segmentos" className="mt-4">
+          <TaxonomyPanel kind="segmento" />
+        </TabsContent>
+        <TabsContent value="generos" className="mt-4">
+          <TaxonomyPanel kind="genero" />
         </TabsContent>
         <TabsContent value="locais" className="mt-4">
           <PopularVenues />

@@ -139,6 +139,7 @@ export interface EventRow extends MetricSums {
   codigo_evento: string
   nome: string | null
   segmento: string | null
+  genero: string | null
   organizador: string | null
   local: string | null
   cidade: string | null
@@ -151,6 +152,7 @@ export interface EventRow extends MetricSums {
 export interface BiEventsParams {
   search?: string
   segmento?: string
+  genero?: string
   organizador?: string
   local?: string
   cidade?: string
@@ -175,6 +177,7 @@ export async function biEvents(
     p_pdv: pdvArg(pdv),
     p_search: params.search || null,
     p_segmento: params.segmento || null,
+    p_genero: params.genero || null,
     p_organizador: params.organizador || null,
     p_local: params.local || null,
     p_cidade: params.cidade || null,
@@ -216,6 +219,7 @@ export async function biBiggestEvents(
     p_pdv: null,
     p_search: search || null,
     p_segmento: null,
+    p_genero: null,
     p_organizador: null,
     p_local: null,
     p_cidade: null,

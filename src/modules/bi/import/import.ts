@@ -29,7 +29,13 @@ const CHUNK = 500
 
 type EventInsert = Omit<
   EventRow,
-  'id' | 'created_at' | 'segmento' | 'familia'
+  | 'id'
+  | 'created_at'
+  | 'segmento'
+  | 'segmento_manual'
+  | 'genero'
+  | 'genero_manual'
+  | 'familia'
 > & {
   segmento?: string | null
   familia?: string | null

@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X, Download } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Search, X, Download, Pin } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -21,18 +23,32 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useEventos, type EventFilters } from '../hooks/useEventos'
+import { useRules } from '../hooks/useRules'
+import { useReclassify } from '../hooks/useReclassify'
 import { useControls } from '@/modules/shared/controls-context'
+import { useOrgId } from '../hooks/useBi'
 import { METRIC_LABELS } from '../lib/controls'
 import { exportToXlsx } from '../lib/export'
+import {
+  fetchEventManuals,
+  setEventDimensionManual,
+} from '../lib/rules-api'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 const ALL = '__all__'
+const AUTO = '__auto__'
 
 function paramFilters(params: URLSearchParams): EventFilters {
   return {
     search: params.get('q') ?? '',
     segmento: params.get('segmento') ?? '',
+    genero: params.get('genero') ?? '',
     organizador: params.get('organizador') ?? '',
     local: params.get('local') ?? '',
     cidade: params.get('cidade') ?? '',
@@ -41,7 +57,6 @@ function paramFilters(params: URLSearchParams): EventFilters {
   }
 }
 
-/** Mapeia a chave do filtro para o nome do parâmetro na URL. */
 function mapKey(key: keyof EventFilters): string {
   return key === 'search' ? 'q' : key
 }
@@ -49,8 +64,24 @@ function mapKey(key: keyof EventFilters): string {
 export function EventosPage() {
   const [params, setParams] = useSearchParams()
   const { metric } = useControls()
+  const orgId = useOrgId()
+  const qc = useQueryClient()
+  const reclassify = useReclassify(orgId)
+  const { rules } = useRules()
   const filters = useMemo(() => paramFilters(params), [params])
   const { events, options, isLoading, total, truncated } = useEventos(filters)
+
+  const segNames = rules.segments.map((s) => s.nome)
+  const genNames = rules.generos.map((g) => g.nome)
+
+  // Manuais por código (para o pin e o estado dos selects inline).
+  const manualsQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['bi', 'event-manuals', orgId],
+    queryFn: () => fetchEventManuals(orgId!),
+  })
+  const manuals = manualsQ.data
 
   function setFilter(key: keyof EventFilters, value: string) {
     const next = new URLSearchParams(params)
@@ -63,9 +94,27 @@ export function EventosPage() {
     setParams(new URLSearchParams(), { replace: true })
   }
 
+  async function changeDimension(
+    codigo: string,
+    dim: 'segmento' | 'genero',
+    value: string | null,
+  ) {
+    if (!orgId) return
+    try {
+      await setEventDimensionManual(orgId, codigo, dim, value)
+      // Limpar manual → reclassifica o evento pelas regras. Definir manual →
+      // reclassifica também (recalcula a outra dimensão, mantém a manual).
+      await reclassify.mutateAsync({ codigos: [codigo] })
+      qc.invalidateQueries({ queryKey: ['bi', 'event-manuals', orgId] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
   const hasFilters =
     filters.search ||
     filters.segmento ||
+    filters.genero ||
     filters.organizador ||
     filters.local ||
     filters.cidade ||
@@ -103,6 +152,7 @@ export function EventosPage() {
                     Código: e.codigo_evento,
                     Evento: e.nome ?? '',
                     Segmento: e.segmento ?? 'Sem segmento',
+                    Gênero: e.genero ?? 'Sem gênero',
                     Organizador: e.organizador ?? '',
                     Local: e.local ?? '',
                     Cidade: e.cidade ?? '',
@@ -137,6 +187,12 @@ export function EventosPage() {
             value={filters.segmento}
             options={options.segmentos}
             onChange={(v) => setFilter('segmento', v)}
+          />
+          <FilterSelect
+            placeholder="Gênero"
+            value={filters.genero}
+            options={options.generos}
+            onChange={(v) => setFilter('genero', v)}
           />
           <FilterSelect
             placeholder="Organizador"
@@ -183,14 +239,13 @@ export function EventosPage() {
                 <TableRow>
                   <TableHead>Código</TableHead>
                   <TableHead>Evento</TableHead>
-                  <TableHead>Segmento</TableHead>
+                  <TableHead className="w-52">Segmento</TableHead>
+                  <TableHead className="w-52">Gênero</TableHead>
                   <TableHead>Organizador</TableHead>
                   <TableHead>Local</TableHead>
-                  <TableHead>Cidade</TableHead>
                   <TableHead>UF</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
                   <TableHead className="text-right">GMV</TableHead>
-                  <TableHead className="text-right">Receita BT</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -199,45 +254,56 @@ export function EventosPage() {
                 ) : events.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={9}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Nenhum evento encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  events.map((e) => (
-                    <TableRow key={e.codigo_evento}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {e.codigo_evento}
-                      </TableCell>
-                      <TableCell className="max-w-64 truncate font-medium">
-                        {e.nome ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {e.segmento ?? 'Sem segmento'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-40 truncate">
-                        {e.organizador ?? '—'}
-                      </TableCell>
-                      <TableCell className="max-w-40 truncate">
-                        {e.local ?? '—'}
-                      </TableCell>
-                      <TableCell>{e.cidade ?? '—'}</TableCell>
-                      <TableCell>{e.uf ?? '—'}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtInt(e.vendas)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(e.gmv)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(e.receitaBt)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  events.map((e) => {
+                    const m = manuals?.get(e.codigo_evento)
+                    return (
+                      <TableRow key={e.codigo_evento}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {e.codigo_evento}
+                        </TableCell>
+                        <TableCell className="max-w-64 truncate font-medium">
+                          {e.nome ?? '—'}
+                        </TableCell>
+                        <DimensionCell
+                          value={e.segmento}
+                          isManual={!!(m?.segmento_manual)}
+                          options={segNames}
+                          onChange={(v) =>
+                            changeDimension(e.codigo_evento, 'segmento', v)
+                          }
+                        />
+                        <DimensionCell
+                          value={e.genero}
+                          emptyLabel="Sem gênero"
+                          isManual={!!(m?.genero_manual)}
+                          options={genNames}
+                          onChange={(v) =>
+                            changeDimension(e.codigo_evento, 'genero', v)
+                          }
+                        />
+                        <TableCell className="max-w-40 truncate">
+                          {e.organizador ?? '—'}
+                        </TableCell>
+                        <TableCell className="max-w-40 truncate">
+                          {e.local ?? '—'}
+                        </TableCell>
+                        <TableCell>{e.uf ?? '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtInt(e.vendas)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtBRL(e.gmv)}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
@@ -245,6 +311,60 @@ export function EventosPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/** Célula de dimensão (segmento/gênero) editável inline, com pin se manual. */
+function DimensionCell({
+  value,
+  options,
+  isManual,
+  onChange,
+  emptyLabel = 'Sem segmento',
+}: {
+  value: string | null
+  options: string[]
+  isManual: boolean
+  onChange: (v: string | null) => void
+  emptyLabel?: string
+}) {
+  return (
+    <TableCell>
+      <div className="flex items-center gap-1">
+        {isManual && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-primary">
+                <Pin className="size-3.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              Definido manualmente — não será alterado por regras
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <Select
+          value={isManual && value ? value : AUTO}
+          onValueChange={(v) => onChange(v === AUTO ? null : v)}
+        >
+          <SelectTrigger className="h-8 flex-1" size="sm">
+            <SelectValue>
+              <span className={value ? '' : 'text-muted-foreground'}>
+                {value ?? emptyLabel}
+              </span>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={AUTO}>— Automático</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o} value={o}>
+                {o}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </TableCell>
   )
 }
 
@@ -284,7 +404,7 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 8 }).map((_, i) => (
         <TableRow key={i}>
-          <TableCell colSpan={10}>
+          <TableCell colSpan={9}>
             <Skeleton className="h-5 w-full" />
           </TableCell>
         </TableRow>

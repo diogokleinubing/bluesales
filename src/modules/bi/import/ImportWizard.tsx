@@ -40,7 +40,8 @@ import {
   type EventSheetInput,
   type SaleSheetInput,
 } from './import'
-import { reclassifyEvents } from '../lib/rules-api'
+import { fetchRules, toClassificationRules } from '../lib/rules-api'
+import { reclassifyEvents } from '../lib/reclassify'
 import { applyFamilyOverrides } from '../lib/family-api'
 import { loadMapping, loadType, saveMapping, saveType } from './mapping-cache'
 import {
@@ -206,8 +207,9 @@ export function ImportWizard() {
       // O consolidador (rollup) já é atualizado de forma incremental dentro
       // do runImport. Reclassifica só se vieram eventos.
       if (res.hadEvents) {
-        setProgress({ phase: 'Classificando segmentos', current: 0, total: 1 })
-        await reclassifyEvents(org.data.id)
+        setProgress({ phase: 'Classificando eventos', current: 0, total: 1 })
+        const rules = toClassificationRules(await fetchRules(org.data.id))
+        await reclassifyEvents('all', rules, org.data.id)
         // Aplica só os overrides (agrupamentos manuais). NÃO aplica a sugestão
         // automática por nome — isso repoluiria os eventos não agrupados.
         setProgress({ phase: 'Aplicando agrupamentos', current: 0, total: 1 })

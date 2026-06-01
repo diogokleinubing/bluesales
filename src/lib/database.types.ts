@@ -22,6 +22,9 @@ export interface EventRow {
   cidade: string | null
   uf: string | null
   segmento: string | null
+  segmento_manual: string | null
+  genero: string | null
+  genero_manual: string | null
   familia: string | null
   created_at: string
 }
@@ -31,6 +34,12 @@ export interface EventFamilyOverrideRow {
   org_id: string
   codigo_evento: string
   familia: string
+}
+
+export interface GeneroRow {
+  id: string
+  org_id: string
+  nome: string
 }
 
 export interface SaleRow {
@@ -91,7 +100,8 @@ export interface KeywordRuleRow {
   id: string
   org_id: string
   keyword: string
-  segmento: string
+  segmento: string | null
+  genero: string | null
   ordem: number
 }
 
@@ -99,7 +109,8 @@ export interface VenueRuleRow {
   id: string
   org_id: string
   keyword: string
-  segmento: string
+  segmento: string | null
+  genero: string | null
   ordem: number
 }
 
@@ -107,14 +118,8 @@ export interface VenueSegmentMapRow {
   id: string
   org_id: string
   local: string
-  segmento: string
-}
-
-export interface EventSegmentOverrideRow {
-  id: string
-  org_id: string
-  codigo_evento: string
-  segmento: string
+  segmento: string | null
+  genero: string | null
 }
 
 export interface ProvisioningRow {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -16,17 +16,26 @@ import {
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import { useOrgId } from '../../hooks/useBi'
-import { setVenueSegment } from '../../lib/rules-api'
+import { setVenueClassification } from '../../lib/rules-api'
 import { biPopularVenues } from '../../lib/rpc'
 import { norm } from '../../lib/classify'
+import { ClassSelect } from './ClassSelect'
 import { fmtInt } from '@/lib/format'
+
+interface Draft {
+  segmento: string | null
+  genero: string | null
+}
 
 export function PopularVenues() {
   const { rules, orgId: rulesOrg } = useRules()
   const orgId = useOrgId()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
-  const [segInputs, setSegInputs] = useState<Record<string, string>>({})
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+
+  const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
+  const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
 
   const venuesQ = useQuery({
     enabled: !!orgId,
@@ -35,17 +44,24 @@ export function PopularVenues() {
     queryFn: () => biPopularVenues(orgId!, search, 200),
   })
 
-  const venueMapByNorm = new Map(
-    rules.venueMap.map((v) => [norm(v.local), v.segmento]),
+  const venueMapByNorm = useMemo(
+    () => new Map(rules.venueMap.map((v) => [norm(v.local), v])),
+    [rules.venueMap],
   )
 
+  function draftFor(local: string): Draft {
+    if (drafts[local]) return drafts[local]
+    const cur = venueMapByNorm.get(norm(local))
+    return { segmento: cur?.segmento ?? null, genero: cur?.genero ?? null }
+  }
+
   async function assign(local: string) {
-    const segmento = (segInputs[local] ?? '').trim()
-    if (!rulesOrg || !segmento) return
+    const d = draftFor(local)
+    if (!rulesOrg || (!d.segmento && !d.genero)) return
     try {
-      await setVenueSegment(rulesOrg, local, segmento)
-      toast.success(`Local "${local}" → ${segmento}`)
-      reclassify.mutate()
+      await setVenueClassification(rulesOrg, local, d.segmento, d.genero)
+      toast.success(`Local "${local}" classificado`)
+      reclassify.mutate({ local })
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -67,49 +83,70 @@ export function PopularVenues() {
                 <TableRow>
                   <TableHead>Local</TableHead>
                   <TableHead className="text-right">Eventos</TableHead>
-                  <TableHead>Segmento atual</TableHead>
-                  <TableHead className="w-72">Atribuir segmento</TableHead>
+                  <TableHead>Atual</TableHead>
+                  <TableHead className="w-44">Segmento</TableHead>
+                  <TableHead className="w-44">Gênero musical</TableHead>
+                  <TableHead className="w-16"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {venuesQ.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                       Carregando…
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (venuesQ.data ?? []).map((v) => (
-                    <TableRow key={v.local}>
-                      <TableCell className="max-w-64 truncate font-medium">
-                        {v.local}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtInt(Number(v.eventos))}
-                      </TableCell>
-                      <TableCell>
-                        {venueMapByNorm.has(norm(v.local)) ? (
-                          <Badge variant="secondary">
-                            {venueMapByNorm.get(norm(v.local))}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="segmento"
-                            list="seg-names"
-                            className="h-8"
-                            value={segInputs[v.local] ?? ''}
-                            onChange={(e) =>
-                              setSegInputs((p) => ({
+                  (venuesQ.data ?? []).map((v) => {
+                    const cur = venueMapByNorm.get(norm(v.local))
+                    const d = draftFor(v.local)
+                    return (
+                      <TableRow key={v.local}>
+                        <TableCell className="max-w-56 truncate font-medium">
+                          {v.local}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtInt(Number(v.eventos))}
+                        </TableCell>
+                        <TableCell>
+                          {cur?.segmento || cur?.genero ? (
+                            <div className="flex flex-wrap gap-1">
+                              {cur.segmento && (
+                                <Badge variant="secondary">{cur.segmento}</Badge>
+                              )}
+                              {cur.genero && (
+                                <Badge variant="outline">{cur.genero}</Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <ClassSelect
+                            value={d.segmento}
+                            options={segNames}
+                            onChange={(val) =>
+                              setDrafts((p) => ({
                                 ...p,
-                                [v.local]: e.target.value,
+                                [v.local]: { ...d, segmento: val },
                               }))
                             }
                           />
+                        </TableCell>
+                        <TableCell>
+                          <ClassSelect
+                            value={d.genero}
+                            options={genNames}
+                            onChange={(val) =>
+                              setDrafts((p) => ({
+                                ...p,
+                                [v.local]: { ...d, genero: val },
+                              }))
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
                           <Button
                             size="sm"
                             variant="secondary"
@@ -117,21 +154,16 @@ export function PopularVenues() {
                           >
                             Aplicar
                           </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
-      <datalist id="seg-names">
-        {rules.segments.map((s) => (
-          <option key={s.id} value={s.nome} />
-        ))}
-      </datalist>
     </div>
   )
 }

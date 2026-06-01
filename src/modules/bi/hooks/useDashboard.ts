@@ -94,7 +94,15 @@ export function useDashboard() {
       }))
       .sort((a, b) => b.value - a.value)
 
-    return { kpis, delta, monthly, composition, topEvents, segments }
+    const generos = (d?.generos ?? [])
+      .map((g) => ({
+        key: g.key ?? 'Sem gênero',
+        label: g.key ?? 'Sem gênero',
+        value: metricOf(g, metric),
+      }))
+      .sort((a, b) => b.value - a.value)
+
+    return { kpis, delta, monthly, composition, topEvents, segments, generos }
   }, [d, metric])
 
   return {

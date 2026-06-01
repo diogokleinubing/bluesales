@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,8 +17,9 @@ import {
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import { useOrgId } from '../../hooks/useBi'
-import { bulkSetEventOverride } from '../../lib/rules-api'
+import { setEventManual } from '../../lib/rules-api'
 import { biBiggestEvents } from '../../lib/rpc'
+import { ClassSelect } from './ClassSelect'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 export function BiggestEvents() {
@@ -27,7 +28,11 @@ export function BiggestEvents() {
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [segmento, setSegmento] = useState('')
+  const [segmento, setSegmento] = useState<string | null>(null)
+  const [genero, setGenero] = useState<string | null>(null)
+
+  const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
+  const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
 
   const eventsQ = useQuery({
     enabled: !!orgId,
@@ -55,13 +60,19 @@ export function BiggestEvents() {
   }
 
   async function applyBulk() {
-    if (!rulesOrg || selected.size === 0 || !segmento.trim()) return
+    if (!rulesOrg || selected.size === 0 || (!segmento && !genero)) return
     try {
-      await bulkSetEventOverride(rulesOrg, [...selected], segmento.trim())
-      toast.success(`${selected.size} eventos → ${segmento.trim()}`)
+      const codigos = [...selected]
+      const patch: { segmento_manual?: string; genero_manual?: string } = {}
+      if (segmento) patch.segmento_manual = segmento
+      if (genero) patch.genero_manual = genero
+      await setEventManual(rulesOrg, codigos, patch)
+      // Reclassifica os afetados: dimensões manuais ficam, as demais recalculam.
+      reclassify.mutate({ codigos })
+      toast.success(`${codigos.length} eventos definidos manualmente`)
       setSelected(new Set())
-      setSegmento('')
-      reclassify.mutate()
+      setSegmento(null)
+      setGenero(null)
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -78,16 +89,23 @@ export function BiggestEvents() {
         />
         <div className="ml-auto flex items-center gap-2">
           <Badge variant="secondary">{selected.size} selecionados</Badge>
-          <Input
-            placeholder="segmento"
-            list="seg-names"
-            className="h-9 w-44"
+          <ClassSelect
             value={segmento}
-            onChange={(e) => setSegmento(e.target.value)}
+            options={segNames}
+            onChange={setSegmento}
+            placeholder="Segmento"
+            className="h-9 w-40"
+          />
+          <ClassSelect
+            value={genero}
+            options={genNames}
+            onChange={setGenero}
+            placeholder="Gênero"
+            className="h-9 w-40"
           />
           <Button
             onClick={applyBulk}
-            disabled={selected.size === 0 || !segmento.trim()}
+            disabled={selected.size === 0 || (!segmento && !genero)}
           >
             Aplicar em lote
           </Button>
@@ -156,11 +174,6 @@ export function BiggestEvents() {
           </div>
         </CardContent>
       </Card>
-      <datalist id="seg-names">
-        {rules.segments.map((s) => (
-          <option key={s.id} value={s.nome} />
-        ))}
-      </datalist>
     </div>
   )
 }

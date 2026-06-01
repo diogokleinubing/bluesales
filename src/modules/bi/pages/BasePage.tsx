@@ -97,7 +97,7 @@ export function BasePage() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => reclassify.mutate()}
+            onClick={() => reclassify.mutate('all')}
             disabled={reclassify.isPending}
           >
             <RefreshCw

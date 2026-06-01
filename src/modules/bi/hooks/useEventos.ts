@@ -7,6 +7,7 @@ import { biEvents, biEventOptions, metricOf } from '../lib/rpc'
 export interface EventFilters {
   search: string
   segmento: string
+  genero: string
   organizador: string
   local: string
   cidade: string
@@ -16,6 +17,7 @@ export interface EventFilters {
 
 export interface EventOptions {
   segmentos: string[]
+  generos: string[]
   organizadores: string[]
   locais: string[]
   cidades: string[]
@@ -26,6 +28,7 @@ export interface EventListRow {
   codigo_evento: string
   nome: string | null
   segmento: string | null
+  genero: string | null
   organizador: string | null
   local: string | null
   cidade: string | null
@@ -50,6 +53,7 @@ export function useEventos(filters: EventFilters) {
       biEvents(orgId!, year, dateBase, pdv, {
         search: filters.search,
         segmento: filters.segmento,
+        genero: filters.genero,
         organizador: filters.organizador,
         local: filters.local,
         cidade: filters.cidade,
@@ -73,6 +77,7 @@ export function useEventos(filters: EventFilters) {
         codigo_evento: e.codigo_evento,
         nome: e.nome,
         segmento: e.segmento,
+        genero: e.genero,
         organizador: e.organizador,
         local: e.local,
         cidade: e.cidade,
@@ -97,6 +102,7 @@ export function useEventos(filters: EventFilters) {
         .sort((a, b) => a.localeCompare(b, 'pt-BR'))
     return {
       segmentos: by('segmento'),
+      generos: by('genero'),
       organizadores: by('organizador'),
       locais: by('local'),
       cidades: by('cidade'),
