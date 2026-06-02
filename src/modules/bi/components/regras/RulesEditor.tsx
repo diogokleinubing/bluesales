@@ -67,21 +67,6 @@ export function RulesEditor() {
         refreshRules={refreshRules}
       />
 
-      {/* Termos no LOCAL */}
-      <KeywordRuleCard
-        title="Termos no local"
-        hint="Aplicados ao nome do local do evento. Salvar reclassifica todos os eventos."
-        table="venue_rules"
-        rows={rules.venueRules}
-        segNames={segNames}
-        genNames={genNames}
-        orgId={orgId}
-        afterChange={() => {
-          refreshRules()
-          reclassify.mutate('all')
-        }}
-      />
-
       <div className="flex justify-end">
         <Button
           variant="secondary"
