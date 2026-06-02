@@ -183,6 +183,7 @@ export function EventosPage() {
                     Evento: e.nome ?? '',
                     Segmento: e.segmento ?? 'Sem segmento',
                     Gênero: e.genero ?? 'Sem gênero',
+                    'Família de Eventos': e.familia ?? '',
                     Organizador: e.organizador ?? '',
                     Local: e.local ?? '',
                     Cidade: e.cidade ?? '',
@@ -271,8 +272,8 @@ export function EventosPage() {
                   <TableHead>Evento</TableHead>
                   <TableHead className="w-52">Segmento</TableHead>
                   <TableHead className="w-52">Gênero</TableHead>
+                  <TableHead>Família de Eventos</TableHead>
                   <TableHead>Organizador</TableHead>
-                  <TableHead>Local</TableHead>
                   <TableHead>UF</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
                   <TableHead className="text-right">GMV Total</TableHead>
@@ -324,10 +325,10 @@ export function EventosPage() {
                           }
                         />
                         <TableCell className="max-w-40 truncate">
-                          {e.organizador ?? '—'}
+                          {e.familia ?? '—'}
                         </TableCell>
                         <TableCell className="max-w-40 truncate">
-                          {e.local ?? '—'}
+                          {e.organizador ?? '—'}
                         </TableCell>
                         <TableCell>{e.uf ?? '—'}</TableCell>
                         <TableCell className="text-right tabular-nums">

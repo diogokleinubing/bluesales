@@ -146,6 +146,7 @@ export interface EventRow extends MetricSums {
   nome: string | null
   segmento: string | null
   genero: string | null
+  familia: string | null
   organizador: string | null
   local: string | null
   cidade: string | null

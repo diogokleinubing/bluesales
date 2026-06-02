@@ -29,6 +29,7 @@ export interface EventListRow {
   nome: string | null
   segmento: string | null
   genero: string | null
+  familia: string | null
   organizador: string | null
   local: string | null
   cidade: string | null
@@ -79,6 +80,7 @@ export function useEventos(filters: EventFilters) {
         nome: e.nome,
         segmento: e.segmento,
         genero: e.genero,
+        familia: e.familia,
         organizador: e.organizador,
         local: e.local,
         cidade: e.cidade,
