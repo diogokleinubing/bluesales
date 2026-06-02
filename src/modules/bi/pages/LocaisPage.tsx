@@ -1,39 +1,30 @@
-import { useMemo } from 'react'
+import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingView } from '../components/RankingView'
-import { useBiGroup } from '../hooks/useBi'
+import { CompareToggle } from '../components/CompareToggle'
+import { useGroupAnalysis } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { groupRowsToAgg } from '../lib/group-map'
 import { METRIC_LABELS } from '../lib/controls'
 
 export function LocaisPage() {
   const { year, metric } = useControls()
-  const localQ = useBiGroup('local')
-  const cidadeQ = useBiGroup('cidade')
-  const ufQ = useBiGroup('uf')
-
-  const porLocal = useMemo(
-    () => groupRowsToAgg(localQ.data ?? [], metric, 'Sem local'),
-    [localQ.data, metric],
-  )
-  const porCidade = useMemo(
-    () => groupRowsToAgg(cidadeQ.data ?? [], metric, 'Sem cidade'),
-    [cidadeQ.data, metric],
-  )
-  const porUf = useMemo(
-    () => groupRowsToAgg(ufQ.data ?? [], metric, 'Sem UF'),
-    [ufQ.data, metric],
-  )
+  const [compare, setCompare] = useState(false)
+  const porLocal = useGroupAnalysis('local', 'Sem local', compare)
+  const porCidade = useGroupAnalysis('cidade', 'Sem cidade', compare)
+  const porUf = useGroupAnalysis('uf', 'Sem UF', compare)
 
   const metricLabel = METRIC_LABELS[metric]
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Locais</h1>
-        <p className="text-sm text-muted-foreground">
-          Desempenho por local, cidade e UF em {year}.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Locais</h1>
+          <p className="text-sm text-muted-foreground">
+            Desempenho por local, cidade e UF em {year}.
+          </p>
+        </div>
+        <CompareToggle checked={compare} onChange={setCompare} />
       </div>
 
       <Tabs defaultValue="local">
@@ -45,28 +36,31 @@ export function LocaisPage() {
         <TabsContent value="local" className="mt-4">
           <RankingView
             title="Local"
-            groups={porLocal}
+            groups={porLocal.groups}
             metricLabel={metricLabel}
             drillParam="local"
-            loading={localQ.isLoading}
+            loading={porLocal.loading}
+            compare={compare}
           />
         </TabsContent>
         <TabsContent value="cidade" className="mt-4">
           <RankingView
             title="Cidade"
-            groups={porCidade}
+            groups={porCidade.groups}
             metricLabel={metricLabel}
             drillParam="cidade"
-            loading={cidadeQ.isLoading}
+            loading={porCidade.loading}
+            compare={compare}
           />
         </TabsContent>
         <TabsContent value="uf" className="mt-4">
           <RankingView
             title="UF"
-            groups={porUf}
+            groups={porUf.groups}
             metricLabel={metricLabel}
             drillParam="uf"
-            loading={ufQ.isLoading}
+            loading={porUf.loading}
+            compare={compare}
           />
         </TabsContent>
       </Tabs>

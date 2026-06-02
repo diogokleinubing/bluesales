@@ -7,6 +7,7 @@ export function groupRowsToAgg(
   rows: GroupRow[],
   metric: Metric,
   fallbackLabel: string,
+  prevByKey?: Map<string, number>,
 ): GroupAgg[] {
   return rows
     .map((r) => {
@@ -16,9 +17,24 @@ export function groupRowsToAgg(
         label,
         value: metricOf(r, metric),
         gmv: Number(r.gmv),
+        gmvOnline: Number(r.gmv_online ?? 0),
         receitaBt: Number(r.receita_bt),
         vendas: Number(r.qtd),
+        gmvPrev: prevByKey?.get(label),
       }
     })
     .sort((a, b) => b.value - a.value)
+}
+
+/** Mapa label -> GMV total, a partir de linhas de bi_group (ano anterior). */
+export function gmvByKey(
+  rows: GroupRow[],
+  fallbackLabel: string,
+): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const r of rows) {
+    const label = r.key && r.key.trim() ? r.key.trim() : fallbackLabel
+    m.set(label, Number(r.gmv))
+  }
+  return m
 }

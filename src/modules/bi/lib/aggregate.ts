@@ -122,8 +122,11 @@ export interface GroupAgg {
   label: string
   value: number
   gmv: number
+  gmvOnline: number
   receitaBt: number
   vendas: number
+  /** GMV total do mesmo período no ano anterior (quando comparativo ligado). */
+  gmvPrev?: number
 }
 
 export function groupBy(
@@ -138,11 +141,12 @@ export function groupBy(
     const key = raw && raw.trim() ? raw.trim() : fallbackLabel
     let g = map.get(key)
     if (!g) {
-      g = { key, label: key, value: 0, gmv: 0, receitaBt: 0, vendas: 0 }
+      g = { key, label: key, value: 0, gmv: 0, gmvOnline: 0, receitaBt: 0, vendas: 0 }
       map.set(key, g)
     }
     g.value += metricValue(s, metric)
     g.gmv += s.gmv
+    g.gmvOnline += s.tipo_pdv === 'E' ? s.gmv : 0
     g.receitaBt += s.receita_bt
     g.vendas += 1
   }

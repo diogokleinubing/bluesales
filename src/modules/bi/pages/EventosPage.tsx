@@ -158,8 +158,8 @@ export function EventosPage() {
                     Cidade: e.cidade ?? '',
                     UF: e.uf ?? '',
                     Vendas: e.vendas,
-                    GMV: e.gmv,
-                    'Receita BT': e.receitaBt,
+                    'GMV Total': e.gmv,
+                    'GMV On-Line': e.gmvOnline,
                   })),
                 },
               ])
@@ -245,7 +245,8 @@ export function EventosPage() {
                   <TableHead>Local</TableHead>
                   <TableHead>UF</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
-                  <TableHead className="text-right">GMV</TableHead>
+                  <TableHead className="text-right">GMV Total</TableHead>
+                  <TableHead className="text-right">GMV On-Line</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -254,7 +255,7 @@ export function EventosPage() {
                 ) : events.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Nenhum evento encontrado.
@@ -300,6 +301,9 @@ export function EventosPage() {
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {fmtBRL(e.gmv)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtBRL(e.gmvOnline)}
                         </TableCell>
                       </TableRow>
                     )
@@ -404,7 +408,7 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 8 }).map((_, i) => (
         <TableRow key={i}>
-          <TableCell colSpan={9}>
+          <TableCell colSpan={10}>
             <Skeleton className="h-5 w-full" />
           </TableCell>
         </TableRow>

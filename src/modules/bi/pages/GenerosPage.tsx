@@ -1,27 +1,24 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MultiLineChart } from '../components/charts'
 import { RankingView } from '../components/RankingView'
-import { useBiGroup, useBiMonthlyByGroup } from '../hooks/useBi'
+import { CompareToggle } from '../components/CompareToggle'
+import { useGroupAnalysis, useBiMonthlyByGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { groupRowsToAgg } from '../lib/group-map'
 import { metricOf } from '../lib/rpc'
 import { METRIC_LABELS } from '../lib/controls'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
-const SEM = 'Sem gênero'
+const FALLBACK = 'Sem gênero'
 
 export function GenerosPage() {
   const { year, metric } = useControls()
   const navigate = useNavigate()
-  const groupQ = useBiGroup('genero')
+  const [compare, setCompare] = useState(false)
+  const { groups, loading: isLoading } = useGroupAnalysis('genero', FALLBACK, compare)
 
-  const groups = useMemo(
-    () => groupRowsToAgg(groupQ.data ?? [], metric, SEM),
-    [groupQ.data, metric],
-  )
   const topNames = useMemo(() => groups.slice(0, 5).map((g) => g.label), [groups])
 
   const monthlyQ = useBiMonthlyByGroup('genero', topNames)
@@ -32,7 +29,7 @@ export function GenerosPage() {
       return base
     })
     for (const r of monthlyQ.data ?? []) {
-      const key = r.key ?? SEM
+      const key = r.key ?? FALLBACK
       if (r.month >= 0 && r.month < 12 && key in rows[r.month])
         rows[r.month][key] = metricOf(r, metric)
     }
@@ -41,15 +38,17 @@ export function GenerosPage() {
 
   const metricLabel = METRIC_LABELS[metric]
   const total = groups.reduce((a, g) => a + g.value, 0)
-  const isLoading = groupQ.isLoading
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Gêneros</h1>
-        <p className="text-sm text-muted-foreground">
-          Desempenho por gênero musical em {year}. Clique para ver os eventos.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Gêneros</h1>
+          <p className="text-sm text-muted-foreground">
+            Desempenho por gênero musical em {year}. Clique para ver os eventos.
+          </p>
+        </div>
+        <CompareToggle checked={compare} onChange={setCompare} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -101,6 +100,7 @@ export function GenerosPage() {
         drillParam="genero"
         loading={isLoading}
         topN={20}
+        compare={compare}
       />
     </div>
   )

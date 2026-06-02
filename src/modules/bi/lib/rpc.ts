@@ -6,6 +6,8 @@ import type { Metric, Pdv, DateBase } from './controls'
 
 export interface MetricSums {
   gmv: number
+  /** GMV apenas das vendas do Site (tipo_pdv='E'). Pode faltar em algumas RPCs. */
+  gmv_online?: number
   receita_bt: number
   receita_liq: number
   mdr: number
@@ -57,16 +59,18 @@ export async function biSummary(
   year: number,
   dateBase: DateBase,
   pdv: Pdv[],
+  monthMax: number | null = null,
 ): Promise<Summary> {
   const rows = await rpc<Summary[]>('bi_summary', {
     p_org: orgId,
     p_year: year,
     p_datebase: dateBase,
     p_pdv: pdvArg(pdv),
+    p_month_max: monthMax,
   })
   return (
     rows[0] ?? {
-      gmv: 0, receita_bt: 0, receita_liq: 0, mdr: 0, rebate: 0,
+      gmv: 0, gmv_online: 0, receita_bt: 0, receita_liq: 0, mdr: 0, rebate: 0,
       conveniencia: 0, comissao: 0, juros: 0, intermediacao: 0, qtd: 0, eventos: 0,
     }
   )
@@ -102,6 +106,7 @@ export async function biGroup(
   dateBase: DateBase,
   pdv: Pdv[],
   dim: string,
+  monthMax: number | null = null,
 ): Promise<GroupRow[]> {
   return rpc<GroupRow[]>('bi_group', {
     p_org: orgId,
@@ -109,6 +114,7 @@ export async function biGroup(
     p_datebase: dateBase,
     p_pdv: pdvArg(pdv),
     p_dim: dim,
+    p_month_max: monthMax,
   })
 }
 

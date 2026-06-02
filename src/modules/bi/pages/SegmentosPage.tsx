@@ -1,25 +1,24 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MultiLineChart } from '../components/charts'
 import { RankingView } from '../components/RankingView'
-import { useBiGroup, useBiMonthlyByGroup } from '../hooks/useBi'
+import { CompareToggle } from '../components/CompareToggle'
+import { useGroupAnalysis, useBiMonthlyByGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { groupRowsToAgg } from '../lib/group-map'
 import { metricOf } from '../lib/rpc'
 import { METRIC_LABELS } from '../lib/controls'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
+const FALLBACK = 'Sem segmento'
+
 export function SegmentosPage() {
   const { year, metric } = useControls()
   const navigate = useNavigate()
-  const groupQ = useBiGroup('segmento')
+  const [compare, setCompare] = useState(false)
+  const { groups, loading: isLoading } = useGroupAnalysis('segmento', FALLBACK, compare)
 
-  const groups = useMemo(
-    () => groupRowsToAgg(groupQ.data ?? [], metric, 'Sem segmento'),
-    [groupQ.data, metric],
-  )
   const topNames = useMemo(() => groups.slice(0, 5).map((g) => g.label), [groups])
 
   const monthlyQ = useBiMonthlyByGroup('segmento', topNames)
@@ -30,7 +29,7 @@ export function SegmentosPage() {
       return base
     })
     for (const r of monthlyQ.data ?? []) {
-      const key = r.key ?? 'Sem segmento'
+      const key = r.key ?? FALLBACK
       if (r.month >= 0 && r.month < 12 && key in rows[r.month])
         rows[r.month][key] = metricOf(r, metric)
     }
@@ -39,15 +38,17 @@ export function SegmentosPage() {
 
   const metricLabel = METRIC_LABELS[metric]
   const total = groups.reduce((a, g) => a + g.value, 0)
-  const isLoading = groupQ.isLoading
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Segmentos</h1>
-        <p className="text-sm text-muted-foreground">
-          Desempenho por segmento em {year}. Clique para ver os eventos.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Segmentos</h1>
+          <p className="text-sm text-muted-foreground">
+            Desempenho por segmento em {year}. Clique para ver os eventos.
+          </p>
+        </div>
+        <CompareToggle checked={compare} onChange={setCompare} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -99,6 +100,7 @@ export function SegmentosPage() {
         drillParam="segmento"
         loading={isLoading}
         topN={20}
+        compare={compare}
       />
     </div>
   )

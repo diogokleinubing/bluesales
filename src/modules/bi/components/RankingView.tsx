@@ -15,10 +15,31 @@ import type { GroupAgg } from '../lib/aggregate'
 import { contaComercialRoute } from '@/modules/shared/navigation'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
+/** Variação percentual (atual vs anterior), com sinal e cor. */
+function DeltaCell({ cur, prev }: { cur: number; prev: number | undefined }) {
+  if (prev == null) return <TableCell className="text-right text-muted-foreground">—</TableCell>
+  if (prev === 0) {
+    return (
+      <TableCell className="text-right tabular-nums text-muted-foreground">
+        {cur > 0 ? 'novo' : '—'}
+      </TableCell>
+    )
+  }
+  const d = (cur - prev) / Math.abs(prev)
+  const cls = d > 0 ? 'text-[var(--success)]' : d < 0 ? 'text-destructive' : 'text-muted-foreground'
+  return (
+    <TableCell className={`text-right tabular-nums ${cls}`}>
+      {d > 0 ? '+' : ''}
+      {fmtPct(d)}
+    </TableCell>
+  )
+}
+
 /**
  * Ranking genérico (barras + tabela) com drill-down para Eventos.
  * `drillParam` é o nome do parâmetro na querystring (ex.: 'organizador').
  * `crmLink` adiciona, por linha, um atalho "Ver no Comercial" (ponte BI->CRM).
+ * `compare` exibe colunas de comparativo com o ano anterior (gmvPrev).
  */
 export function RankingView({
   title,
@@ -28,6 +49,7 @@ export function RankingView({
   loading,
   topN = 15,
   crmLink = false,
+  compare = false,
 }: {
   title: string
   groups: GroupAgg[]
@@ -36,9 +58,11 @@ export function RankingView({
   loading?: boolean
   topN?: number
   crmLink?: boolean
+  compare?: boolean
 }) {
   const navigate = useNavigate()
-  const total = groups.reduce((a, g) => a + g.value, 0)
+  const totalGmv = groups.reduce((a, g) => a + g.gmv, 0)
+  const cols = 5 + (compare ? 2 : 0) + (crmLink ? 1 : 0)
 
   function drill(label: string) {
     if (label && label !== '—')
@@ -81,10 +105,15 @@ export function RankingView({
                 <TableRow>
                   <TableHead>{title}</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
-                  <TableHead className="text-right">GMV</TableHead>
-                  <TableHead className="text-right">Receita BT</TableHead>
-                  <TableHead className="text-right">{metricLabel}</TableHead>
+                  <TableHead className="text-right">GMV Total</TableHead>
+                  <TableHead className="text-right">GMV On-Line</TableHead>
                   <TableHead className="text-right">% do total</TableHead>
+                  {compare && (
+                    <>
+                      <TableHead className="text-right">GMV ano ant.</TableHead>
+                      <TableHead className="text-right">Δ%</TableHead>
+                    </>
+                  )}
                   {crmLink && <TableHead className="text-right">Comercial</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -92,17 +121,14 @@ export function RankingView({
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={crmLink ? 7 : 6}>
+                      <TableCell colSpan={cols}>
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : groups.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={crmLink ? 7 : 6}
-                      className="py-8 text-center text-muted-foreground"
-                    >
+                    <TableCell colSpan={cols} className="py-8 text-center text-muted-foreground">
                       Sem dados para o período.
                     </TableCell>
                   </TableRow>
@@ -124,14 +150,19 @@ export function RankingView({
                         {fmtBRL(g.gmv)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(g.receitaBt)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(g.value)}
+                        {fmtBRL(g.gmvOnline)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {fmtPct(total > 0 ? g.value / total : 0)}
+                        {fmtPct(totalGmv > 0 ? g.gmv / totalGmv : 0)}
                       </TableCell>
+                      {compare && (
+                        <>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {g.gmvPrev == null ? '—' : fmtBRL(g.gmvPrev)}
+                          </TableCell>
+                          <DeltaCell cur={g.gmv} prev={g.gmvPrev} />
+                        </>
+                      )}
                       {crmLink && (
                         <TableCell className="text-right">
                           <button

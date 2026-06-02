@@ -35,6 +35,7 @@ export interface EventListRow {
   uf: string | null
   vendas: number
   gmv: number
+  gmvOnline: number
   receitaBt: number
   value: number
 }
@@ -84,6 +85,7 @@ export function useEventos(filters: EventFilters) {
         uf: e.uf,
         vendas: Number(e.qtd),
         gmv: Number(e.gmv),
+        gmvOnline: Number(e.gmv_online ?? 0),
         receitaBt: Number(e.receita_bt),
         value: metricOf(e, metric),
       })),
