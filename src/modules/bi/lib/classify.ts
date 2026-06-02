@@ -71,6 +71,35 @@ export function normalize(text: string | null | undefined): string {
 /** Alias histórico usado em outros módulos. */
 export const norm = normalize
 
+function isWordChar(c: string): boolean {
+  return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+}
+
+/**
+ * Casa a keyword como PALAVRA (não substring): o trecho precisa estar
+ * delimitado por início/fim do texto ou por um caractere não alfanumérico
+ * (espaço, pontuação, &, |, /, etc.). Evita falsos positivos como
+ * "suel" dentro de "consuelo". Ambos já normalizados (sem acento, minúsculos).
+ */
+function matchesKeyword(textNorm: string, kwNorm: string): boolean {
+  if (!kwNorm) return false
+  let from = 0
+  for (;;) {
+    const i = textNorm.indexOf(kwNorm, from)
+    if (i < 0) return false
+    const before = i === 0 ? '' : textNorm[i - 1]
+    const afterIdx = i + kwNorm.length
+    const after = afterIdx >= textNorm.length ? '' : textNorm[afterIdx]
+    if (
+      (before === '' || !isWordChar(before)) &&
+      (after === '' || !isWordChar(after))
+    ) {
+      return true
+    }
+    from = i + 1
+  }
+}
+
 function sortByOrder(rules: KeywordRule[]): KeywordRule[] {
   return [...rules].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
 }
@@ -151,7 +180,7 @@ function classifyWithIndex(
     const generosNome = new Set<string>()
     for (const r of idx.keywordRules) {
       const kw = normalize(r.keyword)
-      if (!kw || !nomeNorm.includes(kw)) continue
+      if (!matchesKeyword(nomeNorm, kw)) continue
       if (segmento == null && r.segmento) {
         segmento = r.segmento
         segmentoSource = 'keyword'
@@ -169,7 +198,7 @@ function classifyWithIndex(
     const generosLocal = new Set<string>()
     for (const r of idx.venueRules) {
       const kw = normalize(r.keyword)
-      if (!kw || !localNorm.includes(kw)) continue
+      if (!matchesKeyword(localNorm, kw)) continue
       if (segmento == null && r.segmento) {
         segmento = r.segmento
         segmentoSource = 'venue_rule'
