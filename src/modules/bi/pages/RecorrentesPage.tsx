@@ -34,6 +34,7 @@ interface Row {
   diff: number
   diffPct: number | null
   abertura: number | null // 1-12
+  eventoMes: number | null // mês do evento no ano atual (1-12)
   aberto: boolean
   status: Status
 }
@@ -92,6 +93,7 @@ export function RecorrentesPage() {
         diff,
         diffPct: ytdPrev > 0 ? diff / ytdPrev : null,
         abertura: r.abertura_prev,
+        eventoMes: r.evento_mes_cur,
         aberto: ytdCur > 0,
         status: computeStatus(
           { ytdCur, abertura: r.abertura_prev, eventoMes: r.evento_mes_cur },
@@ -144,19 +146,22 @@ export function RecorrentesPage() {
                 <TableRow>
                   <TableHead>Evento</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">GMV Total {prevYear}</TableHead>
+                  <TableHead className="border-r border-border text-right">
+                    GMV Total {prevYear}
+                  </TableHead>
                   <TableHead className="text-right">GMV YTD {prevYear}</TableHead>
                   <TableHead className="text-right">GMV YTD {year}</TableHead>
                   <TableHead className="text-right">Δ R$</TableHead>
                   <TableHead className="text-right">Δ %</TableHead>
                   <TableHead>Abertura {prevYear}</TableHead>
+                  <TableHead>Data {year}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={9}>
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
@@ -178,7 +183,7 @@ export function RecorrentesPage() {
                             {r.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="border-r border-border text-right tabular-nums">
                           {fmtBRL(r.totalPrev)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
@@ -200,13 +205,16 @@ export function RecorrentesPage() {
                         <TableCell>
                           {r.abertura ? MONTH_LABELS[r.abertura - 1] : '—'}
                         </TableCell>
+                        <TableCell>
+                          {r.eventoMes ? MONTH_LABELS[r.eventoMes - 1] : '—'}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {/* Totais */}
                     <TableRow className="border-t-2 font-semibold">
                       <TableCell>Total ({rows.length})</TableCell>
                       <TableCell />
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="border-r border-border text-right tabular-nums">
                         {fmtBRL(totals.totalPrev)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
@@ -225,6 +233,7 @@ export function RecorrentesPage() {
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {totalDiffPct == null ? '—' : fmtDelta(totalDiffPct)}
                       </TableCell>
+                      <TableCell />
                       <TableCell />
                     </TableRow>
                   </>
