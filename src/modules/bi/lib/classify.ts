@@ -14,6 +14,9 @@
 
 export const SEGMENTO_PADRAO = 'Outros'
 
+/** Gênero atribuído quando o nome reúne artistas de estilos diferentes. */
+export const GENERO_DIVERSOS = 'Diversos'
+
 export type ClassSource =
   | 'manual'
   | 'venue_map'
@@ -141,7 +144,11 @@ function classifyWithIndex(
   }
 
   // 3. keyword_rules (no nome).
+  //    segmento: a primeira regra que casa (menor ordem) vence.
+  //    genero: junta TODOS os gêneros que casam no nome; se houver mais de um
+  //    distinto (line-up com artistas de estilos diferentes) -> "Diversos".
   if (segmento == null || genero == null) {
+    const generosNome = new Set<string>()
     for (const r of idx.keywordRules) {
       const kw = normalize(r.keyword)
       if (!kw || !nomeNorm.includes(kw)) continue
@@ -149,16 +156,17 @@ function classifyWithIndex(
         segmento = r.segmento
         segmentoSource = 'keyword'
       }
-      if (genero == null && r.genero) {
-        genero = r.genero
-        generoSource = 'keyword'
-      }
-      if (segmento != null && genero != null) break
+      if (genero == null && r.genero) generosNome.add(r.genero)
+    }
+    if (genero == null && generosNome.size > 0) {
+      genero = generosNome.size === 1 ? [...generosNome][0] : GENERO_DIVERSOS
+      generoSource = 'keyword'
     }
   }
 
-  // 4. venue_rules (no local).
+  // 4. venue_rules (no local). Mesma lógica de "Diversos" para o gênero.
   if ((segmento == null || genero == null) && localNorm) {
+    const generosLocal = new Set<string>()
     for (const r of idx.venueRules) {
       const kw = normalize(r.keyword)
       if (!kw || !localNorm.includes(kw)) continue
@@ -166,11 +174,11 @@ function classifyWithIndex(
         segmento = r.segmento
         segmentoSource = 'venue_rule'
       }
-      if (genero == null && r.genero) {
-        genero = r.genero
-        generoSource = 'venue_rule'
-      }
-      if (segmento != null && genero != null) break
+      if (genero == null && r.genero) generosLocal.add(r.genero)
+    }
+    if (genero == null && generosLocal.size > 0) {
+      genero = generosLocal.size === 1 ? [...generosLocal][0] : GENERO_DIVERSOS
+      generoSource = 'venue_rule'
     }
   }
 
