@@ -443,6 +443,7 @@ export interface RecurringYtdRow {
   ytd_prev: number
   ytd_cur: number
   abertura_prev: number | null
+  evento_mes_cur: number | null
 }
 
 /** Comparativo YTD por família (eventos recorrentes), por data de venda. */
