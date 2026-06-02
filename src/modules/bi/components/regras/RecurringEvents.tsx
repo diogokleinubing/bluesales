@@ -17,14 +17,18 @@ import {
 } from '@/components/ui/table'
 import { supabase } from '@/lib/supabase'
 import { useOrgId } from '../../hooks/useBi'
+import { useRules } from '../../hooks/useRules'
+import { useReclassify } from '../../hooks/useReclassify'
 import { biBiggestEvents } from '../../lib/rpc'
 import {
   clearAllFamilias,
   setEventFamilias,
   setFamilyOverride,
 } from '../../lib/family-api'
+import { addKeywordRule, updateKeywordRule } from '../../lib/rules-api'
 import { suggestFamily } from '../../lib/family'
 import { norm } from '../../lib/classify'
+import { ClassSelect } from './ClassSelect'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 interface EvRow {
@@ -65,13 +69,20 @@ async function fetchEventsBase(
 export function RecurringEvents() {
   const orgId = useOrgId()
   const qc = useQueryClient()
+  const { rules } = useRules()
+  const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [onlyUngrouped, setOnlyUngrouped] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [familiaInput, setFamiliaInput] = useState('')
+  const [segmento, setSegmento] = useState<string | null>(null)
+  const [genero, setGenero] = useState<string | null>(null)
   const [userEdited, setUserEdited] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
+  const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
 
   const baseQ = useQuery({
     enabled: !!orgId,
@@ -160,12 +171,40 @@ export function RecurringEvents() {
         await setFamilyOverride(orgId, codigo, familia)
       }
       await setEventFamilias(orgId, codigos, familia)
+
+      // Se informou segmento/gênero, salva como REGRA (keyword = nome da
+      // família) na base de Classificação e reclassifica.
+      let ruleMsg = ''
+      if (segmento || genero) {
+        const existente = rules.keywordRules.find(
+          (r) => norm(r.keyword) === norm(familia),
+        )
+        if (existente) {
+          await updateKeywordRule('keyword_rules', existente.id, {
+            segmento,
+            genero,
+          })
+        } else {
+          await addKeywordRule('keyword_rules', orgId, {
+            keyword: familia,
+            segmento,
+            genero,
+            ordem: rules.keywordRules.length * 10 + 10,
+          })
+        }
+        await qc.invalidateQueries({ queryKey: ['rules'] })
+        reclassify.mutate('all')
+        ruleMsg = ' Regra de classificação salva.'
+      }
+
       setSelected(new Set())
       setFamiliaInput('')
+      setSegmento(null)
+      setGenero(null)
       setUserEdited(false)
       await qc.invalidateQueries({ queryKey: ['bi'] })
       toast.success('Eventos agrupados', {
-        description: `${codigos.length} eventos → "${familia}".`,
+        description: `${codigos.length} eventos → "${familia}".${ruleMsg}`,
       })
     } catch (e) {
       toast.error('Erro ao agrupar', { description: (e as Error).message })
@@ -205,8 +244,10 @@ export function RecurringEvents() {
         Agrupe edições e festivais multi-dia numa mesma <strong>família</strong>{' '}
         (sem o ano). Ex.: selecione todos os dias da “Festa do Pinhão” de 2025 e
         2026 e aplique a família “Festa do Pinhão” — o YTD compara os anos
-        automaticamente. {fmtInt(resumo.familias)} famílias ·{' '}
-        {fmtInt(resumo.recorrentes)} com 2+ edições.
+        automaticamente. Opcional: defina Segmento/Gênero para salvar uma{' '}
+        <strong>regra</strong> com o nome da família e reclassificar.{' '}
+        {fmtInt(resumo.familias)} famílias · {fmtInt(resumo.recorrentes)} com
+        2+ edições.
       </p>
 
       {/* Barra de ação */}
@@ -220,6 +261,20 @@ export function RecurringEvents() {
             setFamiliaInput(e.target.value)
             setUserEdited(true)
           }}
+        />
+        <ClassSelect
+          value={segmento}
+          options={segNames}
+          onChange={setSegmento}
+          placeholder="Segmento"
+          className="h-9 w-40"
+        />
+        <ClassSelect
+          value={genero}
+          options={genNames}
+          onChange={setGenero}
+          placeholder="Gênero"
+          className="h-9 w-40"
         />
         <Button
           onClick={aplicarFamilia}
