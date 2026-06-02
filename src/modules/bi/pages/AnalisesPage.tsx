@@ -5,6 +5,7 @@ import { GenerosPage } from './GenerosPage'
 import { OrganizadoresPage } from './OrganizadoresPage'
 import { LocaisPage } from './LocaisPage'
 import { EventosPage } from './EventosPage'
+import { RecorrentesPage } from './RecorrentesPage'
 
 const VIEWS = [
   { value: 'segmentos', label: 'Segmentos', Component: SegmentosPage },
@@ -12,6 +13,7 @@ const VIEWS = [
   { value: 'organizadores', label: 'Organizadores', Component: OrganizadoresPage },
   { value: 'locais', label: 'Locais', Component: LocaisPage },
   { value: 'eventos', label: 'Eventos', Component: EventosPage },
+  { value: 'recorrentes', label: 'Eventos recorrentes', Component: RecorrentesPage },
 ] as const
 
 type ViewId = (typeof VIEWS)[number]['value']

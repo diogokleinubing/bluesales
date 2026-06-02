@@ -436,3 +436,26 @@ export async function biPaymentsGroup(
     p_juros: juros,
   })
 }
+
+export interface RecurringYtdRow {
+  familia: string
+  total_prev: number
+  ytd_prev: number
+  ytd_cur: number
+  abertura_prev: number | null
+}
+
+/** Comparativo YTD por família (eventos recorrentes), por data de venda. */
+export async function biRecurringYtd(
+  orgId: string,
+  year: number,
+  pdv: Pdv[],
+  monthMax: number | null,
+): Promise<RecurringYtdRow[]> {
+  return rpc<RecurringYtdRow[]>('bi_recurring_ytd', {
+    p_org: orgId,
+    p_year: year,
+    p_pdv: pdvArg(pdv),
+    p_month_max: monthMax,
+  })
+}
