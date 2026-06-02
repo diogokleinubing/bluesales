@@ -187,10 +187,11 @@ function classifyWithIndex(
   if (segmento == null || genero == null) {
     const generosNome = new Set<string>()
     for (const r of idx.keywordRules) {
-      if (r.ignorarComAno && nomeTemAno) continue
       const kw = normalize(r.keyword)
       if (!matchesKeyword(nomeNorm, kw)) continue
-      if (segmento == null && r.segmento) {
+      // "Só sem ano" afeta APENAS o segmento; o gênero é sempre considerado.
+      const pulaSegmento = r.ignorarComAno && nomeTemAno
+      if (segmento == null && r.segmento && !pulaSegmento) {
         segmento = r.segmento
         segmentoSource = 'keyword'
       }
@@ -206,10 +207,10 @@ function classifyWithIndex(
   if ((segmento == null || genero == null) && localNorm) {
     const generosLocal = new Set<string>()
     for (const r of idx.venueRules) {
-      if (r.ignorarComAno && nomeTemAno) continue
       const kw = normalize(r.keyword)
       if (!matchesKeyword(localNorm, kw)) continue
-      if (segmento == null && r.segmento) {
+      const pulaSegmento = r.ignorarComAno && nomeTemAno
+      if (segmento == null && r.segmento && !pulaSegmento) {
         segmento = r.segmento
         segmentoSource = 'venue_rule'
       }

@@ -51,7 +51,7 @@ export function RulesEditor() {
       {/* Termos no NOME do evento */}
       <KeywordRuleCard
         title="Termos no nome do evento"
-        hint="Aplicados ao nome do evento (ex.: artista). Salvar reclassifica todos os eventos."
+        hint='Aplicados ao nome do evento (ex.: artista). "Segmento só sem ano": o segmento não é aplicado quando o nome tem ano (festival); o gênero continua valendo. Salvar reclassifica todos os eventos.'
         table="keyword_rules"
         rows={rules.keywordRules}
         segNames={segNames}
@@ -170,12 +170,18 @@ function KeywordRuleCard({
               <TableHead>Termo</TableHead>
               <TableHead className="w-48">Segmento</TableHead>
               <TableHead className="w-48">Gênero musical</TableHead>
-              <TableHead className="w-24 text-center">
+              <TableHead className="w-32 text-center">
                 <Tooltip>
-                  <TooltipTrigger className="cursor-help">Só sem ano</TooltipTrigger>
-                  <TooltipContent>
-                    Não aplica a regra quando o nome do evento tem um ano (20XX)
-                    — provável festival/edição.
+                  <TooltipTrigger className="cursor-help leading-tight">
+                    Segmento
+                    <br />
+                    só sem ano
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    Quando marcado, o <strong>segmento</strong> desta regra só é
+                    aplicado se o nome do evento <strong>não</strong> tiver um ano
+                    (20XX) — provável festival/edição. O <strong>gênero</strong>{' '}
+                    continua sendo aplicado normalmente.
                   </TooltipContent>
                 </Tooltip>
               </TableHead>
