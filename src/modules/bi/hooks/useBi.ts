@@ -34,7 +34,11 @@ export function useBiYears(dateBase: DateBase) {
   })
 }
 
-/** KPIs do ano selecionado + ano anterior (para o comparativo). */
+/**
+ * KPIs do ano selecionado + ano anterior. O comparativo (deltas) usa o ano
+ * anterior limitado ao último mês com vendas do ano atual. Também traz a série
+ * mensal do ano atual e do anterior (para o gráfico comparativo).
+ */
 export function useBiDashboard() {
   const orgId = useOrgId()
   const { year, dateBase, pdv } = useControls()
@@ -43,16 +47,14 @@ export function useBiDashboard() {
     staleTime: STALE,
     queryKey: ['bi', 'dashboard', orgId, year, dateBase, pdv],
     queryFn: async () => {
-      const [cur, prev, monthly, segments, generos, topEvents] =
-        await Promise.all([
-          rpc.biSummary(orgId!, year, dateBase, pdv),
-          rpc.biSummary(orgId!, year - 1, dateBase, pdv),
-          rpc.biMonthly(orgId!, year, dateBase, pdv),
-          rpc.biGroup(orgId!, year, dateBase, pdv, 'segmento'),
-          rpc.biGroup(orgId!, year, dateBase, pdv, 'genero'),
-          rpc.biEvents(orgId!, year, dateBase, pdv, { limit: 10 }),
-        ])
-      return { cur, prev, monthly, segments, generos, topEvents }
+      const monthly = await rpc.biMonthly(orgId!, year, dateBase, pdv)
+      const lastMonth = lastMonthWithSales(monthly)
+      const [cur, prev, prevMonthly] = await Promise.all([
+        rpc.biSummary(orgId!, year, dateBase, pdv),
+        rpc.biSummary(orgId!, year - 1, dateBase, pdv, lastMonth),
+        rpc.biMonthly(orgId!, year - 1, dateBase, pdv),
+      ])
+      return { cur, prev, monthly, prevMonthly, lastMonth }
     },
   })
 }
