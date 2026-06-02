@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Wand2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -17,9 +18,17 @@ import {
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import { useOrgId } from '../../hooks/useBi'
-import { fetchEventManuals, setEventDimensionManual } from '../../lib/rules-api'
+import {
+  addKeywordRule,
+  fetchEventManuals,
+  setEventDimensionManual,
+  updateKeywordRule,
+  type KeywordRuleInput,
+} from '../../lib/rules-api'
 import { biBiggestEvents } from '../../lib/rpc'
+import { norm } from '../../lib/classify'
 import { ClassSelect } from './ClassSelect'
+import { ConvertToRuleDialog } from './ConvertToRuleDialog'
 import { DimensionCell } from '../DimensionCell'
 import { PendingSaveBar } from '../PendingSaveBar'
 import { fmtBRL, fmtInt } from '@/lib/format'
@@ -35,6 +44,10 @@ export function BiggestEvents() {
   const [bulkGen, setBulkGen] = useState<string | null>(null)
   const [pending, setPending] = useState<Map<string, string | null>>(new Map())
   const [savingPending, setSavingPending] = useState(false)
+  const [convertFor, setConvertFor] = useState<{
+    codigo: string
+    nome: string | null
+  } | null>(null)
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
@@ -98,6 +111,31 @@ export function BiggestEvents() {
     setSelected(new Set())
     setBulkSeg(null)
     setBulkGen(null)
+  }
+
+  /** Cria/atualiza a regra de termo e reclassifica o evento de origem. */
+  async function saveConvert(rule: KeywordRuleInput) {
+    if (!orgId || !convertFor) return
+    const existing = rules.keywordRules.find(
+      (r) => norm(r.keyword) === norm(rule.keyword),
+    )
+    if (existing) {
+      await updateKeywordRule('keyword_rules', existing.id, {
+        segmento: rule.segmento,
+        genero: rule.genero,
+        ignorar_com_ano: rule.ignorar_com_ano,
+      })
+    } else {
+      await addKeywordRule('keyword_rules', orgId, {
+        ...rule,
+        ordem: rules.keywordRules.length * 10 + 10,
+      })
+    }
+    qc.invalidateQueries({ queryKey: ['rules'] })
+    await reclassify.mutateAsync({ codigos: [convertFor.codigo] })
+    qc.invalidateQueries({ queryKey: ['bi', 'event-manuals', orgId] })
+    setConvertFor(null)
+    toast.success('Regra criada e evento atualizado')
   }
 
   async function savePending() {
@@ -189,15 +227,31 @@ export function BiggestEvents() {
                   visible.map((e) => {
                     const m = manuals?.get(e.codigo_evento)
                     return (
-                      <TableRow key={e.codigo_evento}>
+                      <TableRow key={e.codigo_evento} className="group">
                         <TableCell>
                           <Checkbox
                             checked={selected.has(e.codigo_evento)}
                             onCheckedChange={() => toggle(e.codigo_evento)}
                           />
                         </TableCell>
-                        <TableCell className="max-w-64 truncate font-medium">
-                          {e.nome ?? e.codigo_evento}
+                        <TableCell className="max-w-64 font-medium">
+                          <div className="flex items-center gap-1">
+                            <span className="truncate">
+                              {e.nome ?? e.codigo_evento}
+                            </span>
+                            <button
+                              title="Converter em regra"
+                              className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+                              onClick={() =>
+                                setConvertFor({
+                                  codigo: e.codigo_evento,
+                                  nome: e.nome,
+                                })
+                              }
+                            >
+                              <Wand2 className="size-3.5" />
+                            </button>
+                          </div>
                         </TableCell>
                         <TableCell className="max-w-40 truncate">
                           {e.organizador ?? '—'}
@@ -245,6 +299,16 @@ export function BiggestEvents() {
         onSave={savePending}
         onDiscard={() => setPending(new Map())}
       />
+
+      {convertFor && (
+        <ConvertToRuleDialog
+          event={convertFor}
+          segNames={segNames}
+          genNames={genNames}
+          onClose={() => setConvertFor(null)}
+          onSave={saveConvert}
+        />
+      )}
     </div>
   )
 }
