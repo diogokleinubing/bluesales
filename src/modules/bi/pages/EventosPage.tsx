@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Search, X, Download, Pin, Save } from 'lucide-react'
+import { Search, X, Download } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -23,11 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { DimensionCell } from '../components/DimensionCell'
+import { PendingSaveBar } from '../components/PendingSaveBar'
 import { useEventos, type EventFilters } from '../hooks/useEventos'
 import { useRules } from '../hooks/useRules'
 import { useReclassify } from '../hooks/useReclassify'
@@ -42,7 +39,6 @@ import {
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 const ALL = '__all__'
-const AUTO = '__auto__'
 
 function paramFilters(params: URLSearchParams): EventFilters {
   return {
@@ -341,96 +337,13 @@ export function EventosPage() {
         </CardContent>
       </Card>
 
-      {/* Barra flutuante: salvar alterações pendentes de segmento/gênero */}
-      {pending.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
-          <span className="text-sm text-muted-foreground">
-            {pending.size}{' '}
-            {pending.size === 1 ? 'alteração pendente' : 'alterações pendentes'}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPending(new Map())}
-            disabled={savingPending}
-          >
-            Descartar
-          </Button>
-          <Button size="sm" onClick={savePending} disabled={savingPending}>
-            <Save className="size-4" />
-            {savingPending ? 'Salvando…' : 'Atualizar Segmento / Gênero'}
-          </Button>
-        </div>
-      )}
+      <PendingSaveBar
+        count={pending.size}
+        saving={savingPending}
+        onSave={savePending}
+        onDiscard={() => setPending(new Map())}
+      />
     </div>
-  )
-}
-
-/**
- * Célula de dimensão (segmento/gênero) editável inline. A alteração não é
- * salva na hora: fica "staged" (pendente) e a barra flutuante salva tudo.
- */
-function DimensionCell({
-  value,
-  options,
-  isManual,
-  onChange,
-  emptyLabel = 'Sem segmento',
-  staged,
-  hasStaged,
-}: {
-  value: string | null
-  options: string[]
-  isManual: boolean
-  onChange: (v: string | null) => void
-  emptyLabel?: string
-  staged?: string | null
-  hasStaged?: boolean
-}) {
-  // Valor/estado efetivos considerando a alteração pendente.
-  const effValue = hasStaged ? staged ?? null : value
-  const effManual = hasStaged ? staged != null : isManual
-  const selectValue = effManual && effValue ? effValue : AUTO
-
-  return (
-    <TableCell className={hasStaged ? 'bg-primary/5' : undefined}>
-      <div className="flex items-center gap-1">
-        {effManual && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className={hasStaged ? 'text-amber-500' : 'text-primary'}>
-                <Pin className="size-3.5" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {hasStaged
-                ? 'Alteração não salva — use "Atualizar Segmento / Gênero"'
-                : 'Definido manualmente — não será alterado por regras'}
-            </TooltipContent>
-          </Tooltip>
-        )}
-        <Select
-          value={selectValue}
-          onValueChange={(v) => onChange(v === AUTO ? null : v)}
-        >
-          <SelectTrigger className="h-8 flex-1" size="sm">
-            <SelectValue>
-              <span className={effValue ? '' : 'text-muted-foreground'}>
-                {effValue ?? (hasStaged ? '— Automático' : emptyLabel)}
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={AUTO}>— Automático</SelectItem>
-            {options.map((o) => (
-              <SelectItem key={o} value={o}>
-                {o}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </TableCell>
   )
 }
 

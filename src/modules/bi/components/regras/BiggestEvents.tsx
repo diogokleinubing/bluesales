@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -17,19 +17,24 @@ import {
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import { useOrgId } from '../../hooks/useBi'
-import { setEventManual } from '../../lib/rules-api'
+import { fetchEventManuals, setEventDimensionManual } from '../../lib/rules-api'
 import { biBiggestEvents } from '../../lib/rpc'
 import { ClassSelect } from './ClassSelect'
+import { DimensionCell } from '../DimensionCell'
+import { PendingSaveBar } from '../PendingSaveBar'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 export function BiggestEvents() {
-  const { rules, orgId: rulesOrg } = useRules()
   const orgId = useOrgId()
+  const qc = useQueryClient()
+  const { rules } = useRules()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [segmento, setSegmento] = useState<string | null>(null)
-  const [genero, setGenero] = useState<string | null>(null)
+  const [bulkSeg, setBulkSeg] = useState<string | null>(null)
+  const [bulkGen, setBulkGen] = useState<string | null>(null)
+  const [pending, setPending] = useState<Map<string, string | null>>(new Map())
+  const [savingPending, setSavingPending] = useState(false)
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
@@ -41,6 +46,14 @@ export function BiggestEvents() {
     queryFn: () => biBiggestEvents(orgId!, search, 200),
   })
   const visible = eventsQ.data ?? []
+
+  const manualsQ = useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['bi', 'event-manuals', orgId],
+    queryFn: () => fetchEventManuals(orgId!),
+  })
+  const manuals = manualsQ.data
 
   function toggle(codigo: string) {
     setSelected((prev) => {
@@ -59,22 +72,52 @@ export function BiggestEvents() {
     )
   }
 
-  async function applyBulk() {
-    if (!rulesOrg || selected.size === 0 || (!segmento && !genero)) return
+  function stageDimension(
+    codigo: string,
+    dim: 'segmento' | 'genero',
+    value: string | null,
+  ) {
+    setPending((prev) => {
+      const next = new Map(prev)
+      next.set(`${codigo}|${dim}`, value)
+      return next
+    })
+  }
+
+  /** Marca (sem salvar) os selecionados com o segmento/gênero escolhidos. */
+  function stageBulk() {
+    if (selected.size === 0 || (!bulkSeg && !bulkGen)) return
+    setPending((prev) => {
+      const next = new Map(prev)
+      for (const codigo of selected) {
+        if (bulkSeg) next.set(`${codigo}|segmento`, bulkSeg)
+        if (bulkGen) next.set(`${codigo}|genero`, bulkGen)
+      }
+      return next
+    })
+    setSelected(new Set())
+    setBulkSeg(null)
+    setBulkGen(null)
+  }
+
+  async function savePending() {
+    if (!orgId || pending.size === 0) return
+    setSavingPending(true)
     try {
-      const codigos = [...selected]
-      const patch: { segmento_manual?: string; genero_manual?: string } = {}
-      if (segmento) patch.segmento_manual = segmento
-      if (genero) patch.genero_manual = genero
-      await setEventManual(rulesOrg, codigos, patch)
-      // Reclassifica os afetados: dimensões manuais ficam, as demais recalculam.
-      reclassify.mutate({ codigos })
-      toast.success(`${codigos.length} eventos definidos manualmente`)
-      setSelected(new Set())
-      setSegmento(null)
-      setGenero(null)
+      const codigos = new Set<string>()
+      for (const [key, value] of pending) {
+        const [codigo, dim] = key.split('|') as [string, 'segmento' | 'genero']
+        await setEventDimensionManual(orgId, codigo, dim, value)
+        codigos.add(codigo)
+      }
+      await reclassify.mutateAsync({ codigos: [...codigos] })
+      qc.invalidateQueries({ queryKey: ['bi', 'event-manuals', orgId] })
+      setPending(new Map())
+      toast.success(`${codigos.size} eventos atualizados`)
     } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
+      toast.error('Erro ao salvar', { description: (e as Error).message })
+    } finally {
+      setSavingPending(false)
     }
   }
 
@@ -90,24 +133,25 @@ export function BiggestEvents() {
         <div className="ml-auto flex items-center gap-2">
           <Badge variant="secondary">{selected.size} selecionados</Badge>
           <ClassSelect
-            value={segmento}
+            value={bulkSeg}
             options={segNames}
-            onChange={setSegmento}
+            onChange={setBulkSeg}
             placeholder="Segmento"
             className="h-9 w-40"
           />
           <ClassSelect
-            value={genero}
+            value={bulkGen}
             options={genNames}
-            onChange={setGenero}
+            onChange={setBulkGen}
             placeholder="Gênero"
             className="h-9 w-40"
           />
           <Button
-            onClick={applyBulk}
-            disabled={selected.size === 0 || (!segmento && !genero)}
+            variant="secondary"
+            onClick={stageBulk}
+            disabled={selected.size === 0 || (!bulkSeg && !bulkGen)}
           >
-            Aplicar em lote
+            Aplicar aos selecionados
           </Button>
         </div>
       </div>
@@ -128,8 +172,8 @@ export function BiggestEvents() {
                   </TableHead>
                   <TableHead>Evento</TableHead>
                   <TableHead>Organizador</TableHead>
-                  <TableHead>Segmento</TableHead>
-                  <TableHead>Gênero</TableHead>
+                  <TableHead className="w-44">Segmento</TableHead>
+                  <TableHead className="w-44">Gênero</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
                   <TableHead className="text-right">GMV</TableHead>
                 </TableRow>
@@ -142,46 +186,65 @@ export function BiggestEvents() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  visible.map((e) => (
-                    <TableRow key={e.codigo_evento}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selected.has(e.codigo_evento)}
-                          onCheckedChange={() => toggle(e.codigo_evento)}
+                  visible.map((e) => {
+                    const m = manuals?.get(e.codigo_evento)
+                    return (
+                      <TableRow key={e.codigo_evento}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selected.has(e.codigo_evento)}
+                            onCheckedChange={() => toggle(e.codigo_evento)}
+                          />
+                        </TableCell>
+                        <TableCell className="max-w-64 truncate font-medium">
+                          {e.nome ?? e.codigo_evento}
+                        </TableCell>
+                        <TableCell className="max-w-40 truncate">
+                          {e.organizador ?? '—'}
+                        </TableCell>
+                        <DimensionCell
+                          value={e.segmento}
+                          isManual={!!m?.segmento_manual}
+                          options={segNames}
+                          staged={pending.get(`${e.codigo_evento}|segmento`)}
+                          hasStaged={pending.has(`${e.codigo_evento}|segmento`)}
+                          onChange={(v) =>
+                            stageDimension(e.codigo_evento, 'segmento', v)
+                          }
                         />
-                      </TableCell>
-                      <TableCell className="max-w-64 truncate font-medium">
-                        {e.nome ?? e.codigo_evento}
-                      </TableCell>
-                      <TableCell className="max-w-40 truncate">
-                        {e.organizador ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {e.segmento ?? 'Sem segmento'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {e.genero ? (
-                          <Badge variant="secondary">{e.genero}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtInt(Number(e.qtd))}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(Number(e.gmv))}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <DimensionCell
+                          value={e.genero}
+                          emptyLabel="Sem gênero"
+                          isManual={!!m?.genero_manual}
+                          options={genNames}
+                          staged={pending.get(`${e.codigo_evento}|genero`)}
+                          hasStaged={pending.has(`${e.codigo_evento}|genero`)}
+                          onChange={(v) =>
+                            stageDimension(e.codigo_evento, 'genero', v)
+                          }
+                        />
+                        <TableCell className="text-right tabular-nums">
+                          {fmtInt(Number(e.qtd))}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtBRL(Number(e.gmv))}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
+
+      <PendingSaveBar
+        count={pending.size}
+        saving={savingPending}
+        onSave={savePending}
+        onDiscard={() => setPending(new Map())}
+      />
     </div>
   )
 }
