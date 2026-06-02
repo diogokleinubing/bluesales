@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Search, X, Download, Pin } from 'lucide-react'
+import { Search, X, Download, Pin, Save } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -94,20 +94,42 @@ export function EventosPage() {
     setParams(new URLSearchParams(), { replace: true })
   }
 
-  async function changeDimension(
+  // Alterações pendentes (não salvas) por evento+dimensão. value: string =
+  // definir manual; null = limpar (voltar ao automático).
+  const [pending, setPending] = useState<Map<string, string | null>>(new Map())
+  const [savingPending, setSavingPending] = useState(false)
+
+  function stageDimension(
     codigo: string,
     dim: 'segmento' | 'genero',
     value: string | null,
   ) {
-    if (!orgId) return
+    setPending((prev) => {
+      const next = new Map(prev)
+      next.set(`${codigo}|${dim}`, value)
+      return next
+    })
+  }
+
+  async function savePending() {
+    if (!orgId || pending.size === 0) return
+    setSavingPending(true)
     try {
-      await setEventDimensionManual(orgId, codigo, dim, value)
-      // Limpar manual → reclassifica o evento pelas regras. Definir manual →
-      // reclassifica também (recalcula a outra dimensão, mantém a manual).
-      await reclassify.mutateAsync({ codigos: [codigo] })
+      const codigos = new Set<string>()
+      for (const [key, value] of pending) {
+        const [codigo, dim] = key.split('|') as [string, 'segmento' | 'genero']
+        await setEventDimensionManual(orgId, codigo, dim, value)
+        codigos.add(codigo)
+      }
+      // Reclassifica os afetados: dimensões manuais mantêm, demais recalculam.
+      await reclassify.mutateAsync({ codigos: [...codigos] })
       qc.invalidateQueries({ queryKey: ['bi', 'event-manuals', orgId] })
+      setPending(new Map())
+      toast.success(`${codigos.size} eventos atualizados`)
     } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
+      toast.error('Erro ao salvar', { description: (e as Error).message })
+    } finally {
+      setSavingPending(false)
     }
   }
 
@@ -276,8 +298,10 @@ export function EventosPage() {
                           value={e.segmento}
                           isManual={!!(m?.segmento_manual)}
                           options={segNames}
+                          staged={pending.get(`${e.codigo_evento}|segmento`)}
+                          hasStaged={pending.has(`${e.codigo_evento}|segmento`)}
                           onChange={(v) =>
-                            changeDimension(e.codigo_evento, 'segmento', v)
+                            stageDimension(e.codigo_evento, 'segmento', v)
                           }
                         />
                         <DimensionCell
@@ -285,8 +309,10 @@ export function EventosPage() {
                           emptyLabel="Sem gênero"
                           isManual={!!(m?.genero_manual)}
                           options={genNames}
+                          staged={pending.get(`${e.codigo_evento}|genero`)}
+                          hasStaged={pending.has(`${e.codigo_evento}|genero`)}
                           onChange={(v) =>
-                            changeDimension(e.codigo_evento, 'genero', v)
+                            stageDimension(e.codigo_evento, 'genero', v)
                           }
                         />
                         <TableCell className="max-w-40 truncate">
@@ -314,47 +340,83 @@ export function EventosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Barra flutuante: salvar alterações pendentes de segmento/gênero */}
+      {pending.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
+          <span className="text-sm text-muted-foreground">
+            {pending.size}{' '}
+            {pending.size === 1 ? 'alteração pendente' : 'alterações pendentes'}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPending(new Map())}
+            disabled={savingPending}
+          >
+            Descartar
+          </Button>
+          <Button size="sm" onClick={savePending} disabled={savingPending}>
+            <Save className="size-4" />
+            {savingPending ? 'Salvando…' : 'Atualizar Segmento / Gênero'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
-/** Célula de dimensão (segmento/gênero) editável inline, com pin se manual. */
+/**
+ * Célula de dimensão (segmento/gênero) editável inline. A alteração não é
+ * salva na hora: fica "staged" (pendente) e a barra flutuante salva tudo.
+ */
 function DimensionCell({
   value,
   options,
   isManual,
   onChange,
   emptyLabel = 'Sem segmento',
+  staged,
+  hasStaged,
 }: {
   value: string | null
   options: string[]
   isManual: boolean
   onChange: (v: string | null) => void
   emptyLabel?: string
+  staged?: string | null
+  hasStaged?: boolean
 }) {
+  // Valor/estado efetivos considerando a alteração pendente.
+  const effValue = hasStaged ? staged ?? null : value
+  const effManual = hasStaged ? staged != null : isManual
+  const selectValue = effManual && effValue ? effValue : AUTO
+
   return (
-    <TableCell>
+    <TableCell className={hasStaged ? 'bg-primary/5' : undefined}>
       <div className="flex items-center gap-1">
-        {isManual && (
+        {effManual && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-primary">
+              <span className={hasStaged ? 'text-amber-500' : 'text-primary'}>
                 <Pin className="size-3.5" />
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              Definido manualmente — não será alterado por regras
+              {hasStaged
+                ? 'Alteração não salva — use "Atualizar Segmento / Gênero"'
+                : 'Definido manualmente — não será alterado por regras'}
             </TooltipContent>
           </Tooltip>
         )}
         <Select
-          value={isManual && value ? value : AUTO}
+          value={selectValue}
           onValueChange={(v) => onChange(v === AUTO ? null : v)}
         >
           <SelectTrigger className="h-8 flex-1" size="sm">
             <SelectValue>
-              <span className={value ? '' : 'text-muted-foreground'}>
-                {value ?? emptyLabel}
+              <span className={effValue ? '' : 'text-muted-foreground'}>
+                {effValue ?? (hasStaged ? '— Automático' : emptyLabel)}
               </span>
             </SelectValue>
           </SelectTrigger>
