@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
 import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { router } from '@/routes'
 
 const queryClient = new QueryClient({
@@ -20,7 +21,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <RouterProvider router={router} />
+          <TooltipProvider delayDuration={150}>
+            <RouterProvider router={router} />
+          </TooltipProvider>
           <Toaster richColors position="top-right" />
         </AuthProvider>
       </ThemeProvider>
