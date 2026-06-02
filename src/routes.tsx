@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppLayout } from '@/modules/shared/AppLayout'
 import { ControlsProvider } from '@/modules/shared/controls-context'
 import { ProtectedRoute } from '@/modules/auth/ProtectedRoute'
@@ -14,23 +14,11 @@ const DashboardPage = lazy(() =>
 const MensalPage = lazy(() =>
   import('@/modules/bi/pages/MensalPage').then((m) => ({ default: m.MensalPage })),
 )
-const SegmentosPage = lazy(() =>
-  import('@/modules/bi/pages/SegmentosPage').then((m) => ({ default: m.SegmentosPage })),
-)
-const OrganizadoresPage = lazy(() =>
-  import('@/modules/bi/pages/OrganizadoresPage').then((m) => ({ default: m.OrganizadoresPage })),
-)
-const LocaisPage = lazy(() =>
-  import('@/modules/bi/pages/LocaisPage').then((m) => ({ default: m.LocaisPage })),
-)
-const EventosPage = lazy(() =>
-  import('@/modules/bi/pages/EventosPage').then((m) => ({ default: m.EventosPage })),
+const AnalisesPage = lazy(() =>
+  import('@/modules/bi/pages/AnalisesPage').then((m) => ({ default: m.AnalisesPage })),
 )
 const MeiosPagamentoPage = lazy(() =>
   import('@/modules/bi/pages/MeiosPagamentoPage').then((m) => ({ default: m.MeiosPagamentoPage })),
-)
-const GenerosPage = lazy(() =>
-  import('@/modules/bi/pages/GenerosPage').then((m) => ({ default: m.GenerosPage })),
 )
 const YtdPage = lazy(() =>
   import('@/modules/bi/pages/YtdPage').then((m) => ({ default: m.YtdPage })),
@@ -87,6 +75,12 @@ function RootRedirect() {
   return <Navigate to={lastRoute()} replace />
 }
 
+/** Redireciona para a aba de Análises preservando a querystring (drill-down). */
+function AnalisesRedirect({ view }: { view: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`/bi/analises/${view}${search}`} replace />
+}
+
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   {
@@ -104,11 +98,16 @@ export const router = createBrowserRouter([
       // BI
       { path: 'bi/dashboard', element: <DashboardPage /> },
       { path: 'bi/mensal', element: <MensalPage /> },
-      { path: 'bi/segmentos', element: <SegmentosPage /> },
-      { path: 'bi/generos', element: <GenerosPage /> },
-      { path: 'bi/organizadores', element: <OrganizadoresPage /> },
-      { path: 'bi/locais', element: <LocaisPage /> },
-      { path: 'bi/eventos', element: <EventosPage /> },
+      // Análises unificadas (abas internas).
+      { path: 'bi/analises', element: <Navigate to="/bi/analises/segmentos" replace /> },
+      { path: 'bi/analises/:view', element: <AnalisesPage /> },
+      // Compatibilidade: rotas antigas redirecionam para a aba correspondente
+      // preservando a querystring (drill-downs continuam funcionando).
+      { path: 'bi/segmentos', element: <AnalisesRedirect view="segmentos" /> },
+      { path: 'bi/generos', element: <AnalisesRedirect view="generos" /> },
+      { path: 'bi/organizadores', element: <AnalisesRedirect view="organizadores" /> },
+      { path: 'bi/locais', element: <AnalisesRedirect view="locais" /> },
+      { path: 'bi/eventos', element: <AnalisesRedirect view="eventos" /> },
       { path: 'bi/meios-pagamento', element: <MeiosPagamentoPage /> },
       { path: 'bi/ytd', element: <YtdPage /> },
       { path: 'bi/provisionamento', element: <ProvisionamentoPage /> },

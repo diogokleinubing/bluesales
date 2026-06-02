@@ -3,9 +3,6 @@ import {
   LayoutDashboard,
   CalendarRange,
   Layers,
-  Users,
-  MapPin,
-  Ticket,
   TrendingUp,
   Wallet,
   SlidersHorizontal,
@@ -22,7 +19,6 @@ import {
   Route as RouteIcon,
   UsersRound,
   CreditCard,
-  Music,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial'
@@ -57,15 +53,11 @@ export const MODULES: ModuleDef[] = [
     home: '/bi/dashboard',
     groups: [
       {
-        title: 'Análises',
+        title: 'Visão geral',
         items: [
           { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange },
-          { to: '/bi/segmentos', label: 'Segmentos', icon: Layers },
-          { to: '/bi/generos', label: 'Gêneros', icon: Music },
-          { to: '/bi/organizadores', label: 'Organizadores', icon: Users },
-          { to: '/bi/locais', label: 'Locais', icon: MapPin },
-          { to: '/bi/eventos', label: 'Eventos', icon: Ticket },
+          { to: '/bi/analises', label: 'Análises', icon: Layers },
           { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard },
           { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp },
           { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet },
