@@ -140,6 +140,18 @@ export function EventosPage() {
     filters.codigo
 
   const totalValue = events.reduce((a, e) => a + e.value, 0)
+  const totals = useMemo(
+    () =>
+      events.reduce(
+        (a, e) => ({
+          vendas: a.vendas + e.vendas,
+          gmv: a.gmv + e.gmv,
+          gmvOnline: a.gmvOnline + e.gmvOnline,
+        }),
+        { vendas: 0, gmv: 0, gmvOnline: 0 },
+      ),
+    [events],
+  )
 
   return (
     <div className="space-y-4">
@@ -330,6 +342,23 @@ export function EventosPage() {
                       </TableRow>
                     )
                   })
+                )}
+                {!isLoading && events.length > 0 && (
+                  <TableRow className="border-t-2 font-semibold">
+                    <TableCell colSpan={7}>
+                      Total ({fmtInt(events.length)}
+                      {truncated ? ' exibidos' : ''})
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtInt(totals.vendas)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtBRL(totals.gmv)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtBRL(totals.gmvOnline)}
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
