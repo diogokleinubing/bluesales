@@ -40,27 +40,36 @@ export function RulesEditor() {
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
   const refreshRules = () => qc.invalidateQueries({ queryKey: ['rules'] })
 
+  // As regras são salvas na hora, mas a RECLASSIFICAÇÃO dos eventos só roda ao
+  // clicar no botão flutuante (evita reprocessar a base a cada alteração).
+  const [dirty, setDirty] = useState(false)
+  const markDirty = () => {
+    refreshRules()
+    setDirty(true)
+  }
+  function aplicar() {
+    reclassify.mutate('all', { onSuccess: () => setDirty(false) })
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Cada termo ou local pode classificar segmento, gênero, ou os dois. Ao
-        salvar, os eventos são reclassificados automaticamente (definições
-        manuais são preservadas).
+        Cada termo ou local pode classificar segmento, gênero, ou os dois. As
+        alterações são salvas na hora; clique em{' '}
+        <strong>Reclassificar eventos</strong> para aplicá-las à base
+        (definições manuais são preservadas).
       </p>
 
       {/* Termos no NOME do evento */}
       <KeywordRuleCard
         title="Termos no nome do evento"
-        hint='Aplicados ao nome do evento (ex.: artista). "Segmento só sem ano": o segmento não é aplicado quando o nome tem ano (festival); o gênero continua valendo. Salvar reclassifica todos os eventos.'
+        hint='Aplicados ao nome do evento (ex.: artista). "Segmento só sem ano": o segmento não é aplicado quando o nome tem ano (festival); o gênero continua valendo.'
         table="keyword_rules"
         rows={rules.keywordRules}
         segNames={segNames}
         genNames={genNames}
         orgId={orgId}
-        afterChange={() => {
-          refreshRules()
-          reclassify.mutate('all')
-        }}
+        afterChange={markDirty}
       />
 
       {/* Locais (venue_segment_map) */}
@@ -69,22 +78,24 @@ export function RulesEditor() {
         segNames={segNames}
         genNames={genNames}
         orgId={orgId}
-        onReclassifyLocal={(local) => reclassify.mutate({ local })}
+        onReclassifyLocal={markDirty}
         refreshRules={refreshRules}
       />
 
-      <div className="flex justify-end">
-        <Button
-          variant="secondary"
-          onClick={() => reclassify.mutate('all')}
-          disabled={reclassify.isPending}
-        >
-          <RefreshCw
-            className={`size-4 ${reclassify.isPending ? 'animate-spin' : ''}`}
-          />
-          Reclassificar todos
-        </Button>
-      </div>
+      {/* Barra flutuante: aplicar (reclassificar) as alterações de regras */}
+      {(dirty || reclassify.isPending) && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
+          <span className="text-sm text-muted-foreground">
+            Alterações de regras não aplicadas
+          </span>
+          <Button onClick={aplicar} disabled={reclassify.isPending}>
+            <RefreshCw
+              className={`size-4 ${reclassify.isPending ? 'animate-spin' : ''}`}
+            />
+            {reclassify.isPending ? 'Reclassificando…' : 'Reclassificar eventos'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
