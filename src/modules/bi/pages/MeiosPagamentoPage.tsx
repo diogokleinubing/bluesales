@@ -1,8 +1,15 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -14,7 +21,12 @@ import {
 import { HorizontalRankBar } from '../components/charts'
 import { useOrgId } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
-import { biPaymentsGroup, metricOf, type PaymentDim } from '../lib/rpc'
+import {
+  biPaymentsGroup,
+  metricOf,
+  type PaymentDim,
+  type PaymentJuros,
+} from '../lib/rpc'
 import { METRIC_LABELS } from '../lib/controls'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
@@ -40,12 +52,15 @@ interface Row {
 function PaymentView({ dim }: { dim: PaymentDim }) {
   const orgId = useOrgId()
   const { year, metric, pdv } = useControls()
+  const [juros, setJuros] = useState<PaymentJuros>('all')
+  // O filtro de juros só faz sentido na visão de parcelas.
+  const jurosArg: PaymentJuros = dim === 'parcelas' ? juros : 'all'
 
   const query = useQuery({
     enabled: !!orgId,
     staleTime: 5 * 60 * 1000,
-    queryKey: ['bi', 'payments', orgId, year, pdv, dim],
-    queryFn: () => biPaymentsGroup(orgId!, year, pdv, dim),
+    queryKey: ['bi', 'payments', orgId, year, pdv, dim, jurosArg],
+    queryFn: () => biPaymentsGroup(orgId!, year, pdv, dim, jurosArg),
   })
 
   const rows = useMemo<Row[]>(() => {
@@ -79,10 +94,22 @@ function PaymentView({ dim }: { dim: PaymentDim }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             {metricLabel} por {labelDim(dim)}
           </CardTitle>
+          {dim === 'parcelas' && (
+            <Select value={juros} onValueChange={(v) => setJuros(v as PaymentJuros)}>
+              <SelectTrigger className="h-8 w-40" size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="com">Com juros</SelectItem>
+                <SelectItem value="sem">Sem juros</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (

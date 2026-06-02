@@ -408,6 +408,7 @@ export async function biPaymentYears(orgId: string): Promise<number[]> {
 }
 
 export type PaymentDim = 'forma' | 'operadora' | 'parcelas'
+export type PaymentJuros = 'all' | 'com' | 'sem'
 
 export interface PaymentGroupRow extends MetricSums {
   key: string | null
@@ -419,11 +420,13 @@ export async function biPaymentsGroup(
   year: number,
   pdv: Pdv[],
   dim: PaymentDim,
+  juros: PaymentJuros = 'all',
 ): Promise<PaymentGroupRow[]> {
   return rpc<PaymentGroupRow[]>('bi_payments_group', {
     p_org: orgId,
     p_year: year,
     p_pdv: pdv.length > 0 ? pdv : null,
     p_dim: dim,
+    p_juros: juros,
   })
 }
