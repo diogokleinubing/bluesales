@@ -49,12 +49,14 @@ export function toClassificationRules(bundle: RulesBundle): ClassificationRules 
       segmento: k.segmento,
       genero: k.genero,
       ordem: k.ordem,
+      ignorarComAno: k.ignorar_com_ano,
     })),
     venueRules: bundle.venueRules.map((k) => ({
       keyword: k.keyword,
       segmento: k.segmento,
       genero: k.genero,
       ordem: k.ordem,
+      ignorarComAno: k.ignorar_com_ano,
     })),
     venueMap: bundle.venueMap.map((v) => ({
       local: v.local,
@@ -104,6 +106,7 @@ export interface KeywordRuleInput {
   segmento: string | null
   genero: string | null
   ordem: number
+  ignorar_com_ano?: boolean
 }
 
 export async function addKeywordRule(

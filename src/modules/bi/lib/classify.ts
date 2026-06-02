@@ -30,6 +30,13 @@ export interface KeywordRule {
   segmento: string | null
   genero: string | null
   ordem?: number
+  /** Não aplicar esta regra quando o nome do evento contiver um ano (20XX). */
+  ignorarComAno?: boolean
+}
+
+/** O texto contém um ano de edição (2020–2030)? (indica festival/edição) */
+export function hasYear(text: string | null | undefined): boolean {
+  return /\b20(2\d|30)\b/.test(text ?? '')
 }
 
 export interface VenueMapEntry {
@@ -141,6 +148,7 @@ function classifyWithIndex(
 ): ClassificationResult {
   const nomeNorm = normalize(event.nome)
   const localNorm = normalize(event.local)
+  const nomeTemAno = hasYear(event.nome)
 
   let segmento: string | null = null
   let segmentoSource: ClassSource = null
@@ -179,6 +187,7 @@ function classifyWithIndex(
   if (segmento == null || genero == null) {
     const generosNome = new Set<string>()
     for (const r of idx.keywordRules) {
+      if (r.ignorarComAno && nomeTemAno) continue
       const kw = normalize(r.keyword)
       if (!matchesKeyword(nomeNorm, kw)) continue
       if (segmento == null && r.segmento) {
@@ -197,6 +206,7 @@ function classifyWithIndex(
   if ((segmento == null || genero == null) && localNorm) {
     const generosLocal = new Set<string>()
     for (const r of idx.venueRules) {
+      if (r.ignorarComAno && nomeTemAno) continue
       const kw = normalize(r.keyword)
       if (!matchesKeyword(localNorm, kw)) continue
       if (segmento == null && r.segmento) {

@@ -105,6 +105,7 @@ export interface KeywordRuleRow {
   segmento: string | null
   genero: string | null
   ordem: number
+  ignorar_com_ano: boolean
 }
 
 export interface VenueRuleRow {
@@ -114,6 +115,7 @@ export interface VenueRuleRow {
   segmento: string | null
   genero: string | null
   ordem: number
+  ignorar_com_ano: boolean
 }
 
 export interface VenueSegmentMapRow {

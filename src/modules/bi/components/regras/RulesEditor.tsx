@@ -5,6 +5,12 @@ import { Plus, Trash2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   Table,
   TableBody,
@@ -108,6 +114,7 @@ function KeywordRuleCard({
   const [keyword, setKeyword] = useState('')
   const [segmento, setSegmento] = useState<string | null>(null)
   const [genero, setGenero] = useState<string | null>(null)
+  const [ignorarComAno, setIgnorarComAno] = useState(false)
 
   async function add() {
     if (!orgId || !keyword.trim() || (!segmento && !genero)) {
@@ -120,10 +127,12 @@ function KeywordRuleCard({
         segmento,
         genero,
         ordem: rows.length * 10 + 10,
+        ignorar_com_ano: ignorarComAno,
       })
       setKeyword('')
       setSegmento(null)
       setGenero(null)
+      setIgnorarComAno(false)
       afterChange()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -161,6 +170,15 @@ function KeywordRuleCard({
               <TableHead>Termo</TableHead>
               <TableHead className="w-48">Segmento</TableHead>
               <TableHead className="w-48">Gênero musical</TableHead>
+              <TableHead className="w-24 text-center">
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help">Só sem ano</TooltipTrigger>
+                  <TooltipContent>
+                    Não aplica a regra quando o nome do evento tem um ano (20XX)
+                    — provável festival/edição.
+                  </TooltipContent>
+                </Tooltip>
+              </TableHead>
               <TableHead className="w-20">Ordem</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
@@ -168,7 +186,7 @@ function KeywordRuleCard({
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-4 text-center text-muted-foreground">
                   Nenhum termo.
                 </TableCell>
               </TableRow>
@@ -188,6 +206,14 @@ function KeywordRuleCard({
                     value={r.genero}
                     options={genNames}
                     onChange={(v) => patch(r.id, { genero: v })}
+                  />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Checkbox
+                    checked={r.ignorar_com_ano}
+                    onCheckedChange={(v) =>
+                      patch(r.id, { ignorar_com_ano: v === true })
+                    }
                   />
                 </TableCell>
                 <TableCell className="tabular-nums text-muted-foreground">
@@ -216,6 +242,12 @@ function KeywordRuleCard({
               </TableCell>
               <TableCell>
                 <ClassSelect value={genero} options={genNames} onChange={setGenero} />
+              </TableCell>
+              <TableCell className="text-center">
+                <Checkbox
+                  checked={ignorarComAno}
+                  onCheckedChange={(v) => setIgnorarComAno(v === true)}
+                />
               </TableCell>
               <TableCell colSpan={2}>
                 <Button size="sm" variant="secondary" onClick={add}>
