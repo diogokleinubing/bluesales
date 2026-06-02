@@ -442,7 +442,9 @@ export interface RecurringYtdRow {
   total_prev: number
   ytd_prev: number
   ytd_cur: number
-  abertura_prev: number | null
+  abertura_mes: number | null
+  abertura_ano: number | null
+  abertura_prev_mes: number | null
   evento_mes_cur: number | null
 }
 

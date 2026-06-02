@@ -33,7 +33,9 @@ interface Row {
   ytdCur: number
   diff: number
   diffPct: number | null
-  abertura: number | null // 1-12
+  aberturaMes: number | null // 1-12 (1ª venda da edição atual)
+  aberturaAno: number | null // ano da abertura (pode ser o ano anterior)
+  aberturaPrevMes: number | null // mês de abertura da edição passada (previsão)
   eventoMes: number | null // mês do evento no ano atual (1-12)
   aberto: boolean
   status: Status
@@ -92,11 +94,13 @@ export function RecorrentesPage() {
         ytdCur,
         diff,
         diffPct: ytdPrev > 0 ? diff / ytdPrev : null,
-        abertura: r.abertura_prev,
+        aberturaMes: r.abertura_mes,
+        aberturaAno: r.abertura_ano,
+        aberturaPrevMes: r.abertura_prev_mes,
         eventoMes: r.evento_mes_cur,
         aberto: ytdCur > 0,
         status: computeStatus(
-          { ytdCur, abertura: r.abertura_prev, eventoMes: r.evento_mes_cur },
+          { ytdCur, abertura: r.abertura_prev_mes, eventoMes: r.evento_mes_cur },
           cutoff,
         ),
       }
@@ -106,7 +110,8 @@ export function RecorrentesPage() {
     list.sort((a, b) => {
       if (a.aberto !== b.aberto) return a.aberto ? -1 : 1
       if (a.aberto) return b.ytdCur - a.ytdCur
-      return (a.abertura ?? 99) - (b.abertura ?? 99)
+      // Não abertos: ordem cronológica pela previsão (abertura da edição passada).
+      return (a.aberturaPrevMes ?? 99) - (b.aberturaPrevMes ?? 99)
     })
     return list
   }, [dataQ.data, cutoff])
@@ -153,8 +158,8 @@ export function RecorrentesPage() {
                   <TableHead className="text-right">GMV YTD {year}</TableHead>
                   <TableHead className="text-right">Δ R$</TableHead>
                   <TableHead className="text-right">Δ %</TableHead>
-                  <TableHead>Abertura {prevYear}</TableHead>
-                  <TableHead>Data {year}</TableHead>
+                  <TableHead>Abertura Anterior</TableHead>
+                  <TableHead>Próxima Edição</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -202,11 +207,13 @@ export function RecorrentesPage() {
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {r.diffPct == null ? '—' : fmtDelta(r.diffPct)}
                         </TableCell>
-                        <TableCell>
-                          {r.abertura ? MONTH_LABELS[r.abertura - 1] : '—'}
+                        <TableCell className="whitespace-nowrap">
+                          {r.aberturaMes
+                            ? `${MONTH_LABELS[r.aberturaMes - 1]}/${r.aberturaAno}`
+                            : '—'}
                         </TableCell>
-                        <TableCell>
-                          {r.eventoMes ? MONTH_LABELS[r.eventoMes - 1] : '—'}
+                        <TableCell className="whitespace-nowrap">
+                          {r.eventoMes ? `${MONTH_LABELS[r.eventoMes - 1]}/${year}` : '—'}
                         </TableCell>
                       </TableRow>
                     ))}
