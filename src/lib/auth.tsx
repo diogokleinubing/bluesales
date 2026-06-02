@@ -18,6 +18,7 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   isAdmin: boolean
+  isGestor: boolean
   /** Usuário já tem um fator TOTP verificado cadastrado? */
   hasMfa: boolean
   /** A sessão atual já passou pelo 2FA (aal2)? */
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isGestor, setIsGestor] = useState(false)
   const [mustChangePassword, setMustChangePassword] = useState(false)
   const [hasMfa, setHasMfa] = useState(false)
   const [aal, setAal] = useState<Aal>(null)
@@ -60,15 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (uid: string | undefined) => {
     if (!uid) {
       setIsAdmin(false)
+      setIsGestor(false)
       setMustChangePassword(false)
       return
     }
     const { data } = await supabase
       .from('profiles')
-      .select('is_admin, must_change_password')
+      .select('is_admin, is_gestor, must_change_password')
       .eq('id', uid)
       .maybeSingle()
     setIsAdmin(!!data?.is_admin)
+    setIsGestor(!!data?.is_gestor)
     setMustChangePassword(!!data?.must_change_password)
   }, [])
 
@@ -93,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshMfa()
       } else {
         setIsAdmin(false)
+        setIsGestor(false)
         setMustChangePassword(false)
         setHasMfa(false)
         setAal(null)
@@ -121,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: session?.user ?? null,
       loading,
       isAdmin,
+      isGestor,
       hasMfa,
       mfaSatisfied,
       needsMfaEnroll,
@@ -143,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       isAdmin,
+      isGestor,
       hasMfa,
       mfaSatisfied,
       needsMfaEnroll,

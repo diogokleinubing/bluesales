@@ -1,14 +1,27 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { Ticket } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getModule, moduleFromPath } from './nav'
+import { useAuth } from '@/lib/auth'
+import { getModule, moduleFromPath, type NavItem } from './nav'
 import { ModuleSwitcher } from './ModuleSwitcher'
 import { UserMenu } from './UserMenu'
 
 export function Sidebar() {
   const { pathname } = useLocation()
+  const { isAdmin, isGestor } = useAuth()
   const moduleId = moduleFromPath(pathname)
   const mod = getModule(moduleId)
+
+  const canSee = (item: NavItem) =>
+    item.requires === 'admin'
+      ? isAdmin
+      : item.requires === 'gestor'
+        ? isGestor
+        : true
+
+  const groups = mod.groups
+    .map((g) => ({ ...g, items: g.items.filter(canSee) }))
+    .filter((g) => g.items.length > 0)
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
@@ -30,7 +43,7 @@ export function Sidebar() {
 
       {/* Menu contextual do módulo ativo */}
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
-        {mod.groups.map((group) => (
+        {groups.map((group) => (
           <div key={group.title}>
             <div className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {group.title}

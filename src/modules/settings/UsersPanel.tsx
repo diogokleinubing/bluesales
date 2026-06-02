@@ -33,6 +33,7 @@ import { useAuth } from '@/lib/auth'
 import {
   fetchProfiles,
   setAdmin,
+  setGestor,
   resetUserPassword,
   disableUserMfa,
 } from './admin-api'
@@ -57,6 +58,16 @@ export function UsersPanel() {
       await setAdmin(id, value)
       await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
       toast.success(value ? 'Usuário promovido a admin' : 'Admin removido')
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  async function toggleGestor(id: string, value: boolean) {
+    try {
+      await setGestor(id, value)
+      await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
+      toast.success(value ? 'Usuário definido como gestor' : 'Gestor removido')
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -110,6 +121,7 @@ export function UsersPanel() {
                 <TableHead>Email</TableHead>
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-center">Admin</TableHead>
+                <TableHead className="text-center">Gestor</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -117,14 +129,14 @@ export function UsersPanel() {
               {query.isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={4}>
+                    <TableCell colSpan={5}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     Nenhum usuário.
                   </TableCell>
                 </TableRow>
@@ -154,6 +166,12 @@ export function UsersPanel() {
                           checked={u.is_admin}
                           disabled={isSelf}
                           onCheckedChange={(v) => toggleAdmin(u.id, v)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={u.is_gestor}
+                          onCheckedChange={(v) => toggleGestor(u.id, v)}
                         />
                       </TableCell>
                       <TableCell className="text-right">

@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppLayout } from '@/modules/shared/AppLayout'
 import { ControlsProvider } from '@/modules/shared/controls-context'
 import { ProtectedRoute } from '@/modules/auth/ProtectedRoute'
-import { AdminRoute } from '@/modules/auth/AdminRoute'
+import { AdminRoute, RoleRoute } from '@/modules/auth/AdminRoute'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { lastRoute } from '@/modules/shared/navigation'
 
@@ -97,7 +97,14 @@ export const router = createBrowserRouter([
 
       // BI
       { path: 'bi/dashboard', element: <DashboardPage /> },
-      { path: 'bi/mensal', element: <MensalPage /> },
+      {
+        path: 'bi/mensal',
+        element: (
+          <RoleRoute role="gestor">
+            <MensalPage />
+          </RoleRoute>
+        ),
+      },
       // Análises unificadas (abas internas).
       { path: 'bi/analises', element: <Navigate to="/bi/analises/segmentos" replace /> },
       { path: 'bi/analises/:view', element: <AnalisesPage /> },
@@ -113,7 +120,14 @@ export const router = createBrowserRouter([
       { path: 'bi/provisionamento', element: <ProvisionamentoPage /> },
       { path: 'bi/regras', element: <RegrasPage /> },
       { path: 'bi/importacao', element: <ImportacaoPage /> },
-      { path: 'bi/base', element: <BasePage /> },
+      {
+        path: 'bi/base',
+        element: (
+          <RoleRoute role="admin">
+            <BasePage />
+          </RoleRoute>
+        ),
+      },
 
       // Comercial (stubs)
       { path: 'comercial/painel', element: <PainelPage /> },

@@ -20,6 +20,15 @@ export async function setAdmin(id: string, isAdmin: boolean): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/** Define/retira o papel gestor de um usuário. */
+export async function setGestor(id: string, isGestor: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_gestor: isGestor })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 /**
  * Reseta a senha de outro usuário (via Edge Function admin-actions).
  * Retorna a senha temporária; o usuário será forçado a trocá-la no login.
