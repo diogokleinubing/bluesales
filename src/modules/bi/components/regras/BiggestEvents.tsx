@@ -129,6 +129,7 @@ export function BiggestEvents() {
                   <TableHead>Evento</TableHead>
                   <TableHead>Organizador</TableHead>
                   <TableHead>Segmento</TableHead>
+                  <TableHead>Gênero</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
                   <TableHead className="text-right">GMV</TableHead>
                 </TableRow>
@@ -136,7 +137,7 @@ export function BiggestEvents() {
               <TableBody>
                 {eventsQ.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                       Carregando…
                     </TableCell>
                   </TableRow>
@@ -159,6 +160,13 @@ export function BiggestEvents() {
                         <Badge variant="outline">
                           {e.segmento ?? 'Sem segmento'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {e.genero ? (
+                          <Badge variant="secondary">{e.genero}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {fmtInt(Number(e.qtd))}
