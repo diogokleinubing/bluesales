@@ -45,6 +45,7 @@ interface EvRow {
   familia: string | null
   segmento: string | null
   genero: string | null
+  organizador: string | null
   gmv: number
 }
 
@@ -52,6 +53,18 @@ interface EvRow {
 export function hasYearInTitle(nome: string | null): boolean {
   if (!nome) return false
   return /\b(20(2\d|30))\b/.test(nome)
+}
+
+/** Não sugerir: shows, validações, cópias, ou eventos da própria Blueticket. */
+const EXCLUDE_WORDS = ['show', 'validacao', 'copia']
+function isExcludedFromSuggestion(e: {
+  nome: string | null
+  organizador: string | null
+}): boolean {
+  const n = norm(e.nome)
+  if (EXCLUDE_WORDS.some((w) => n.includes(w))) return true
+  if (norm(e.organizador).includes('blueticket')) return true
+  return false
 }
 
 
@@ -64,7 +77,7 @@ async function fetchEventsBase(
   for (;;) {
     const { data, error } = await supabase
       .from('events')
-      .select('codigo_evento, nome, familia, segmento, genero')
+      .select('codigo_evento, nome, familia, segmento, genero, organizador')
       .eq('org_id', orgId)
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
@@ -93,6 +106,9 @@ export function RecurringEvents() {
   const [saving, setSaving] = useState(false)
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestChecked, setSuggestChecked] = useState<Set<string>>(new Set())
+  const [suggestEdits, setSuggestEdits] = useState<
+    Record<string, { nome: string; segmento: string | null; genero: string | null }>
+  >({})
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
@@ -158,16 +174,19 @@ export function RecurringEvents() {
 
     const byCand = new Map<
       string,
-      { familia: string; existente: boolean; events: EvRow[] }
+      { key: string; familia: string; existente: boolean; events: EvRow[] }
     >()
     for (const e of events) {
       if (e.familia) continue
       // Só sugere eventos que têm o ano no nome (candidatos a recorrência).
       if (!hasYearInTitle(e.nome)) continue
+      // Exclui shows, validações, cópias e eventos da própria Blueticket.
+      if (isExcludedFromSuggestion(e)) continue
       const cand = familiaFromName(e.nome)
       if (!cand) continue
       const key = norm(cand)
       const entry = byCand.get(key) ?? {
+        key,
         familia: famByNorm.get(key) ?? cand,
         existente: existentes.has(key),
         events: [],
@@ -183,32 +202,82 @@ export function RecurringEvents() {
   function openSuggest() {
     // Abre tudo desmarcado por padrão (o usuário escolhe o que agrupar).
     setSuggestChecked(new Set())
+    const edits: Record<
+      string,
+      { nome: string; segmento: string | null; genero: string | null }
+    > = {}
+    for (const s of suggestions) {
+      edits[s.key] = { nome: s.familia, segmento: null, genero: null }
+    }
+    setSuggestEdits(edits)
     setSuggestOpen(true)
+  }
+
+  /** Cria/atualiza a regra de keyword (nome da família) com segmento/gênero. */
+  async function upsertFamilyRule(
+    familia: string,
+    segmento: string | null,
+    genero: string | null,
+  ) {
+    if (!orgId || (!segmento && !genero)) return false
+    const existente = rules.keywordRules.find(
+      (r) => norm(r.keyword) === norm(familia),
+    )
+    if (existente) {
+      await updateKeywordRule('keyword_rules', existente.id, { segmento, genero })
+    } else {
+      await addKeywordRule('keyword_rules', orgId, {
+        keyword: familia,
+        segmento,
+        genero,
+        ordem: rules.keywordRules.length * 10 + 10,
+      })
+    }
+    return true
   }
 
   async function applySuggestions() {
     if (!orgId) return
-    const byFam = new Map<string, string[]>()
+    // (família final, segmento, gênero) -> códigos marcados
+    const groups: {
+      familia: string
+      segmento: string | null
+      genero: string | null
+      codigos: string[]
+    }[] = []
     for (const s of suggestions) {
-      for (const e of s.events) {
-        if (!suggestChecked.has(e.codigo_evento)) continue
-        const arr = byFam.get(s.familia) ?? []
-        arr.push(e.codigo_evento)
-        byFam.set(s.familia, arr)
-      }
+      const codigos = s.events
+        .filter((e) => suggestChecked.has(e.codigo_evento))
+        .map((e) => e.codigo_evento)
+      if (codigos.length === 0) continue
+      const ed = suggestEdits[s.key]
+      const familia = (ed?.nome ?? s.familia).trim() || s.familia
+      groups.push({
+        familia,
+        segmento: ed?.segmento ?? null,
+        genero: ed?.genero ?? null,
+        codigos,
+      })
     }
-    const totalCodigos = [...byFam.values()].reduce((a, c) => a + c.length, 0)
+    const totalCodigos = groups.reduce((a, g) => a + g.codigos.length, 0)
     if (totalCodigos === 0) return
     setSaving(true)
     try {
-      for (const [familia, codigos] of byFam) {
-        for (const c of codigos) await setFamilyOverride(orgId, c, familia)
-        await setEventFamilias(orgId, codigos, familia)
+      let criouRegra = false
+      for (const g of groups) {
+        for (const c of g.codigos) await setFamilyOverride(orgId, c, g.familia)
+        await setEventFamilias(orgId, g.codigos, g.familia)
+        if (await upsertFamilyRule(g.familia, g.segmento, g.genero))
+          criouRegra = true
+      }
+      if (criouRegra) {
+        await qc.invalidateQueries({ queryKey: ['rules'] })
+        reclassify.mutate('all')
       }
       await qc.invalidateQueries({ queryKey: ['bi'] })
       setSuggestOpen(false)
       toast.success('Famílias aplicadas', {
-        description: `${totalCodigos} eventos agrupados em ${byFam.size} famílias.`,
+        description: `${totalCodigos} eventos agrupados em ${groups.length} famílias.`,
       })
     } catch (e) {
       toast.error('Erro ao aplicar', { description: (e as Error).message })
@@ -527,29 +596,55 @@ export function RecurringEvents() {
               const allOn = s.events.every((e) =>
                 suggestChecked.has(e.codigo_evento),
               )
+              const ed = suggestEdits[s.key] ?? {
+                nome: s.familia,
+                segmento: null,
+                genero: null,
+              }
+              const patchEdit = (p: Partial<typeof ed>) =>
+                setSuggestEdits((prev) => ({
+                  ...prev,
+                  [s.key]: { ...ed, ...p },
+                }))
               return (
-                <div key={s.familia} className="rounded-md border border-border">
-                  <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={allOn}
-                        onCheckedChange={(v) =>
-                          setSuggestChecked((prev) => {
-                            const next = new Set(prev)
-                            for (const e of s.events) {
-                              if (v === true) next.add(e.codigo_evento)
-                              else next.delete(e.codigo_evento)
-                            }
-                            return next
-                          })
-                        }
-                      />
-                      <span className="font-medium">{s.familia}</span>
-                      <Badge variant={s.existente ? 'secondary' : 'outline'}>
-                        {s.existente ? 'existente' : 'nova'}
-                      </Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
+                <div key={s.key} className="rounded-md border border-border">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
+                    <Checkbox
+                      checked={allOn}
+                      onCheckedChange={(v) =>
+                        setSuggestChecked((prev) => {
+                          const next = new Set(prev)
+                          for (const e of s.events) {
+                            if (v === true) next.add(e.codigo_evento)
+                            else next.delete(e.codigo_evento)
+                          }
+                          return next
+                        })
+                      }
+                    />
+                    <Input
+                      value={ed.nome}
+                      onChange={(e) => patchEdit({ nome: e.target.value })}
+                      className="h-8 w-56"
+                    />
+                    <ClassSelect
+                      value={ed.segmento}
+                      options={segNames}
+                      onChange={(v) => patchEdit({ segmento: v })}
+                      placeholder="Segmento"
+                      className="h-8 w-36"
+                    />
+                    <ClassSelect
+                      value={ed.genero}
+                      options={genNames}
+                      onChange={(v) => patchEdit({ genero: v })}
+                      placeholder="Gênero"
+                      className="h-8 w-36"
+                    />
+                    <Badge variant={s.existente ? 'secondary' : 'outline'}>
+                      {s.existente ? 'existente' : 'nova'}
+                    </Badge>
+                    <span className="ml-auto text-xs text-muted-foreground">
                       {s.events.length} eventos
                     </span>
                   </div>
