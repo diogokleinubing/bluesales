@@ -35,7 +35,9 @@ interface EvRow {
   codigo_evento: string
   nome: string | null
   familia: string | null
-  receita: number
+  segmento: string | null
+  genero: string | null
+  gmv: number
 }
 
 /** Título tem um ano entre 2020 e 2030? (candidato a evento recorrente) */
@@ -47,18 +49,18 @@ export function hasYearInTitle(nome: string | null): boolean {
 
 async function fetchEventsBase(
   orgId: string,
-): Promise<Omit<EvRow, 'receita'>[]> {
-  const all: Omit<EvRow, 'receita'>[] = []
+): Promise<Omit<EvRow, 'gmv'>[]> {
+  const all: Omit<EvRow, 'gmv'>[] = []
   const PAGE = 1000
   let from = 0
   for (;;) {
     const { data, error } = await supabase
       .from('events')
-      .select('codigo_evento, nome, familia')
+      .select('codigo_evento, nome, familia, segmento, genero')
       .eq('org_id', orgId)
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
-    const rows = (data ?? []) as Omit<EvRow, 'receita'>[]
+    const rows = (data ?? []) as Omit<EvRow, 'gmv'>[]
     all.push(...rows)
     if (rows.length < PAGE) break
     from += PAGE
@@ -93,12 +95,12 @@ export function RecurringEvents() {
         fetchEventsBase(orgId!),
         biBiggestEvents(orgId!, '', 10000),
       ])
-      const revMap = new Map(
-        rev.map((r) => [r.codigo_evento, Number(r.receita_bt)]),
+      const gmvMap = new Map(
+        rev.map((r) => [r.codigo_evento, Number(r.gmv)]),
       )
       return evs
-        .map((e) => ({ ...e, receita: revMap.get(e.codigo_evento) ?? 0 }))
-        .sort((a, b) => b.receita - a.receita)
+        .map((e) => ({ ...e, gmv: gmvMap.get(e.codigo_evento) ?? 0 }))
+        .sort((a, b) => b.gmv - a.gmv)
     },
   })
 
@@ -331,7 +333,9 @@ export function RecurringEvents() {
                   </TableHead>
                   <TableHead className="min-w-[28rem]">Evento</TableHead>
                   <TableHead>Código</TableHead>
-                  <TableHead className="text-right">Receita</TableHead>
+                  <TableHead className="text-right">GMV</TableHead>
+                  <TableHead>Segmento</TableHead>
+                  <TableHead>Gênero</TableHead>
                   <TableHead>Família atual</TableHead>
                 </TableRow>
               </TableHeader>
@@ -339,7 +343,7 @@ export function RecurringEvents() {
                 {baseQ.isLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={7}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Carregando…
@@ -348,7 +352,7 @@ export function RecurringEvents() {
                 ) : visible.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={7}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Nenhum evento encontrado.
@@ -370,7 +374,21 @@ export function RecurringEvents() {
                         {e.codigo_evento}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(e.receita)}
+                        {fmtBRL(e.gmv)}
+                      </TableCell>
+                      <TableCell>
+                        {e.segmento ? (
+                          <Badge variant="outline">{e.segmento}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {e.genero ? (
+                          <Badge variant="secondary">{e.genero}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {e.familia ? (
