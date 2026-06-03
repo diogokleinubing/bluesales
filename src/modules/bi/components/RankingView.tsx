@@ -62,6 +62,9 @@ export function RankingView({
 }) {
   const navigate = useNavigate()
   const totalGmv = groups.reduce((a, g) => a + g.gmv, 0)
+  const totalVendas = groups.reduce((a, g) => a + g.vendas, 0)
+  const totalGmvOnline = groups.reduce((a, g) => a + g.gmvOnline, 0)
+  const totalGmvPrev = groups.reduce((a, g) => a + (g.gmvPrev ?? 0), 0)
   const cols = 5 + (compare ? 2 : 0) + (crmLink ? 1 : 0)
 
   function drill(label: string) {
@@ -177,6 +180,32 @@ export function RankingView({
                       )}
                     </TableRow>
                   ))
+                )}
+                {!loading && groups.length > 0 && (
+                  <TableRow className="border-t-2 font-semibold">
+                    <TableCell>Total ({groups.length})</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtInt(totalVendas)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtBRL(totalGmv)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtBRL(totalGmvOnline)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {fmtPct(1)}
+                    </TableCell>
+                    {compare && (
+                      <>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {fmtBRL(totalGmvPrev)}
+                        </TableCell>
+                        <DeltaCell cur={totalGmv} prev={totalGmvPrev} />
+                      </>
+                    )}
+                    {crmLink && <TableCell />}
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
