@@ -86,6 +86,11 @@ export function RecurringEvents() {
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
+  // Filtro inclui "Outros" (fallback) no fim, para ver os não ajustados.
+  const segFilterOptions = useMemo(
+    () => [...segNames.filter((s) => s !== 'Outros'), 'Outros'],
+    [segNames],
+  )
 
   const baseQ = useQuery({
     enabled: !!orgId,
@@ -321,7 +326,7 @@ export function RecurringEvents() {
         />
         <ClassSelect
           value={segFilter}
-          options={segNames}
+          options={segFilterOptions}
           onChange={setSegFilter}
           placeholder="Todos os segmentos"
           className="h-9 w-52"
