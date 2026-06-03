@@ -206,12 +206,36 @@ export function RecurringEvents() {
   function openSuggest() {
     // Abre tudo desmarcado por padrão (o usuário escolhe o que agrupar).
     setSuggestChecked(new Set())
+    // Mais comum em uma lista (ignora vazios).
+    const mode = (xs: (string | null)[]): string | null => {
+      const c = new Map<string, number>()
+      for (const x of xs) if (x) c.set(x, (c.get(x) ?? 0) + 1)
+      let best: string | null = null
+      let n = 0
+      for (const [k, v] of c) if (v > n) ((best = k), (n = v))
+      return best
+    }
     const edits: Record<
       string,
       { nome: string; segmento: string | null; genero: string | null }
     > = {}
     for (const s of suggestions) {
-      edits[s.key] = { nome: s.familia, segmento: null, genero: null }
+      let segmento: string | null = null
+      let genero: string | null = null
+      // 1) regra de keyword com o nome da família tem prioridade.
+      const rule = rules.keywordRules.find((r) => norm(r.keyword) === s.key)
+      if (rule) {
+        segmento = rule.segmento
+        genero = rule.genero
+      } else if (s.existente) {
+        // 2) config atual dos eventos já agrupados nessa família.
+        const fam = events.filter(
+          (e) => e.familia && norm(e.familia) === s.key,
+        )
+        segmento = mode(fam.map((e) => (e.segmento === 'Outros' ? null : e.segmento)))
+        genero = mode(fam.map((e) => e.genero))
+      }
+      edits[s.key] = { nome: s.familia, segmento, genero }
     }
     setSuggestEdits(edits)
     setSuggestOpen(true)
@@ -586,7 +610,7 @@ export function RecurringEvents() {
       </Card>
 
       <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Famílias sugeridas</DialogTitle>
             <DialogDescription>
@@ -645,7 +669,13 @@ export function RecurringEvents() {
                       placeholder="Gênero"
                       className="h-8 w-36"
                     />
-                    <Badge variant={s.existente ? 'secondary' : 'outline'}>
+                    <Badge
+                      className={
+                        s.existente
+                          ? 'border-transparent bg-[var(--success)]/15 text-[var(--success)]'
+                          : 'border-transparent bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                      }
+                    >
                       {s.existente ? 'existente' : 'nova'}
                     </Badge>
                     <span className="ml-auto text-xs text-muted-foreground">
