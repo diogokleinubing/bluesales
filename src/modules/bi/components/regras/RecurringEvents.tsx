@@ -196,7 +196,11 @@ export function RecurringEvents() {
     }
     return [...byCand.values()]
       .filter((s) => s.existente || s.events.length >= 2)
-      .sort((a, b) => b.events.length - a.events.length)
+      // Famílias já existentes (novas edições) primeiro — são as mais certeiras.
+      .sort((a, b) => {
+        if (a.existente !== b.existente) return a.existente ? -1 : 1
+        return b.events.length - a.events.length
+      })
   }, [events])
 
   function openSuggest() {
@@ -272,7 +276,7 @@ export function RecurringEvents() {
       }
       if (criouRegra) {
         await qc.invalidateQueries({ queryKey: ['rules'] })
-        reclassify.mutate('all')
+        await reclassify.mutateAsync('all')
       }
       await qc.invalidateQueries({ queryKey: ['bi'] })
       setSuggestOpen(false)
@@ -349,8 +353,8 @@ export function RecurringEvents() {
           })
         }
         await qc.invalidateQueries({ queryKey: ['rules'] })
-        reclassify.mutate('all')
-        ruleMsg = ' Regra de classificação salva.'
+        await reclassify.mutateAsync('all')
+        ruleMsg = ' Regra de classificação salva e eventos reclassificados.'
       }
 
       setSelected(new Set())
@@ -582,7 +586,7 @@ export function RecurringEvents() {
       </Card>
 
       <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Famílias sugeridas</DialogTitle>
             <DialogDescription>
