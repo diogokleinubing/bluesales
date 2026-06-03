@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Layers, Eraser } from 'lucide-react'
+import { Layers, Eraser, Sparkles } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -26,7 +34,7 @@ import {
   setFamilyOverride,
 } from '../../lib/family-api'
 import { addKeywordRule, updateKeywordRule } from '../../lib/rules-api'
-import { suggestFamily } from '../../lib/family'
+import { suggestFamily, familiaFromName } from '../../lib/family'
 import { norm } from '../../lib/classify'
 import { ClassSelect } from './ClassSelect'
 import { fmtBRL, fmtInt } from '@/lib/format'
@@ -83,6 +91,8 @@ export function RecurringEvents() {
   const [genero, setGenero] = useState<string | null>(null)
   const [userEdited, setUserEdited] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestChecked, setSuggestChecked] = useState<Set<string>>(new Set())
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
@@ -138,6 +148,73 @@ export function RecurringEvents() {
     for (const c of counts.values()) if (c >= 2) recorrentes++
     return { familias: counts.size, recorrentes }
   }, [events])
+
+  // Descobre famílias: eventos SEM família cujo nome (sem o ano) bate com uma
+  // família existente, ou que se agrupam com outros eventos soltos (>= 2).
+  const suggestions = useMemo(() => {
+    const famByNorm = new Map<string, string>()
+    for (const e of events) if (e.familia) famByNorm.set(norm(e.familia), e.familia)
+    const existentes = new Set(famByNorm.keys())
+
+    const byCand = new Map<
+      string,
+      { familia: string; existente: boolean; events: EvRow[] }
+    >()
+    for (const e of events) {
+      if (e.familia) continue
+      const cand = familiaFromName(e.nome)
+      if (!cand) continue
+      const key = norm(cand)
+      const entry = byCand.get(key) ?? {
+        familia: famByNorm.get(key) ?? cand,
+        existente: existentes.has(key),
+        events: [],
+      }
+      entry.events.push(e)
+      byCand.set(key, entry)
+    }
+    return [...byCand.values()]
+      .filter((s) => s.existente || s.events.length >= 2)
+      .sort((a, b) => b.events.length - a.events.length)
+  }, [events])
+
+  function openSuggest() {
+    const all = new Set<string>()
+    for (const s of suggestions) for (const e of s.events) all.add(e.codigo_evento)
+    setSuggestChecked(all)
+    setSuggestOpen(true)
+  }
+
+  async function applySuggestions() {
+    if (!orgId) return
+    const byFam = new Map<string, string[]>()
+    for (const s of suggestions) {
+      for (const e of s.events) {
+        if (!suggestChecked.has(e.codigo_evento)) continue
+        const arr = byFam.get(s.familia) ?? []
+        arr.push(e.codigo_evento)
+        byFam.set(s.familia, arr)
+      }
+    }
+    const totalCodigos = [...byFam.values()].reduce((a, c) => a + c.length, 0)
+    if (totalCodigos === 0) return
+    setSaving(true)
+    try {
+      for (const [familia, codigos] of byFam) {
+        for (const c of codigos) await setFamilyOverride(orgId, c, familia)
+        await setEventFamilias(orgId, codigos, familia)
+      }
+      await qc.invalidateQueries({ queryKey: ['bi'] })
+      setSuggestOpen(false)
+      toast.success('Famílias aplicadas', {
+        description: `${totalCodigos} eventos agrupados em ${byFam.size} famílias.`,
+      })
+    } catch (e) {
+      toast.error('Erro ao aplicar', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Sugestão = trecho em comum dos nomes selecionados (sem o ano).
   const suggestion = useMemo(() => {
@@ -291,6 +368,18 @@ export function RecurringEvents() {
         >
           <Layers className="size-4" /> Agrupar selecionados
         </Button>
+        <Button
+          variant="outline"
+          onClick={openSuggest}
+          disabled={saving || suggestions.length === 0}
+        >
+          <Sparkles className="size-4" /> Sugerir famílias
+          {suggestions.length > 0 && (
+            <Badge variant="secondary" className="ml-1">
+              {suggestions.length}
+            </Badge>
+          )}
+        </Button>
         <div className="ml-auto flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
             <Checkbox
@@ -421,6 +510,98 @@ export function RecurringEvents() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={suggestOpen} onOpenChange={setSuggestOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Famílias sugeridas</DialogTitle>
+            <DialogDescription>
+              Eventos sem família que combinam com uma família existente ou entre
+              si (pelo nome, sem o ano). Marque os que deseja agrupar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[55vh] space-y-4 overflow-auto pr-1">
+            {suggestions.map((s) => {
+              const allOn = s.events.every((e) =>
+                suggestChecked.has(e.codigo_evento),
+              )
+              return (
+                <div key={s.familia} className="rounded-md border border-border">
+                  <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={allOn}
+                        onCheckedChange={(v) =>
+                          setSuggestChecked((prev) => {
+                            const next = new Set(prev)
+                            for (const e of s.events) {
+                              if (v === true) next.add(e.codigo_evento)
+                              else next.delete(e.codigo_evento)
+                            }
+                            return next
+                          })
+                        }
+                      />
+                      <span className="font-medium">{s.familia}</span>
+                      <Badge variant={s.existente ? 'secondary' : 'outline'}>
+                        {s.existente ? 'existente' : 'nova'}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {s.events.length} eventos
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {s.events.map((e) => (
+                      <label
+                        key={e.codigo_evento}
+                        className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm"
+                      >
+                        <Checkbox
+                          checked={suggestChecked.has(e.codigo_evento)}
+                          onCheckedChange={(v) =>
+                            setSuggestChecked((prev) => {
+                              const next = new Set(prev)
+                              if (v === true) next.add(e.codigo_evento)
+                              else next.delete(e.codigo_evento)
+                              return next
+                            })
+                          }
+                        />
+                        <span className="truncate">{e.nome ?? e.codigo_evento}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+            {suggestions.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma sugestão no momento.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setSuggestOpen(false)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={applySuggestions}
+              disabled={saving || suggestChecked.size === 0}
+            >
+              {saving
+                ? 'Aplicando…'
+                : `Aplicar (${suggestChecked.size})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
