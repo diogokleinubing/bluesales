@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,6 +17,25 @@ import { useOrgId, lastMonthWithSales } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
 import { biMonthly, biRecurringYtd } from '../lib/rpc'
 import { fmtBRL, fmtDelta } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+type SortKey =
+  | 'familia'
+  | 'status'
+  | 'totalPrev'
+  | 'ytdPrev'
+  | 'ytdCur'
+  | 'diff'
+  | 'diffPct'
+  | 'abertura'
+  | 'eventoMes'
+
+const STATUS_RANK: Record<string, number> = {
+  Aberto: 0,
+  'Não Aberto': 1,
+  Aguardando: 2,
+  Finalizado: 3,
+}
 
 type Status = 'Aberto' | 'Finalizado' | 'Não Aberto' | 'Aguardando'
 
@@ -105,16 +125,50 @@ export function RecorrentesPage() {
         ),
       }
     })
-    // Abertos primeiro (por YTD do ano atual, desc); não-abertos depois, em
-    // ordem cronológica do mês de abertura do ano anterior.
-    list.sort((a, b) => {
-      if (a.aberto !== b.aberto) return a.aberto ? -1 : 1
-      if (a.aberto) return b.ytdCur - a.ytdCur
-      // Não abertos: ordem cronológica pela previsão (abertura da edição passada).
-      return (a.aberturaPrevMes ?? 99) - (b.aberturaPrevMes ?? 99)
-    })
     return list
   }, [dataQ.data, cutoff])
+
+  // Ordenação por clique no cabeçalho (padrão: GMV Total do ano anterior desc).
+  const [sortKey, setSortKey] = useState<SortKey>('totalPrev')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(k: SortKey) {
+    if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(k)
+      setSortDir(k === 'familia' || k === 'status' ? 'asc' : 'desc')
+    }
+  }
+
+  const sortedRows = useMemo(() => {
+    const val = (r: Row): number | string => {
+      switch (sortKey) {
+        case 'familia':
+          return r.familia.toLowerCase()
+        case 'status':
+          return STATUS_RANK[r.status] ?? 9
+        case 'abertura':
+          return r.aberturaMes ? r.aberturaAno! * 12 + r.aberturaMes : 1e9
+        case 'eventoMes':
+          return r.eventoMes ?? 99
+        case 'diffPct':
+          return r.diffPct ?? -1e18
+        default:
+          return r[sortKey] as number
+      }
+    }
+    const arr = [...rows]
+    arr.sort((a, b) => {
+      const av = val(a)
+      const bv = val(b)
+      const cmp =
+        typeof av === 'string'
+          ? av.localeCompare(bv as string, 'pt-BR')
+          : av - (bv as number)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return arr
+  }, [rows, sortKey, sortDir])
 
   const totals = useMemo(
     () => ({
@@ -129,6 +183,7 @@ export function RecorrentesPage() {
 
   const isLoading = monthlyQ.isLoading || dataQ.isLoading
   const cutoffLabel = cutoff ? MONTH_LABELS[cutoff - 1] : null
+  const sortProps = { sortKey, sortDir, onSort: toggleSort }
 
   return (
     <div className="space-y-4">
@@ -138,8 +193,8 @@ export function RecorrentesPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Famílias com volume em {prevYear}. YTD por data de venda
-          {cutoffLabel ? ` (Jan–${cutoffLabel})` : ''}. Os que ainda não abriram
-          em {year} aparecem por ordem do mês de abertura.
+          {cutoffLabel ? ` (Jan–${cutoffLabel})` : ''}. Clique no título de uma
+          coluna para ordenar.
         </p>
       </div>
 
@@ -149,17 +204,17 @@ export function RecorrentesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Evento</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="border-r border-border text-right">
+                  <SortHead k="familia" {...sortProps}>Evento</SortHead>
+                  <SortHead k="status" {...sortProps}>Status</SortHead>
+                  <SortHead k="totalPrev" align="right" className="border-r border-border" {...sortProps}>
                     GMV Total {prevYear}
-                  </TableHead>
-                  <TableHead className="text-right">GMV YTD {prevYear}</TableHead>
-                  <TableHead className="text-right">GMV YTD {year}</TableHead>
-                  <TableHead className="text-right">Δ R$</TableHead>
-                  <TableHead className="text-right">Δ %</TableHead>
-                  <TableHead>Abertura Anterior</TableHead>
-                  <TableHead>Próxima Edição</TableHead>
+                  </SortHead>
+                  <SortHead k="ytdPrev" align="right" {...sortProps}>GMV YTD {prevYear}</SortHead>
+                  <SortHead k="ytdCur" align="right" {...sortProps}>GMV YTD {year}</SortHead>
+                  <SortHead k="diff" align="right" {...sortProps}>Δ R$</SortHead>
+                  <SortHead k="diffPct" align="right" {...sortProps}>Δ %</SortHead>
+                  <SortHead k="abertura" {...sortProps}>Abertura Anterior</SortHead>
+                  <SortHead k="eventoMes" {...sortProps}>Próxima Edição</SortHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -180,7 +235,7 @@ export function RecorrentesPage() {
                   </TableRow>
                 ) : (
                   <>
-                    {rows.map((r) => (
+                    {sortedRows.map((r) => (
                       <TableRow key={r.familia}>
                         <TableCell className="font-medium">{r.familia}</TableCell>
                         <TableCell>
@@ -251,5 +306,51 @@ export function RecorrentesPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function SortHead({
+  k,
+  sortKey,
+  sortDir,
+  onSort,
+  align = 'left',
+  className,
+  children,
+}: {
+  k: SortKey
+  sortKey: SortKey
+  sortDir: 'asc' | 'desc'
+  onSort: (k: SortKey) => void
+  align?: 'left' | 'right'
+  className?: string
+  children: React.ReactNode
+}) {
+  const active = sortKey === k
+  return (
+    <TableHead
+      className={cn(
+        'cursor-pointer select-none whitespace-nowrap',
+        align === 'right' && 'text-right',
+        className,
+      )}
+      onClick={() => onSort(k)}
+    >
+      <span
+        className={cn(
+          'inline-flex items-center gap-1',
+          align === 'right' && 'flex-row-reverse',
+          active && 'text-foreground',
+        )}
+      >
+        {children}
+        {active &&
+          (sortDir === 'asc' ? (
+            <ArrowUp className="size-3" />
+          ) : (
+            <ArrowDown className="size-3" />
+          ))}
+      </span>
+    </TableHead>
   )
 }
