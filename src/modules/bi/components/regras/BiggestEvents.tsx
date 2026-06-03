@@ -39,6 +39,7 @@ export function BiggestEvents() {
   const { rules } = useRules()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
+  const [segFilter, setSegFilter] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkSeg, setBulkSeg] = useState<string | null>(null)
   const [bulkGen, setBulkGen] = useState<string | null>(null)
@@ -51,6 +52,10 @@ export function BiggestEvents() {
 
   const segNames = useMemo(() => rules.segments.map((s) => s.nome), [rules.segments])
   const genNames = useMemo(() => rules.generos.map((g) => g.nome), [rules.generos])
+  const segFilterOptions = useMemo(
+    () => [...segNames.filter((s) => s !== 'Outros'), 'Outros'],
+    [segNames],
+  )
 
   const eventsQ = useQuery({
     enabled: !!orgId,
@@ -58,7 +63,13 @@ export function BiggestEvents() {
     queryKey: ['bi', 'biggest-events', orgId, search],
     queryFn: () => biBiggestEvents(orgId!, search, 200),
   })
-  const visible = eventsQ.data ?? []
+  const visible = useMemo(
+    () =>
+      (eventsQ.data ?? []).filter(
+        (e) => !segFilter || (e.segmento ?? 'Outros') === segFilter,
+      ),
+    [eventsQ.data, segFilter],
+  )
 
   const manualsQ = useQuery({
     enabled: !!orgId,
@@ -167,6 +178,13 @@ export function BiggestEvents() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
+        />
+        <ClassSelect
+          value={segFilter}
+          options={segFilterOptions}
+          onChange={setSegFilter}
+          placeholder="Todos os segmentos"
+          className="h-9 w-52"
         />
         <div className="ml-auto flex items-center gap-2">
           <Badge variant="secondary">{selected.size} selecionados</Badge>
