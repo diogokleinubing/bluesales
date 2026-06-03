@@ -15,7 +15,7 @@ import { ActivityDialog } from '../components/ActivityDialog'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
 import {
-  TextField, SelectField, TextareaField, FormActions, useDraft, toText, toNumber,
+  TextField, SelectField, CurrencyField, TextareaField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useProfile } from '../hooks/useProfile'
@@ -146,7 +146,7 @@ function OppVisaoGeral({
   const initial = useMemo(
     () => ({
       titulo: o.titulo ?? '',
-      gmv_estimado: o.gmv_estimado != null ? String(o.gmv_estimado) : '',
+      gmv_estimado: o.gmv_estimado != null ? String(Math.round(o.gmv_estimado)) : '',
       probabilidade: o.probabilidade != null ? String(o.probabilidade) : '0',
       data_prevista_fechamento: o.data_prevista_fechamento ?? '',
       owner_id: o.owner_id,
@@ -200,7 +200,7 @@ function OppVisaoGeral({
             <Label className="text-xs text-muted-foreground">Estágio</Label>
             <StageSelector slug="oportunidade" value={o.stage_id} onChange={setStage} allowNone={false} className="h-8 w-full" />
           </div>
-          <TextField label="GMV estimado" type="number" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
+          <CurrencyField label="GMV estimado" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Probabilidade: {draft.probabilidade || 0}%</Label>
             <input

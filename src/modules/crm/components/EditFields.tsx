@@ -60,6 +60,39 @@ export function TextField({
   )
 }
 
+/**
+ * Campo monetário em R$. Armazena/retorna apenas dígitos (reais inteiros)
+ * como string; exibe sempre formatado com prefixo "R$" e separador de milhar.
+ */
+export function CurrencyField({
+  label, value, onChange, className,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  className?: string
+}) {
+  const digits = (value ?? '').replace(/\D/g, '')
+  const display = digits ? new Intl.NumberFormat('pt-BR').format(Number(digits)) : ''
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+          R$
+        </span>
+        <Input
+          inputMode="numeric"
+          className={`h-8 pl-9 ${className ?? ''}`}
+          value={display}
+          placeholder="0"
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function TextareaField({
   label, value, onChange,
 }: {

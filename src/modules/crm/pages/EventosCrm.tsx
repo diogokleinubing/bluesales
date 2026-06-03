@@ -18,6 +18,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { CurrencyField } from '../components/EditFields'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { useLocalOptions, useOrgOptions, useSegmentOptions } from '../hooks/useCrmLookups'
 import {
@@ -75,7 +76,7 @@ export function EventosCrm() {
       local_id: e.local_id ?? NONE,
       organization_id: e.organization_id ?? NONE,
       capacidade_estimada: e.capacidade_estimada != null ? String(e.capacidade_estimada) : '',
-      gmv_estimado: e.gmv_estimado != null ? String(e.gmv_estimado) : '',
+      gmv_estimado: e.gmv_estimado != null ? String(Math.round(e.gmv_estimado)) : '',
       segmento_id: e.segmento_id ?? NONE,
       status: e.status,
       observacoes: e.observacoes ?? '',
@@ -206,8 +207,7 @@ export function EventosCrm() {
               </Select></div>
             <div className="space-y-1"><Label>Capacidade estimada</Label>
               <Input type="number" value={f.capacidade_estimada} onChange={(e) => setF({ ...f, capacidade_estimada: e.target.value })} /></div>
-            <div className="space-y-1"><Label>GMV estimado</Label>
-              <Input type="number" value={f.gmv_estimado} onChange={(e) => setF({ ...f, gmv_estimado: e.target.value })} /></div>
+            <CurrencyField label="GMV estimado" value={f.gmv_estimado} onChange={(v) => setF({ ...f, gmv_estimado: v })} />
             <div className="space-y-1"><Label>Código BI</Label>
               <Input value={f.bi_event_codigo} onChange={(e) => setF({ ...f, bi_event_codigo: e.target.value })} /></div>
             <div className="col-span-2 space-y-1"><Label>Observações</Label>
