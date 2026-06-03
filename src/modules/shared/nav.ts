@@ -17,8 +17,10 @@ import {
   Activity,
   CheckSquare,
   Route as RouteIcon,
-  UsersRound,
   CreditCard,
+  Mic2,
+  MapPin,
+  ShieldQuestion,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial'
@@ -84,19 +86,29 @@ export const MODULES: ModuleDef[] = [
       {
         title: 'Operação',
         items: [
-          { to: '/comercial/painel', label: 'Painel comercial', icon: Gauge },
-          { to: '/comercial/contas', label: 'Contas', icon: Building2 },
+          { to: '/comercial/painel', label: 'Painel', icon: Gauge },
+          { to: '/comercial/organizacoes', label: 'Organizações', icon: Building2 },
           { to: '/comercial/contatos', label: 'Contatos', icon: Contact },
-          { to: '/comercial/funil', label: 'Funil de relacionamento', icon: Filter },
+          { to: '/comercial/oportunidades', label: 'Oportunidades', icon: Filter },
           { to: '/comercial/atividades', label: 'Atividades', icon: Activity },
           { to: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare },
         ],
       },
       {
+        title: 'Cadastros',
+        items: [
+          { to: '/comercial/artistas', label: 'Artistas', icon: Mic2 },
+          { to: '/comercial/eventos', label: 'Eventos', icon: CalendarRange },
+          { to: '/comercial/locais', label: 'Locais', icon: MapPin },
+        ],
+      },
+      {
         title: 'Configuração',
         items: [
-          { to: '/comercial/regua', label: 'Régua de relacionamento', icon: RouteIcon },
-          { to: '/comercial/time', label: 'Time', icon: UsersRound },
+          { to: '/comercial/configuracao/funis', label: 'Funis', icon: RouteIcon },
+          { to: '/comercial/configuracao/plataformas', label: 'Plataformas', icon: Layers },
+          { to: '/comercial/configuracao/objecoes', label: 'Objeções', icon: ShieldQuestion },
+          { to: '/bi/regras', label: 'Segmentos', icon: SlidersHorizontal },
         ],
       },
     ],

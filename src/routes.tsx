@@ -36,33 +36,51 @@ const BasePage = lazy(() =>
   import('@/modules/bi/pages/BasePage').then((m) => ({ default: m.BasePage })),
 )
 
-// --- Comercial (stubs) ---
-const PainelPage = lazy(() =>
-  import('@/modules/crm/pages/PainelPage').then((m) => ({ default: m.PainelPage })),
+// --- Comercial (CRM) ---
+const PainelComercial = lazy(() =>
+  import('@/modules/crm/pages/Painel').then((m) => ({ default: m.PainelComercial })),
 )
-const ContasPage = lazy(() =>
-  import('@/modules/crm/pages/ContasPage').then((m) => ({ default: m.ContasPage })),
+const Organizacoes = lazy(() =>
+  import('@/modules/crm/pages/Organizacoes').then((m) => ({ default: m.Organizacoes })),
 )
-const ContaDetailPage = lazy(() =>
-  import('@/modules/crm/pages/ContaDetailPage').then((m) => ({ default: m.ContaDetailPage })),
+const OrganizacaoDetalhe = lazy(() =>
+  import('@/modules/crm/pages/OrganizacaoDetalhe').then((m) => ({ default: m.OrganizacaoDetalhe })),
 )
-const ContatosPage = lazy(() =>
-  import('@/modules/crm/pages/ContatosPage').then((m) => ({ default: m.ContatosPage })),
+const Contatos = lazy(() =>
+  import('@/modules/crm/pages/Contatos').then((m) => ({ default: m.Contatos })),
 )
-const FunilPage = lazy(() =>
-  import('@/modules/crm/pages/FunilPage').then((m) => ({ default: m.FunilPage })),
+const ContatoDetalhe = lazy(() =>
+  import('@/modules/crm/pages/ContatoDetalhe').then((m) => ({ default: m.ContatoDetalhe })),
 )
-const AtividadesPage = lazy(() =>
-  import('@/modules/crm/pages/AtividadesPage').then((m) => ({ default: m.AtividadesPage })),
+const Oportunidades = lazy(() =>
+  import('@/modules/crm/pages/Oportunidades').then((m) => ({ default: m.Oportunidades })),
 )
-const TarefasPage = lazy(() =>
-  import('@/modules/crm/pages/TarefasPage').then((m) => ({ default: m.TarefasPage })),
+const OportunidadeDetalhe = lazy(() =>
+  import('@/modules/crm/pages/OportunidadeDetalhe').then((m) => ({ default: m.OportunidadeDetalhe })),
 )
-const ReguaPage = lazy(() =>
-  import('@/modules/crm/pages/ReguaPage').then((m) => ({ default: m.ReguaPage })),
+const Atividades = lazy(() =>
+  import('@/modules/crm/pages/Atividades').then((m) => ({ default: m.Atividades })),
 )
-const TimePage = lazy(() =>
-  import('@/modules/crm/pages/TimePage').then((m) => ({ default: m.TimePage })),
+const Tarefas = lazy(() =>
+  import('@/modules/crm/pages/Tarefas').then((m) => ({ default: m.Tarefas })),
+)
+const Artistas = lazy(() =>
+  import('@/modules/crm/pages/Artistas').then((m) => ({ default: m.Artistas })),
+)
+const EventosCrm = lazy(() =>
+  import('@/modules/crm/pages/EventosCrm').then((m) => ({ default: m.EventosCrm })),
+)
+const Locais = lazy(() =>
+  import('@/modules/crm/pages/Locais').then((m) => ({ default: m.Locais })),
+)
+const FunisConfig = lazy(() =>
+  import('@/modules/crm/pages/config/Funis').then((m) => ({ default: m.FunisConfig })),
+)
+const PlataformasConfig = lazy(() =>
+  import('@/modules/crm/pages/config/Plataformas').then((m) => ({ default: m.PlataformasConfig })),
+)
+const ObjecoesConfig = lazy(() =>
+  import('@/modules/crm/pages/config/Objecoes').then((m) => ({ default: m.ObjecoesConfig })),
 )
 
 // --- Ambiente ---
@@ -130,15 +148,21 @@ export const router = createBrowserRouter([
       },
 
       // Comercial (stubs)
-      { path: 'comercial/painel', element: <PainelPage /> },
-      { path: 'comercial/contas', element: <ContasPage /> },
-      { path: 'comercial/contas/:ref', element: <ContaDetailPage /> },
-      { path: 'comercial/contatos', element: <ContatosPage /> },
-      { path: 'comercial/funil', element: <FunilPage /> },
-      { path: 'comercial/atividades', element: <AtividadesPage /> },
-      { path: 'comercial/tarefas', element: <TarefasPage /> },
-      { path: 'comercial/regua', element: <ReguaPage /> },
-      { path: 'comercial/time', element: <TimePage /> },
+      { path: 'comercial/painel', element: <PainelComercial /> },
+      { path: 'comercial/organizacoes', element: <Organizacoes /> },
+      { path: 'comercial/organizacoes/:id', element: <OrganizacaoDetalhe /> },
+      { path: 'comercial/contatos', element: <Contatos /> },
+      { path: 'comercial/contatos/:id', element: <ContatoDetalhe /> },
+      { path: 'comercial/oportunidades', element: <Oportunidades /> },
+      { path: 'comercial/oportunidades/:id', element: <OportunidadeDetalhe /> },
+      { path: 'comercial/atividades', element: <Atividades /> },
+      { path: 'comercial/tarefas', element: <Tarefas /> },
+      { path: 'comercial/artistas', element: <Artistas /> },
+      { path: 'comercial/eventos', element: <EventosCrm /> },
+      { path: 'comercial/locais', element: <Locais /> },
+      { path: 'comercial/configuracao/funis', element: <FunisConfig /> },
+      { path: 'comercial/configuracao/plataformas', element: <PlataformasConfig /> },
+      { path: 'comercial/configuracao/objecoes', element: <ObjecoesConfig /> },
 
       // Ambiente (somente admin)
       {

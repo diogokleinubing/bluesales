@@ -39,7 +39,7 @@ export function lastRouteOfModule(m: ModuleId): string {
   return getModule(m).home
 }
 
-/** Rota da conta no Comercial (ponte BI -> Comercial via organizador/ref). */
+/** Rota da org no Comercial (ponte BI -> Comercial via organizador). */
 export function contaComercialRoute(ref: string): string {
-  return `/comercial/contas/${encodeURIComponent(ref)}`
+  return `/comercial/organizacoes?bi_organizador=${encodeURIComponent(ref)}`
 }
