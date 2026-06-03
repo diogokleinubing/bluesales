@@ -51,7 +51,7 @@ interface Row {
 
 function PaymentView({ dim }: { dim: PaymentDim }) {
   const orgId = useOrgId()
-  const { year, metric, pdv } = useControls()
+  const { year, metric, pdv, months } = useControls()
   const [juros, setJuros] = useState<PaymentJuros>('all')
   // O filtro de juros só faz sentido na visão de parcelas.
   const jurosArg: PaymentJuros = dim === 'parcelas' ? juros : 'all'
@@ -59,8 +59,8 @@ function PaymentView({ dim }: { dim: PaymentDim }) {
   const query = useQuery({
     enabled: !!orgId,
     staleTime: 5 * 60 * 1000,
-    queryKey: ['bi', 'payments', orgId, year, pdv, dim, jurosArg],
-    queryFn: () => biPaymentsGroup(orgId!, year, pdv, dim, jurosArg),
+    queryKey: ['bi', 'payments', orgId, year, pdv, dim, jurosArg, months],
+    queryFn: () => biPaymentsGroup(orgId!, year, pdv, dim, jurosArg, months),
   })
 
   const rows = useMemo<Row[]>(() => {

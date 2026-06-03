@@ -41,18 +41,18 @@ export function useBiYears(dateBase: DateBase) {
  */
 export function useBiDashboard() {
   const orgId = useOrgId()
-  const { year, dateBase, pdv } = useControls()
+  const { year, dateBase, pdv, months } = useControls()
   return useQuery({
     enabled: !!orgId,
     staleTime: STALE,
-    queryKey: ['bi', 'dashboard', orgId, year, dateBase, pdv],
+    queryKey: ['bi', 'dashboard', orgId, year, dateBase, pdv, months],
     queryFn: async () => {
-      const monthly = await rpc.biMonthly(orgId!, year, dateBase, pdv)
+      const monthly = await rpc.biMonthly(orgId!, year, dateBase, pdv, months)
       const lastMonth = lastMonthWithSales(monthly)
       const [cur, prev, prevMonthly] = await Promise.all([
-        rpc.biSummary(orgId!, year, dateBase, pdv),
-        rpc.biSummary(orgId!, year - 1, dateBase, pdv, lastMonth),
-        rpc.biMonthly(orgId!, year - 1, dateBase, pdv),
+        rpc.biSummary(orgId!, year, dateBase, pdv, null, months),
+        rpc.biSummary(orgId!, year - 1, dateBase, pdv, lastMonth, months),
+        rpc.biMonthly(orgId!, year - 1, dateBase, pdv, months),
       ])
       return { cur, prev, monthly, prevMonthly, lastMonth }
     },
@@ -61,12 +61,12 @@ export function useBiDashboard() {
 
 export function useBiMonthly() {
   const orgId = useOrgId()
-  const { year, dateBase, pdv } = useControls()
+  const { year, dateBase, pdv, months } = useControls()
   return useQuery({
     enabled: !!orgId,
     staleTime: STALE,
-    queryKey: ['bi', 'monthly', orgId, year, dateBase, pdv],
-    queryFn: () => rpc.biMonthly(orgId!, year, dateBase, pdv),
+    queryKey: ['bi', 'monthly', orgId, year, dateBase, pdv, months],
+    queryFn: () => rpc.biMonthly(orgId!, year, dateBase, pdv, months),
   })
 }
 
@@ -92,29 +92,29 @@ export function useGroupAnalysis(
   compare: boolean,
 ): { groups: GroupAgg[]; loading: boolean } {
   const orgId = useOrgId()
-  const { year, dateBase, pdv, metric } = useControls()
+  const { year, dateBase, pdv, metric, months } = useControls()
 
   const curQ = useQuery({
     enabled: !!orgId,
     staleTime: STALE,
-    queryKey: ['bi', 'group', orgId, year, dateBase, pdv, dim],
-    queryFn: () => rpc.biGroup(orgId!, year, dateBase, pdv, dim),
+    queryKey: ['bi', 'group', orgId, year, dateBase, pdv, dim, months],
+    queryFn: () => rpc.biGroup(orgId!, year, dateBase, pdv, dim, null, months),
   })
 
   const monthlyQ = useQuery({
     enabled: !!orgId && compare,
     staleTime: STALE,
-    queryKey: ['bi', 'monthly', orgId, year, dateBase, pdv],
-    queryFn: () => rpc.biMonthly(orgId!, year, dateBase, pdv),
+    queryKey: ['bi', 'monthly', orgId, year, dateBase, pdv, months],
+    queryFn: () => rpc.biMonthly(orgId!, year, dateBase, pdv, months),
   })
   const lastMonth = lastMonthWithSales(monthlyQ.data)
 
   const prevQ = useQuery({
     enabled: !!orgId && compare && lastMonth != null,
     staleTime: STALE,
-    queryKey: ['bi', 'group-prev', orgId, year - 1, dateBase, pdv, dim, lastMonth],
+    queryKey: ['bi', 'group-prev', orgId, year - 1, dateBase, pdv, dim, lastMonth, months],
     queryFn: () =>
-      rpc.biGroup(orgId!, year - 1, dateBase, pdv, dim, lastMonth),
+      rpc.biGroup(orgId!, year - 1, dateBase, pdv, dim, lastMonth, months),
   })
 
   const groups = useMemo(() => {
@@ -132,12 +132,13 @@ export function useGroupAnalysis(
 
 export function useBiMonthlyByGroup(dim: string, keys: string[]) {
   const orgId = useOrgId()
-  const { year, dateBase, pdv } = useControls()
+  const { year, dateBase, pdv, months } = useControls()
   return useQuery({
     enabled: !!orgId && keys.length > 0,
     staleTime: STALE,
-    queryKey: ['bi', 'monthly-group', orgId, year, dateBase, pdv, dim, keys],
-    queryFn: () => rpc.biMonthlyByGroup(orgId!, year, dateBase, pdv, dim, keys),
+    queryKey: ['bi', 'monthly-group', orgId, year, dateBase, pdv, dim, keys, months],
+    queryFn: () =>
+      rpc.biMonthlyByGroup(orgId!, year, dateBase, pdv, dim, keys, months),
   })
 }
 

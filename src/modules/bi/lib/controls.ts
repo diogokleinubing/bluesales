@@ -29,12 +29,21 @@ export const PDV_LABELS: Record<Pdv, string> = {
 
 export const ALL_PDV: Pdv[] = ['E', 'D', 'I']
 
+export const ALL_MONTHS: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+export const MONTH_NAMES = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+]
+
 export interface GlobalControls {
   year: number
   metric: Metric
   dateBase: DateBase
   /** Múltipla escolha. Default = somente Site (E). */
   pdv: Pdv[]
+  /** Meses (1-12) a considerar. Default = todos. */
+  months: number[]
 }
 
 export const CURRENT_YEAR = new Date().getFullYear()
@@ -44,6 +53,13 @@ export const DEFAULT_CONTROLS: GlobalControls = {
   metric: 'gmv',
   dateBase: 'venda',
   pdv: ['E'],
+  months: ALL_MONTHS,
+}
+
+/** Array para a RPC: null quando todos os 12 meses (sem filtro). */
+export function monthsArg(months: number[]): number[] | null {
+  if (!months || months.length === 0 || months.length >= 12) return null
+  return [...months].sort((a, b) => a - b)
 }
 
 const STORAGE_KEY = 'bt:global-controls'
@@ -60,6 +76,10 @@ export function loadControls(): GlobalControls {
         Array.isArray(parsed.pdv) && parsed.pdv.length > 0
           ? parsed.pdv
           : DEFAULT_CONTROLS.pdv,
+      months:
+        Array.isArray(parsed.months) && parsed.months.length > 0
+          ? parsed.months
+          : DEFAULT_CONTROLS.months,
     }
   } catch {
     return DEFAULT_CONTROLS

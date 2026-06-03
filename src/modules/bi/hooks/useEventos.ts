@@ -45,12 +45,12 @@ const PAGE = 300
 
 export function useEventos(filters: EventFilters) {
   const orgId = useOrgId()
-  const { year, metric, dateBase, pdv } = useControls()
+  const { year, metric, dateBase, pdv, months } = useControls()
 
   const eventsQ = useQuery({
     enabled: !!orgId,
     staleTime: 60 * 1000,
-    queryKey: ['bi', 'events', orgId, year, dateBase, pdv, metric, filters],
+    queryKey: ['bi', 'events', orgId, year, dateBase, pdv, metric, months, filters],
     queryFn: () =>
       biEvents(orgId!, year, dateBase, pdv, {
         search: filters.search,
@@ -63,6 +63,7 @@ export function useEventos(filters: EventFilters) {
         codigo: filters.codigo,
         order: metric,
         limit: PAGE,
+        months,
       }),
   })
 

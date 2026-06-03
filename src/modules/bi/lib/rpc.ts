@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Metric, Pdv, DateBase } from './controls'
+import { monthsArg, type Metric, type Pdv, type DateBase } from './controls'
 
 // Wrappers tipados das funções de agregação (consolidador no Postgres).
 // Todas filtram por org e devolvem apenas o resultado agregado.
@@ -60,6 +60,7 @@ export async function biSummary(
   dateBase: DateBase,
   pdv: Pdv[],
   monthMax: number | null = null,
+  months: number[] = [],
 ): Promise<Summary> {
   const rows = await rpc<Summary[]>('bi_summary', {
     p_org: orgId,
@@ -67,6 +68,7 @@ export async function biSummary(
     p_datebase: dateBase,
     p_pdv: pdvArg(pdv),
     p_month_max: monthMax,
+    p_months: monthsArg(months),
   })
   return (
     rows[0] ?? {
@@ -86,12 +88,14 @@ export async function biMonthly(
   year: number,
   dateBase: DateBase,
   pdv: Pdv[],
+  months: number[] = [],
 ): Promise<MonthlyRow[]> {
   return rpc<MonthlyRow[]>('bi_monthly', {
     p_org: orgId,
     p_year: year,
     p_datebase: dateBase,
     p_pdv: pdvArg(pdv),
+    p_months: monthsArg(months),
   })
 }
 
@@ -107,6 +111,7 @@ export async function biGroup(
   pdv: Pdv[],
   dim: string,
   monthMax: number | null = null,
+  months: number[] = [],
 ): Promise<GroupRow[]> {
   return rpc<GroupRow[]>('bi_group', {
     p_org: orgId,
@@ -115,6 +120,7 @@ export async function biGroup(
     p_pdv: pdvArg(pdv),
     p_dim: dim,
     p_month_max: monthMax,
+    p_months: monthsArg(months),
   })
 }
 
@@ -130,6 +136,7 @@ export async function biMonthlyByGroup(
   pdv: Pdv[],
   dim: string,
   keys: string[],
+  months: number[] = [],
 ): Promise<MonthlyGroupRow[]> {
   return rpc<MonthlyGroupRow[]>('bi_monthly_by_group', {
     p_org: orgId,
@@ -138,6 +145,7 @@ export async function biMonthlyByGroup(
     p_pdv: pdvArg(pdv),
     p_dim: dim,
     p_keys: keys,
+    p_months: monthsArg(months),
   })
 }
 
@@ -168,6 +176,7 @@ export interface BiEventsParams {
   order?: Metric
   limit?: number
   offset?: number
+  months?: number[]
 }
 
 export async function biEvents(
@@ -193,6 +202,7 @@ export async function biEvents(
     p_order: params.order ?? 'gmv',
     p_limit: params.limit ?? 100,
     p_offset: params.offset ?? 0,
+    p_months: monthsArg(params.months ?? []),
   })
 }
 
@@ -428,6 +438,7 @@ export async function biPaymentsGroup(
   pdv: Pdv[],
   dim: PaymentDim,
   juros: PaymentJuros = 'all',
+  months: number[] = [],
 ): Promise<PaymentGroupRow[]> {
   return rpc<PaymentGroupRow[]>('bi_payments_group', {
     p_org: orgId,
@@ -435,6 +446,7 @@ export async function biPaymentsGroup(
     p_pdv: pdv.length > 0 ? pdv : null,
     p_dim: dim,
     p_juros: juros,
+    p_months: monthsArg(months),
   })
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
@@ -8,13 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useControls } from './controls-context'
 import { useBiYears } from '@/modules/bi/hooks/useBi'
 import {
+  ALL_MONTHS,
   ALL_PDV,
   CURRENT_YEAR,
   DATE_BASE_LABELS,
   METRIC_LABELS,
+  MONTH_NAMES,
   PDV_LABELS,
   type DateBase,
   type Metric,
@@ -23,8 +35,26 @@ import {
 
 /** Barra de filtros globais do BI (Ano, Métrica, Base de data, PDV). */
 export function BiFilters() {
-  const { year, metric, dateBase, pdv, setControls } = useControls()
+  const { year, metric, dateBase, pdv, months, setControls } = useControls()
   const yearsQuery = useBiYears(dateBase)
+
+  const allMonths = months.length >= 12
+  const monthsLabel = allMonths
+    ? 'Todos'
+    : months.length === 0
+      ? 'Todos'
+      : [...months]
+          .sort((a, b) => a - b)
+          .map((m) => MONTH_NAMES[m - 1])
+          .join(', ')
+
+  function toggleMonth(m: number, checked: boolean) {
+    const set = new Set(months.length === 0 ? ALL_MONTHS : months)
+    if (checked) set.add(m)
+    else set.delete(m)
+    const next = [...set].sort((a, b) => a - b)
+    setControls({ months: next.length === 0 ? ALL_MONTHS : next })
+  }
 
   const years = useMemo(() => {
     const ys = yearsQuery.data ?? []
@@ -62,6 +92,42 @@ export function BiFilters() {
             ))}
           </SelectContent>
         </Select>
+      </ControlBlock>
+
+      <ControlBlock label="Meses">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-40 justify-between font-normal"
+            >
+              <span className="truncate">{monthsLabel}</span>
+              <ChevronDown className="size-4 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-44">
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault()
+                setControls({ months: ALL_MONTHS })
+              }}
+            >
+              Selecionar todos
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {ALL_MONTHS.map((m) => (
+              <DropdownMenuCheckboxItem
+                key={m}
+                checked={allMonths || months.includes(m)}
+                onCheckedChange={(c) => toggleMonth(m, c === true)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {MONTH_NAMES[m - 1]}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </ControlBlock>
 
       <ControlBlock label="Métrica">
