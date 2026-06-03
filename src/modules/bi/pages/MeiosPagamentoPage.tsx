@@ -88,7 +88,8 @@ function PaymentView({ dim }: { dim: PaymentDim }) {
   }, [query.data, metric, dim])
 
   const metricLabel = METRIC_LABELS[metric]
-  const total = rows.reduce((a, r) => a + r.value, 0)
+  const totalVendas = rows.reduce((a, r) => a + r.vendas, 0)
+  const totalGmv = rows.reduce((a, r) => a + r.gmv, 0)
   const loading = query.isLoading
 
   return (
@@ -135,25 +136,24 @@ function PaymentView({ dim }: { dim: PaymentDim }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>{labelDim(dim)}</TableHead>
-                  <TableHead className="text-right">Vendas</TableHead>
+                  <TableHead className="text-right">Qtd. Vendas</TableHead>
+                  <TableHead className="text-right">% Qtd.</TableHead>
                   <TableHead className="text-right">GMV</TableHead>
-                  <TableHead className="text-right">Receita BT</TableHead>
-                  <TableHead className="text-right">{metricLabel}</TableHead>
-                  <TableHead className="text-right">% do total</TableHead>
+                  <TableHead className="text-right">% GMV</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={5}>
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                       Sem dados.
                     </TableCell>
                   </TableRow>
@@ -164,17 +164,14 @@ function PaymentView({ dim }: { dim: PaymentDim }) {
                       <TableCell className="text-right tabular-nums">
                         {fmtInt(r.vendas)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {fmtPct(totalVendas > 0 ? r.vendas / totalVendas : 0)}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {fmtBRL(r.gmv)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(r.receitaBt)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(r.value)}
-                      </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {fmtPct(total > 0 ? r.value / total : 0)}
+                        {fmtPct(totalGmv > 0 ? r.gmv / totalGmv : 0)}
                       </TableCell>
                     </TableRow>
                   ))
