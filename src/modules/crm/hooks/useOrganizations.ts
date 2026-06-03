@@ -108,3 +108,14 @@ export async function updateOrganization(
     .eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+export async function deleteOrganization(id: string) {
+  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
+  await supabase
+    .from('entity_objections')
+    .delete()
+    .eq('entity_type', 'organization')
+    .eq('entity_id', id)
+  const { error } = await supabase.from('organizations').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}

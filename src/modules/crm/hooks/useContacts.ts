@@ -105,3 +105,14 @@ export async function updateContact(id: string, patch: Partial<Person>) {
     .eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+export async function deleteContact(id: string) {
+  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
+  await supabase
+    .from('entity_objections')
+    .delete()
+    .eq('entity_type', 'person')
+    .eq('entity_id', id)
+  const { error } = await supabase.from('persons').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}

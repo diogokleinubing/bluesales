@@ -20,9 +20,11 @@ import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import {
   TextField, SelectField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import {
   useOrganization,
   updateOrganization,
+  deleteOrganization,
   type Organization,
 } from '../hooks/useOrganizations'
 import { useOpportunities } from '../hooks/useOpportunities'
@@ -67,8 +69,16 @@ export function OrganizacaoDetalhe() {
       </Button>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{org.nome}</h1>
-        {org.classificacao && <Badge variant="secondary">{org.classificacao}</Badge>}
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">{org.nome}</h1>
+          {org.classificacao && <Badge variant="secondary">{org.classificacao}</Badge>}
+        </div>
+        <DeleteEntityButton
+          title="Excluir organização?"
+          description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
+          onDelete={() => deleteOrganization(org.id)}
+          onDeleted={() => navigate('/comercial/organizacoes')}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">

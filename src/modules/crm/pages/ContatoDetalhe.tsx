@@ -23,7 +23,8 @@ import { ActivityTimeline } from '../components/ActivityTimeline'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
 import { TextField, FormActions, useDraft, toText } from '../components/EditFields'
-import { useContact, updateContact, type Person } from '../hooks/useContacts'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
+import { useContact, updateContact, deleteContact, type Person } from '../hooks/useContacts'
 import { usePersonOptions } from '../hooks/useCrmLookups'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { fmtDate } from '@/lib/format'
@@ -41,7 +42,15 @@ export function ContatoDetalhe() {
       <Button variant="ghost" size="sm" onClick={() => navigate('/comercial/contatos')}>
         <ArrowLeft className="size-4" /> Contatos
       </Button>
-      <h1 className="text-2xl font-semibold tracking-tight">{p.nome}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">{p.nome}</h1>
+        <DeleteEntityButton
+          title="Excluir contato?"
+          description={`Esta ação remove "${p.nome}" e seus vínculos com organizações e conexões. Não pode ser desfeita.`}
+          onDelete={() => deleteContact(p.id)}
+          onDeleted={() => navigate('/comercial/contatos')}
+        />
+      </div>
 
       <Tabs defaultValue="dados">
         <TabsList>

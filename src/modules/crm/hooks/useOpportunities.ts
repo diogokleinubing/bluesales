@@ -105,3 +105,14 @@ export async function updateOpportunity(id: string, patch: Partial<Opportunity>)
     .eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+export async function deleteOpportunity(id: string) {
+  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
+  await supabase
+    .from('entity_objections')
+    .delete()
+    .eq('entity_type', 'opportunity')
+    .eq('entity_id', id)
+  const { error } = await supabase.from('opportunities').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}

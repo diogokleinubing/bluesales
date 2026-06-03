@@ -17,8 +17,10 @@ import { AuditLog } from '../components/AuditLog'
 import {
   TextField, SelectField, TextareaField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useProfile } from '../hooks/useProfile'
-import { useOpportunity, updateOpportunity, type Opportunity } from '../hooks/useOpportunities'
+import { canEdit } from '../lib/permissions'
+import { useOpportunity, updateOpportunity, deleteOpportunity, type Opportunity } from '../hooks/useOpportunities'
 import { fmtBRL } from '@/lib/format'
 
 export function OportunidadeDetalhe() {
@@ -53,7 +55,17 @@ export function OportunidadeDetalhe() {
       <Button variant="ghost" size="sm" onClick={() => navigate('/comercial/oportunidades')}>
         <ArrowLeft className="size-4" /> Oportunidades
       </Button>
-      <h1 className="text-2xl font-semibold tracking-tight">{o.titulo}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">{o.titulo}</h1>
+        {canEdit(profile, o.owner_id) && (
+          <DeleteEntityButton
+            title="Excluir oportunidade?"
+            description={`Esta ação remove "${o.titulo}". As atividades e tarefas são preservadas (apenas desvinculadas). Não pode ser desfeita.`}
+            onDelete={() => deleteOpportunity(o.id)}
+            onDeleted={() => navigate('/comercial/oportunidades')}
+          />
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <Tabs defaultValue="visao">
