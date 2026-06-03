@@ -31,7 +31,8 @@ import {
   type Organization,
 } from '../hooks/useOrganizations'
 import { useOpportunities } from '../hooks/useOpportunities'
-import { usePersonOptions } from '../hooks/useCrmLookups'
+import { useCrmOrgId } from '../hooks/useFunnelStages'
+import { PersonAutocomplete, type PersonPick } from '../components/PersonAutocomplete'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
 const ORIGENS = ['Indicação', 'Prospecção ativa', 'Inbound', 'Evento', 'Outro']
@@ -207,8 +208,8 @@ function OrgOportunidades({ organizationId }: { organizationId: string }) {
 // ---------------------------------------------------------------------------
 function OrgContatos({ orgId }: { orgId: string }) {
   const qc = useQueryClient()
-  const persons = usePersonOptions()
-  const [sel, setSel] = useState('')
+  const tenantOrgId = useCrmOrgId()
+  const [selected, setSelected] = useState<PersonPick | null>(null)
   const [papel, setPapel] = useState('')
 
   const q = useQuery({
@@ -225,18 +226,19 @@ function OrgContatos({ orgId }: { orgId: string }) {
   const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'org-contatos', orgId] })
 
   async function vincular() {
-    if (!sel) return
+    if (!selected || !tenantOrgId) return
     const { error } = await supabase.from('org_persons').insert({
-      org_id: (await supabase.from('organizations').select('org_id').eq('id', orgId).single()).data?.org_id,
+      org_id: tenantOrgId,
       organization_id: orgId,
-      person_id: sel,
+      person_id: selected.id,
       papel: papel.trim() || null,
       data_inicio: new Date().toISOString().slice(0, 10),
     })
     if (error) return toast.error('Erro', { description: error.message })
-    setSel('')
+    setSelected(null)
     setPapel('')
     refresh()
+    qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
   }
 
   async function encerrar(id: string) {
@@ -271,23 +273,23 @@ function OrgContatos({ orgId }: { orgId: string }) {
           </div>
         )
       })}
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={sel} onValueChange={setSel}>
-          <SelectTrigger className="h-9 w-56" size="sm">
-            <SelectValue placeholder="Vincular contato…" />
-          </SelectTrigger>
-          <SelectContent>
-            {(persons.data ?? []).map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input placeholder="Papel" className="h-9 max-w-40" value={papel} onChange={(e) => setPapel(e.target.value)} />
-        <Button size="sm" variant="secondary" onClick={vincular} disabled={!sel}>
-          <Plus className="size-4" /> Vincular
-        </Button>
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <PersonAutocomplete
+            className="w-56"
+            placeholder="Buscar ou criar contato…"
+            onPick={(p) => setSelected(p)}
+          />
+          <Input placeholder="Papel" className="h-9 max-w-40" value={papel} onChange={(e) => setPapel(e.target.value)} />
+          <Button size="sm" variant="secondary" onClick={vincular} disabled={!selected}>
+            <Plus className="size-4" /> Vincular
+          </Button>
+        </div>
+        {selected && (
+          <p className="text-xs text-muted-foreground">
+            Selecionado: <span className="font-medium text-foreground">{selected.nome}</span>
+          </p>
+        )}
       </div>
     </div>
   )
