@@ -74,6 +74,7 @@ export function RecurringEvents() {
   const { rules } = useRules()
   const reclassify = useReclassify(orgId)
   const [search, setSearch] = useState('')
+  const [segFilter, setSegFilter] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [onlyUngrouped, setOnlyUngrouped] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -111,6 +112,7 @@ export function RecurringEvents() {
     return events
       .filter((e) => (showAll ? true : hasYearInTitle(e.nome)))
       .filter((e) => (onlyUngrouped ? !e.familia : true))
+      .filter((e) => (segFilter ? e.segmento === segFilter : true))
       .filter(
         (e) =>
           !q ||
@@ -119,7 +121,7 @@ export function RecurringEvents() {
           e.codigo_evento.includes(q),
       )
       .slice(0, 500)
-  }, [events, search, showAll, onlyUngrouped])
+  }, [events, search, showAll, onlyUngrouped, segFilter])
 
   const resumo = useMemo(() => {
     const counts = new Map<string, number>()
@@ -310,12 +312,21 @@ export function RecurringEvents() {
         </div>
       </div>
 
-      <Input
-        placeholder="Buscar por nome, família ou código…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome, família ou código…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
+        <ClassSelect
+          value={segFilter}
+          options={segNames}
+          onChange={setSegFilter}
+          placeholder="Todos os segmentos"
+          className="h-9 w-52"
+        />
+      </div>
 
       <Card>
         <CardContent className="p-0">
