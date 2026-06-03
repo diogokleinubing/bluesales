@@ -67,57 +67,67 @@ export function OportunidadeDetalhe() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <Tabs defaultValue="visao">
-          <TabsList>
-            <TabsTrigger value="visao">Visão geral</TabsTrigger>
-            <TabsTrigger value="atividades">Atividades</TabsTrigger>
-            <TabsTrigger value="objecoes">Objeções</TabsTrigger>
-            <TabsTrigger value="historico">Histórico</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="geral">
+        <TabsList>
+          <TabsTrigger value="geral">Visão geral</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="visao" className="mt-4">
-            <OppVisaoGeral
-              o={o}
-              isGestor={profile?.role === 'gestor'}
-              profiles={profilesQ.data ?? []}
-            />
-          </TabsContent>
+        <TabsContent value="geral" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-4">
+              <OppVisaoGeral
+                o={o}
+                isGestor={profile?.role === 'gestor'}
+                profiles={profilesQ.data ?? []}
+              />
 
-          <TabsContent value="atividades" className="mt-4 space-y-3">
-            <Button onClick={() => setActOpen(true)}><Plus className="size-4" /> Registrar atividade</Button>
-            <ActivityTimeline filter={{ opportunityId: o.id }} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">Atividades</h3>
+                    <Button size="sm" variant="secondary" onClick={() => setActOpen(true)}>
+                      <Plus className="size-4" /> Registrar
+                    </Button>
+                  </div>
+                  <ActivityTimeline filter={{ opportunityId: o.id }} />
+                </CardContent>
+              </Card>
 
-          <TabsContent value="objecoes" className="mt-4">
-            <ObjecoesTags entityType="opportunity" entityId={o.id} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Objeções</h3>
+                  <ObjecoesTags entityType="opportunity" entityId={o.id} />
+                </CardContent>
+              </Card>
+            </div>
 
-          <TabsContent value="historico" className="mt-4">
-            <AuditLog entityType="opportunity" entityId={o.id} />
-          </TabsContent>
-        </Tabs>
+            <div className="space-y-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Vínculos</CardTitle></CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Organização: </span>
+                    {orgQ.data ? (
+                      <Link to={`/comercial/organizacoes/${orgQ.data.id}`} className="text-primary hover:underline">
+                        {orgQ.data.nome}
+                      </Link>
+                    ) : '—'}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">GMV estimado: </span>
+                    {o.gmv_estimado != null ? fmtBRL(o.gmv_estimado) : '—'}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
 
-        <div className="space-y-3">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Vínculos</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Organização: </span>
-                {orgQ.data ? (
-                  <Link to={`/comercial/organizacoes/${orgQ.data.id}`} className="text-primary hover:underline">
-                    {orgQ.data.nome}
-                  </Link>
-                ) : '—'}
-              </div>
-              <div>
-                <span className="text-muted-foreground">GMV estimado: </span>
-                {o.gmv_estimado != null ? fmtBRL(o.gmv_estimado) : '—'}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        <TabsContent value="historico" className="mt-4">
+          <AuditLog entityType="opportunity" entityId={o.id} />
+        </TabsContent>
+      </Tabs>
 
       <ActivityDialog open={actOpen} onOpenChange={setActOpen} organizationId={o.organization_id} opportunityId={o.id} />
     </div>

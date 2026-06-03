@@ -52,33 +52,46 @@ export function ContatoDetalhe() {
         />
       </div>
 
-      <Tabs defaultValue="dados">
+      <Tabs defaultValue="geral">
         <TabsList>
-          <TabsTrigger value="dados">Dados</TabsTrigger>
-          <TabsTrigger value="orgs">Organizações</TabsTrigger>
-          <TabsTrigger value="conexoes">Conexões</TabsTrigger>
-          <TabsTrigger value="atividades">Atividades</TabsTrigger>
+          <TabsTrigger value="geral">Visão geral</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dados" className="mt-4 max-w-2xl space-y-4">
-          <ContatoDados p={p} />
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Objeções</CardTitle></CardHeader>
-            <CardContent><ObjecoesTags entityType="person" entityId={p.id} /></CardContent>
-          </Card>
-        </TabsContent>
+        <TabsContent value="geral" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+            <div className="space-y-4">
+              <ContatoDados p={p} />
 
-        <TabsContent value="orgs" className="mt-4">
-          <ContatoOrgs personId={p.id} />
-        </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Organizações</h3>
+                  <ContatoOrgs personId={p.id} />
+                </CardContent>
+              </Card>
 
-        <TabsContent value="conexoes" className="mt-4">
-          <ContatoConexoes personId={p.id} />
-        </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Conexões</h3>
+                  <ContatoConexoes personId={p.id} />
+                </CardContent>
+              </Card>
+            </div>
 
-        <TabsContent value="atividades" className="mt-4">
-          <ActivityTimeline filter={{ personId: p.id }} showOrg />
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Objeções</CardTitle></CardHeader>
+                <CardContent><ObjecoesTags entityType="person" entityId={p.id} /></CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Atividades</h3>
+                  <ActivityTimeline filter={{ personId: p.id }} showOrg />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4">
@@ -127,7 +140,7 @@ function ContatoOrgs({ personId }: { personId: string }) {
 
   if (q.isLoading) return <Skeleton className="h-24 w-full" />
   return (
-    <div className="max-w-2xl space-y-3">
+    <div className="space-y-3">
       {(q.data ?? []).map((r) => {
         const o = r.organizations as unknown as { nome: string } | null
         return (
@@ -188,7 +201,7 @@ function ContatoConexoes({ personId }: { personId: string }) {
 
   if (q.isLoading) return <Skeleton className="h-24 w-full" />
   return (
-    <div className="max-w-2xl space-y-3">
+    <div className="space-y-3">
       {(q.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Nenhuma conexão.</p>}
       {(q.data ?? []).map((c) => {
         const other = c.person_a_id === personId

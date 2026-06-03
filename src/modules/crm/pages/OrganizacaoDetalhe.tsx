@@ -81,73 +81,87 @@ export function OrganizacaoDetalhe() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        {/* Coluna principal */}
-        <Tabs defaultValue="visao">
-          <TabsList>
-            <TabsTrigger value="visao">Visão geral</TabsTrigger>
-            <TabsTrigger value="atividades">Atividades</TabsTrigger>
-            <TabsTrigger value="contatos">Contatos</TabsTrigger>
-            <TabsTrigger value="oportunidades">Oportunidades</TabsTrigger>
-            <TabsTrigger value="objecoes">Objeções</TabsTrigger>
-            <TabsTrigger value="historico">Histórico</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="geral">
+        <TabsList>
+          <TabsTrigger value="geral">Visão geral</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="visao" className="mt-4">
-            <OrgVisaoGeral org={org} />
-          </TabsContent>
+        <TabsContent value="geral" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+            {/* Coluna principal — tudo na mesma tela */}
+            <div className="space-y-4">
+              <OrgVisaoGeral org={org} />
 
-          <TabsContent value="atividades" className="mt-4 space-y-3">
-            <Button onClick={() => setActOpen(true)}>
-              <Plus className="size-4" /> Registrar atividade
-            </Button>
-            <ActivityTimeline filter={{ organizationId: org.id }} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">Atividades</h3>
+                    <Button size="sm" variant="secondary" onClick={() => setActOpen(true)}>
+                      <Plus className="size-4" /> Registrar
+                    </Button>
+                  </div>
+                  <ActivityTimeline filter={{ organizationId: org.id }} />
+                </CardContent>
+              </Card>
 
-          <TabsContent value="contatos" className="mt-4">
-            <OrgContatos orgId={org.id} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Contatos</h3>
+                  <OrgContatos orgId={org.id} />
+                </CardContent>
+              </Card>
 
-          <TabsContent value="oportunidades" className="mt-4 space-y-3">
-            <Button onClick={() => setOppOpen(true)}>
-              <Plus className="size-4" /> Nova oportunidade
-            </Button>
-            <OrgOportunidades organizationId={org.id} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">Oportunidades</h3>
+                    <Button size="sm" variant="secondary" onClick={() => setOppOpen(true)}>
+                      <Plus className="size-4" /> Nova
+                    </Button>
+                  </div>
+                  <OrgOportunidades organizationId={org.id} />
+                </CardContent>
+              </Card>
 
-          <TabsContent value="objecoes" className="mt-4">
-            <ObjecoesTags entityType="organization" entityId={org.id} />
-          </TabsContent>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Objeções</h3>
+                  <ObjecoesTags entityType="organization" entityId={org.id} />
+                </CardContent>
+              </Card>
+            </div>
 
-          <TabsContent value="historico" className="mt-4">
-            <AuditLog entityType="organization" entityId={org.id} />
-          </TabsContent>
-        </Tabs>
+            {/* Sidebar */}
+            <div className="space-y-3">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Estágio (relacionamento)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <StageSelector
+                    slug="relacionamento"
+                    value={org.funil_stage_id}
+                    onChange={(stageId) => save({ funil_stage_id: stageId })}
+                    className="h-8 w-full"
+                  />
+                </CardContent>
+              </Card>
 
-        {/* Sidebar */}
-        <div className="space-y-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Estágio (relacionamento)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <StageSelector
-                slug="relacionamento"
-                value={org.funil_stage_id}
-                onChange={(stageId) => save({ funil_stage_id: stageId })}
-                className="h-8 w-full"
-              />
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Ponte com o BI</CardTitle>
+                </CardHeader>
+                <OrgBiPonte org={org} />
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Ponte com o BI</CardTitle>
-            </CardHeader>
-            <OrgBiPonte org={org} />
-          </Card>
-        </div>
-      </div>
+        <TabsContent value="historico" className="mt-4">
+          <AuditLog entityType="organization" entityId={org.id} />
+        </TabsContent>
+      </Tabs>
 
       <ActivityDialog open={actOpen} onOpenChange={setActOpen} organizationId={org.id} />
       <NovaOportunidadeDialog open={oppOpen} onOpenChange={setOppOpen} organizationId={org.id} />
