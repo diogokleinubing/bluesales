@@ -61,6 +61,60 @@ export function useOppOptions(organizationId: string | null | undefined) {
   })
 }
 
+export function useGeneroOptions() {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'generos', orgId],
+    queryFn: async (): Promise<Lookup[]> => {
+      const { data, error } = await supabase
+        .from('generos')
+        .select('id, nome')
+        .eq('org_id', orgId!)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as Lookup[]
+    },
+  })
+}
+
+export function useSegmentOptions() {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'segments', orgId],
+    queryFn: async (): Promise<Lookup[]> => {
+      const { data, error } = await supabase
+        .from('segments')
+        .select('id, nome')
+        .eq('org_id', orgId!)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as Lookup[]
+    },
+  })
+}
+
+export function useLocalOptions() {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'locais', orgId],
+    queryFn: async (): Promise<Lookup[]> => {
+      const { data, error } = await supabase
+        .from('crm_locals')
+        .select('id, nome')
+        .eq('org_id', orgId!)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as Lookup[]
+    },
+  })
+}
+
 export function useArtistOptions() {
   const orgId = useCrmOrgId()
   return useQuery({
