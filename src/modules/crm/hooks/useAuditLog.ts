@@ -1,24 +1,33 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
-export interface HistoryEvent {
-  id: string
-  kind: 'audit' | 'stage'
-  action: string
+export interface HistoryChange {
   field?: string | null
   oldValue?: string | null
   newValue?: string | null
-  user?: string | null
-  at: string
 }
 
-/** Histórico (audit_log + stage_history) de uma entidade, mais recente primeiro. */
+export interface HistoryEntry {
+  id: string
+  kind: 'audit' | 'stage'
+  action: string
+  user?: string | null
+  at: string
+  /** Alterações agrupadas (um update pode mexer em vários campos de uma vez). */
+  changes: HistoryChange[]
+}
+
+/**
+ * Histórico (audit_log + stage_history) de uma entidade, mais recente primeiro.
+ * Alterações feitas em conjunto (mesmo usuário e horário) são agrupadas em um
+ * único registro para facilitar a leitura.
+ */
 export function useAuditLog(entityType: string, entityId: string | undefined) {
   return useQuery({
     enabled: !!entityId,
     staleTime: 30 * 1000,
     queryKey: ['crm', 'history', entityType, entityId],
-    queryFn: async (): Promise<HistoryEvent[]> => {
+    queryFn: async (): Promise<HistoryEntry[]> => {
       const [audit, stages, profiles, stageNames] = await Promise.all([
         supabase
           .from('audit_log')
@@ -43,33 +52,62 @@ export function useAuditLog(entityType: string, entityId: string | undefined) {
         (stageNames.data ?? []).map((s) => [s.id, s.nome as string]),
       )
 
-      const auditEvents: HistoryEvent[] = (audit.data ?? [])
-        // stage_change já aparece detalhado em stage_history
-        .filter((a) => a.action !== 'stage_change')
-        .map((a) => ({
-          id: `a-${a.id}`,
-          kind: 'audit',
-          action: a.action,
-          field: a.field_name,
-          oldValue: a.old_value,
-          newValue: a.new_value,
-          user: a.user_id ? userById.get(a.user_id) ?? null : null,
-          at: a.created_at,
-        }))
+      const entries: HistoryEntry[] = []
 
-      const stageEvents: HistoryEvent[] = (stages.data ?? []).map((s) => ({
-        id: `s-${s.id}`,
-        kind: 'stage',
-        action: 'stage_change',
-        oldValue: s.from_stage_id ? stageById.get(s.from_stage_id) ?? null : null,
-        newValue: s.to_stage_id ? stageById.get(s.to_stage_id) ?? null : null,
-        user: s.user_id ? userById.get(s.user_id) ?? null : null,
-        at: s.created_at,
-      }))
+      // Agrupa updates por (usuário + horário); create/delete ficam isolados.
+      const updateGroups = new Map<string, HistoryEntry>()
+      for (const a of audit.data ?? []) {
+        if (a.action === 'stage_change') continue // detalhado em stage_history
+        const user = a.user_id ? userById.get(a.user_id) ?? null : null
+        if (a.action === 'update') {
+          const key = `${a.user_id ?? ''}__${a.created_at}`
+          let entry = updateGroups.get(key)
+          if (!entry) {
+            entry = {
+              id: `g-${key}`,
+              kind: 'audit',
+              action: 'update',
+              user,
+              at: a.created_at,
+              changes: [],
+            }
+            updateGroups.set(key, entry)
+            entries.push(entry)
+          }
+          entry.changes.push({
+            field: a.field_name,
+            oldValue: a.old_value,
+            newValue: a.new_value,
+          })
+        } else {
+          entries.push({
+            id: `a-${a.id}`,
+            kind: 'audit',
+            action: a.action,
+            user,
+            at: a.created_at,
+            changes: [],
+          })
+        }
+      }
 
-      return [...auditEvents, ...stageEvents].sort((a, b) =>
-        a.at < b.at ? 1 : -1,
-      )
+      for (const s of stages.data ?? []) {
+        entries.push({
+          id: `s-${s.id}`,
+          kind: 'stage',
+          action: 'stage_change',
+          user: s.user_id ? userById.get(s.user_id) ?? null : null,
+          at: s.created_at,
+          changes: [
+            {
+              oldValue: s.from_stage_id ? stageById.get(s.from_stage_id) ?? null : null,
+              newValue: s.to_stage_id ? stageById.get(s.to_stage_id) ?? null : null,
+            },
+          ],
+        })
+      }
+
+      return entries.sort((a, b) => (a.at < b.at ? 1 : -1))
     },
   })
 }

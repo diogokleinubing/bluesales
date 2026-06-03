@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -6,17 +6,9 @@ import { ArrowLeft, ExternalLink, Plus, Power } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { supabase } from '@/lib/supabase'
 import { fmtBRL } from '@/lib/format'
 import { StageSelector } from '../components/StageSelector'
@@ -25,6 +17,9 @@ import { ActivityDialog } from '../components/ActivityDialog'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
+import {
+  TextField, SelectField, FormActions, useDraft, toText, toNumber,
+} from '../components/EditFields'
 import {
   useOrganization,
   updateOrganization,
@@ -89,18 +84,7 @@ export function OrganizacaoDetalhe() {
           </TabsList>
 
           <TabsContent value="visao" className="mt-4">
-            <Card>
-              <CardContent className="grid grid-cols-2 gap-3 p-4">
-                <FieldText label="Nome" value={org.nome} onSave={(v) => save({ nome: v ?? org.nome })} />
-                <FieldText label="Cidade" value={org.cidade} onSave={(v) => save({ cidade: v })} />
-                <FieldText label="UF" value={org.uf} onSave={(v) => save({ uf: v })} />
-                <FieldNumber label="GMV anual" value={org.gmv_anual} onSave={(v) => save({ gmv_anual: v })} />
-                <FieldSelect label="Classificação" value={org.classificacao} options={CLASSES} onSave={(v) => save({ classificacao: v })} />
-                <FieldSelect label="Origem do lead" value={org.origem_lead} options={ORIGENS} onSave={(v) => save({ origem_lead: v })} />
-                <FieldSelect label="Sociedade" value={org.sociedade} options={SOCIEDADES} onSave={(v) => save({ sociedade: v })} />
-                <FieldSelect label="Estrutura" value={org.estrutura} options={ESTRUTURAS} onSave={(v) => save({ estrutura: v })} />
-              </CardContent>
-            </Card>
+            <OrgVisaoGeral org={org} />
           </TabsContent>
 
           <TabsContent value="atividades" className="mt-4 space-y-3">
@@ -150,21 +134,7 @@ export function OrganizacaoDetalhe() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Ponte com o BI</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <FieldText
-                label="Organizador no BI"
-                value={org.bi_organizador}
-                onSave={(v) => save({ bi_organizador: v })}
-              />
-              {org.bi_organizador && (
-                <Link
-                  to={`/bi/organizadores?organizador=${encodeURIComponent(org.bi_organizador)}`}
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  Ver no BI <ExternalLink className="size-3.5" />
-                </Link>
-              )}
-            </CardContent>
+            <OrgBiPonte org={org} />
           </Card>
         </div>
       </div>
@@ -296,84 +266,96 @@ function OrgContatos({ orgId }: { orgId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-function FieldText({
-  label,
-  value,
-  onSave,
-}: {
-  label: string
-  value: string | null
-  onSave: (v: string | null) => void
-}) {
-  const [v, setV] = useState(value ?? '')
+function OrgVisaoGeral({ org }: { org: Organization }) {
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const initial = useMemo(
+    () => ({
+      nome: org.nome ?? '',
+      cidade: org.cidade ?? '',
+      uf: org.uf ?? '',
+      gmv_anual: org.gmv_anual != null ? String(org.gmv_anual) : '',
+      classificacao: org.classificacao ?? '',
+      origem_lead: org.origem_lead ?? '',
+      sociedade: org.sociedade ?? '',
+      estrutura: org.estrutura ?? '',
+    }),
+    [org],
+  )
+  const { draft, set, dirty, reset } = useDraft(initial, org.updated_at)
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      await updateOrganization(org.id, {
+        nome: draft.nome.trim() || org.nome,
+        cidade: toText(draft.cidade),
+        uf: toText(draft.uf),
+        gmv_anual: toNumber(draft.gmv_anual),
+        classificacao: toText(draft.classificacao),
+        origem_lead: toText(draft.origem_lead),
+        sociedade: toText(draft.sociedade),
+        estrutura: toText(draft.estrutura),
+      })
+      qc.invalidateQueries({ queryKey: ['crm', 'organization', org.id] })
+      qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        className="h-8"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => v !== (value ?? '') && onSave(v.trim() || null)}
-      />
-    </div>
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+          <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
+          <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v)} />
+          <TextField label="GMV anual" type="number" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
+          <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
+          <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+          <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
+          <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
+        </div>
+        <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
+      </CardContent>
+    </Card>
   )
 }
 
-function FieldNumber({
-  label,
-  value,
-  onSave,
-}: {
-  label: string
-  value: number | null
-  onSave: (v: number | null) => void
-}) {
-  const [v, setV] = useState(value != null ? String(value) : '')
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        type="number"
-        className="h-8"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() =>
-          v !== (value != null ? String(value) : '') &&
-          onSave(v ? Number(v) : null)
-        }
-      />
-    </div>
-  )
-}
+function OrgBiPonte({ org }: { org: Organization }) {
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const initial = useMemo(() => ({ bi: org.bi_organizador ?? '' }), [org])
+  const { draft, set, dirty, reset } = useDraft(initial, org.updated_at)
 
-function FieldSelect({
-  label,
-  value,
-  options,
-  onSave,
-}: {
-  label: string
-  value: string | null
-  options: string[]
-  onSave: (v: string | null) => void
-}) {
-  const NONE = '__none__'
+  async function salvar() {
+    setSaving(true)
+    try {
+      await updateOrganization(org.id, { bi_organizador: toText(draft.bi) })
+      qc.invalidateQueries({ queryKey: ['crm', 'organization', org.id] })
+      qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Select value={value ?? NONE} onValueChange={(x) => onSave(x === NONE ? null : x)}>
-        <SelectTrigger className="h-8" size="sm">
-          <SelectValue placeholder="—" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>—</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o} value={o}>
-              {o}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <CardContent className="space-y-2">
+      <TextField label="Organizador no BI" value={draft.bi} onChange={(v) => set('bi', v)} />
+      {org.bi_organizador && (
+        <Link
+          to={`/bi/organizadores?organizador=${encodeURIComponent(org.bi_organizador)}`}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+        >
+          Ver no BI <ExternalLink className="size-3.5" />
+        </Link>
+      )}
+      <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
+    </CardContent>
   )
 }

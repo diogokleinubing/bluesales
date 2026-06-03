@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -15,6 +14,9 @@ import { ActivityTimeline } from '../components/ActivityTimeline'
 import { ActivityDialog } from '../components/ActivityDialog'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
+import {
+  TextField, SelectField, TextareaField, FormActions, useDraft, toText, toNumber,
+} from '../components/EditFields'
 import { useProfile } from '../hooks/useProfile'
 import { useOpportunity, updateOpportunity, type Opportunity } from '../hooks/useOpportunities'
 import { fmtBRL } from '@/lib/format'
@@ -22,7 +24,6 @@ import { fmtBRL } from '@/lib/format'
 export function OportunidadeDetalhe() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const { profile } = useProfile()
   const { data: o, isLoading } = useOpportunity(id)
   const [actOpen, setActOpen] = useState(false)
@@ -44,18 +45,6 @@ export function OportunidadeDetalhe() {
     },
   })
 
-  async function save(patch: Partial<Opportunity>) {
-    if (!id) return
-    try {
-      await updateOpportunity(id, patch)
-      qc.invalidateQueries({ queryKey: ['crm', 'opportunity', id] })
-      qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
-      qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
-    } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
-    }
-  }
-
   if (isLoading) return <Skeleton className="h-96 w-full" />
   if (!o) return <p className="text-muted-foreground">Oportunidade não encontrada.</p>
 
@@ -76,48 +65,11 @@ export function OportunidadeDetalhe() {
           </TabsList>
 
           <TabsContent value="visao" className="mt-4">
-            <Card>
-              <CardContent className="grid grid-cols-2 gap-3 p-4">
-                <FText label="Título" value={o.titulo} onSave={(v) => save({ titulo: v ?? o.titulo })} />
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Estágio</Label>
-                  <StageSelector slug="oportunidade" value={o.stage_id} onChange={(s) => s && save({ stage_id: s })} allowNone={false} className="h-8 w-full" />
-                </div>
-                <FNum label="GMV estimado" value={o.gmv_estimado} onSave={(v) => save({ gmv_estimado: v })} />
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Probabilidade: {o.probabilidade ?? 0}%</Label>
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    defaultValue={o.probabilidade ?? 0}
-                    onMouseUp={(e) => save({ probabilidade: Number((e.target as HTMLInputElement).value) })}
-                    onTouchEnd={(e) => save({ probabilidade: Number((e.target as HTMLInputElement).value) })}
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Data prevista de fechamento</Label>
-                  <Input type="date" className="h-8" defaultValue={o.data_prevista_fechamento ?? ''} onBlur={(e) => save({ data_prevista_fechamento: e.target.value || null })} />
-                </div>
-                {profile?.role === 'gestor' && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Responsável</Label>
-                    <select
-                      className="h-8 w-full rounded-md border border-border bg-transparent px-2 text-sm"
-                      value={o.owner_id}
-                      onChange={(e) => save({ owner_id: e.target.value })}
-                    >
-                      {(profilesQ.data ?? []).map((p) => (
-                        <option key={p.id} value={p.id}>{p.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className="col-span-2 space-y-1">
-                  <Label className="text-xs text-muted-foreground">Observações</Label>
-                  <Input className="h-8" defaultValue={o.observacoes ?? ''} onBlur={(e) => save({ observacoes: e.target.value || null })} />
-                </div>
-              </CardContent>
-            </Card>
+            <OppVisaoGeral
+              o={o}
+              isGestor={profile?.role === 'gestor'}
+              profiles={profilesQ.data ?? []}
+            />
           </TabsContent>
 
           <TabsContent value="atividades" className="mt-4 space-y-3">
@@ -160,22 +112,98 @@ export function OportunidadeDetalhe() {
   )
 }
 
-function FText({ label, value, onSave }: { label: string; value: string | null; onSave: (v: string | null) => void }) {
-  const [v, setV] = useState(value ?? '')
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input className="h-8" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== (value ?? '') && onSave(v.trim() || null)} />
-    </div>
+function OppVisaoGeral({
+  o, isGestor, profiles,
+}: {
+  o: Opportunity
+  isGestor: boolean
+  profiles: { id: string; nome: string | null }[]
+}) {
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const initial = useMemo(
+    () => ({
+      titulo: o.titulo ?? '',
+      gmv_estimado: o.gmv_estimado != null ? String(o.gmv_estimado) : '',
+      probabilidade: o.probabilidade != null ? String(o.probabilidade) : '0',
+      data_prevista_fechamento: o.data_prevista_fechamento ?? '',
+      owner_id: o.owner_id,
+      observacoes: o.observacoes ?? '',
+    }),
+    [o],
   )
-}
+  const { draft, set, dirty, reset } = useDraft(initial, o.updated_at)
 
-function FNum({ label, value, onSave }: { label: string; value: number | null; onSave: (v: number | null) => void }) {
-  const [v, setV] = useState(value != null ? String(value) : '')
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ['crm', 'opportunity', o.id] })
+    qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
+    qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
+  }
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      await updateOpportunity(o.id, {
+        titulo: draft.titulo.trim() || o.titulo,
+        gmv_estimado: toNumber(draft.gmv_estimado),
+        probabilidade: toNumber(draft.probabilidade),
+        data_prevista_fechamento: draft.data_prevista_fechamento || null,
+        owner_id: draft.owner_id,
+        observacoes: toText(draft.observacoes),
+      })
+      invalidate()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function setStage(s: string | null) {
+    if (!s) return
+    try {
+      await updateOpportunity(o.id, { stage_id: s })
+      invalidate()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
   return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input type="number" className="h-8" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== (value != null ? String(value) : '') && onSave(v ? Number(v) : null)} />
-    </div>
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Título" value={draft.titulo} onChange={(v) => set('titulo', v)} />
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Estágio</Label>
+            <StageSelector slug="oportunidade" value={o.stage_id} onChange={setStage} allowNone={false} className="h-8 w-full" />
+          </div>
+          <TextField label="GMV estimado" type="number" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Probabilidade: {draft.probabilidade || 0}%</Label>
+            <input
+              type="range" min={0} max={100} step={5}
+              value={draft.probabilidade || '0'}
+              onChange={(e) => set('probabilidade', e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <TextField label="Data prevista de fechamento" type="date" value={draft.data_prevista_fechamento} onChange={(v) => set('data_prevista_fechamento', v)} />
+          {isGestor && (
+            <SelectField
+              label="Responsável"
+              value={draft.owner_id}
+              includeNone={false}
+              options={profiles.map((p) => ({ value: p.id, label: p.nome ?? p.id }))}
+              onChange={(v) => set('owner_id', v)}
+            />
+          )}
+          <div className="col-span-2">
+            <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
+          </div>
+        </div>
+        <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
+      </CardContent>
+    </Card>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -22,6 +22,7 @@ import { StageSelector } from '../components/StageSelector'
 import { ActivityTimeline } from '../components/ActivityTimeline'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
+import { TextField, FormActions, useDraft, toText } from '../components/EditFields'
 import { useContact, updateContact, type Person } from '../hooks/useContacts'
 import { usePersonOptions } from '../hooks/useCrmLookups'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
@@ -30,19 +31,7 @@ import { fmtDate } from '@/lib/format'
 export function ContatoDetalhe() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const { data: p, isLoading } = useContact(id)
-
-  async function save(patch: Partial<Person>) {
-    if (!id) return
-    try {
-      await updateContact(id, patch)
-      qc.invalidateQueries({ queryKey: ['crm', 'contact', id] })
-      qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
-    } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
-    }
-  }
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
   if (!p) return <p className="text-muted-foreground">Contato não encontrado.</p>
@@ -64,24 +53,7 @@ export function ContatoDetalhe() {
         </TabsList>
 
         <TabsContent value="dados" className="mt-4 max-w-2xl space-y-4">
-          <Card>
-            <CardContent className="grid grid-cols-2 gap-3 p-4">
-              <F label="Nome" value={p.nome} onSave={(v) => save({ nome: v ?? p.nome })} />
-              <F label="Cargo" value={p.cargo} onSave={(v) => save({ cargo: v })} />
-              <F label="Email" value={p.email} onSave={(v) => save({ email: v })} />
-              <F label="Telefone" value={p.telefone} onSave={(v) => save({ telefone: v })} />
-              <F label="LinkedIn" value={p.linkedin} onSave={(v) => save({ linkedin: v })} />
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
-                <StageSelector
-                  slug="relacionamento"
-                  value={p.funil_stage_id}
-                  onChange={(s) => save({ funil_stage_id: s })}
-                  className="h-8 w-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <ContatoDados p={p} />
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Objeções</CardTitle></CardHeader>
             <CardContent><ObjecoesTags entityType="person" entityId={p.id} /></CardContent>
@@ -235,12 +207,74 @@ function ContatoConexoes({ personId }: { personId: string }) {
   )
 }
 
-function F({ label, value, onSave }: { label: string; value: string | null; onSave: (v: string | null) => void }) {
-  const [v, setV] = useState(value ?? '')
+function ContatoDados({ p }: { p: Person }) {
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const initial = useMemo(
+    () => ({
+      nome: p.nome ?? '',
+      cargo: p.cargo ?? '',
+      email: p.email ?? '',
+      telefone: p.telefone ?? '',
+      linkedin: p.linkedin ?? '',
+    }),
+    [p],
+  )
+  const { draft, set, dirty, reset } = useDraft(initial, p.updated_at)
+
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ['crm', 'contact', p.id] })
+    qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
+  }
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      await updateContact(p.id, {
+        nome: draft.nome.trim() || p.nome,
+        cargo: toText(draft.cargo),
+        email: toText(draft.email),
+        telefone: toText(draft.telefone),
+        linkedin: toText(draft.linkedin),
+      })
+      invalidate()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function setStage(s: string | null) {
+    try {
+      await updateContact(p.id, { funil_stage_id: s })
+      invalidate()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
   return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input className="h-8" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== (value ?? '') && onSave(v.trim() || null)} />
-    </div>
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+          <TextField label="Cargo" value={draft.cargo} onChange={(v) => set('cargo', v)} />
+          <TextField label="Email" type="email" value={draft.email} onChange={(v) => set('email', v)} />
+          <TextField label="Telefone" value={draft.telefone} onChange={(v) => set('telefone', v)} />
+          <TextField label="LinkedIn" value={draft.linkedin} onChange={(v) => set('linkedin', v)} />
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
+            <StageSelector
+              slug="relacionamento"
+              value={p.funil_stage_id}
+              onChange={setStage}
+              className="h-8 w-full"
+            />
+          </div>
+        </div>
+        <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
+      </CardContent>
+    </Card>
   )
 }
