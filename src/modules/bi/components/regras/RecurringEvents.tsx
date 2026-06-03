@@ -162,6 +162,8 @@ export function RecurringEvents() {
     >()
     for (const e of events) {
       if (e.familia) continue
+      // Só sugere eventos que têm o ano no nome (candidatos a recorrência).
+      if (!hasYearInTitle(e.nome)) continue
       const cand = familiaFromName(e.nome)
       if (!cand) continue
       const key = norm(cand)
@@ -179,9 +181,8 @@ export function RecurringEvents() {
   }, [events])
 
   function openSuggest() {
-    const all = new Set<string>()
-    for (const s of suggestions) for (const e of s.events) all.add(e.codigo_evento)
-    setSuggestChecked(all)
+    // Abre tudo desmarcado por padrão (o usuário escolhe o que agrupar).
+    setSuggestChecked(new Set())
     setSuggestOpen(true)
   }
 
