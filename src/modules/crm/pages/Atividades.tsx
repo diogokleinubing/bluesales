@@ -9,7 +9,7 @@ import { ActivityTimeline } from '../components/ActivityTimeline'
 import { ActivityDialog } from '../components/ActivityDialog'
 import type { ActivityTipo } from '../hooks/useActivities'
 
-const TIPOS: ActivityTipo[] = ['Reunião', 'Ligação', 'Email', 'WhatsApp', 'Nota', 'Outro']
+const TIPOS: ActivityTipo[] = ['Reunião', 'Ligação', 'Email', 'WhatsApp', 'Nota', 'Tarefa', 'Outro']
 const ALL = '__all__'
 
 export function Atividades() {

@@ -8,6 +8,7 @@ export type ActivityTipo =
   | 'Email'
   | 'WhatsApp'
   | 'Nota'
+  | 'Tarefa'
   | 'Outro'
 
 export interface ActivityRow {

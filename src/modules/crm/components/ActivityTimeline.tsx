@@ -4,6 +4,7 @@ import {
   Mail,
   MessageCircle,
   StickyNote,
+  CheckSquare,
   CircleDot,
   FileText,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ const ICON: Record<ActivityTipo, typeof Users> = {
   Email: Mail,
   WhatsApp: MessageCircle,
   Nota: StickyNote,
+  Tarefa: CheckSquare,
   Outro: CircleDot,
 }
 

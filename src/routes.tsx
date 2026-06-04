@@ -61,9 +61,6 @@ const OportunidadeDetalhe = lazy(() =>
 const Atividades = lazy(() =>
   import('@/modules/crm/pages/Atividades').then((m) => ({ default: m.Atividades })),
 )
-const Tarefas = lazy(() =>
-  import('@/modules/crm/pages/Tarefas').then((m) => ({ default: m.Tarefas })),
-)
 const Artistas = lazy(() =>
   import('@/modules/crm/pages/Artistas').then((m) => ({ default: m.Artistas })),
 )
@@ -156,7 +153,6 @@ export const router = createBrowserRouter([
       { path: 'comercial/oportunidades', element: <Oportunidades /> },
       { path: 'comercial/oportunidades/:id', element: <OportunidadeDetalhe /> },
       { path: 'comercial/atividades', element: <Atividades /> },
-      { path: 'comercial/tarefas', element: <Tarefas /> },
       { path: 'comercial/artistas', element: <Artistas /> },
       { path: 'comercial/eventos', element: <EventosCrm /> },
       { path: 'comercial/locais', element: <Locais /> },

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Users, Phone, Mail, MessageCircle, StickyNote, CircleDot,
-  ShieldQuestion, FileText, type LucideIcon,
+  ShieldQuestion, CheckSquare, FileText, type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +24,7 @@ type Tipo = ActivityTipo | 'Objeção'
 
 const TYPES: { tipo: Tipo; icon: LucideIcon }[] = [
   { tipo: 'Nota', icon: StickyNote },
+  { tipo: 'Tarefa', icon: CheckSquare },
   { tipo: 'Reunião', icon: Users },
   { tipo: 'Ligação', icon: Phone },
   { tipo: 'Email', icon: Mail },

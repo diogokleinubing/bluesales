@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarClock, CheckSquare, AlertTriangle } from 'lucide-react'
+import { CalendarClock, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
@@ -27,12 +27,10 @@ function Resumo() {
       const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const endToday = new Date(startToday)
       endToday.setDate(endToday.getDate() + 1)
-      const in7 = new Date(startToday)
-      in7.setDate(in7.getDate() + 7)
       const cut30 = new Date(now)
       cut30.setDate(cut30.getDate() - 30)
 
-      const [actToday, tasks7, opps, acts] = await Promise.all([
+      const [actToday, opps, acts] = await Promise.all([
         supabase
           .from('activities')
           .select('id', { count: 'exact', head: true })
@@ -40,15 +38,10 @@ function Resumo() {
           .gte('data_hora', startToday.toISOString())
           .lt('data_hora', endToday.toISOString()),
         supabase
-          .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .eq('org_id', orgId!)
-          .eq('concluida', false)
-          .lte('data_vencimento', in7.toISOString().slice(0, 10)),
-        supabase
           .from('opportunities')
           .select('id, titulo, created_at')
-          .eq('org_id', orgId!),
+          .eq('org_id', orgId!)
+          .is('resultado', null),
         supabase
           .from('activities')
           .select('opportunity_id, data_hora')
@@ -67,7 +60,6 @@ function Resumo() {
       })
       return {
         activitiesToday: actToday.count ?? 0,
-        tasksDue7: tasks7.count ?? 0,
         staleCount: stale.length,
       }
     },
@@ -75,8 +67,8 @@ function Resumo() {
 
   if (q.isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
       </div>
@@ -84,21 +76,15 @@ function Resumo() {
   }
   const d = q.data
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <ResumoCard
         icon={<CalendarClock className="size-5" />}
         label="Atividades hoje"
         value={d?.activitiesToday ?? 0}
       />
       <ResumoCard
-        icon={<CheckSquare className="size-5" />}
-        label="Tarefas vencendo (7 dias)"
-        value={d?.tasksDue7 ?? 0}
-        onClick={() => navigate('/comercial/tarefas')}
-      />
-      <ResumoCard
         icon={<AlertTriangle className="size-5" />}
-        label="Oportunidades sem atividade +30d"
+        label="Oportunidades em aberto sem atividade +30d"
         value={d?.staleCount ?? 0}
         alert={(d?.staleCount ?? 0) > 0}
         onClick={() => navigate('/comercial/oportunidades')}

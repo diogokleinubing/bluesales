@@ -31,7 +31,7 @@ import {
   useOppOptions,
 } from '../hooks/useCrmLookups'
 
-const TIPOS: ActivityTipo[] = ['Reunião', 'Ligação', 'Email', 'WhatsApp', 'Nota', 'Outro']
+const TIPOS: ActivityTipo[] = ['Reunião', 'Ligação', 'Email', 'WhatsApp', 'Nota', 'Tarefa', 'Outro']
 const NONE = '__none__'
 
 function nowLocal() {

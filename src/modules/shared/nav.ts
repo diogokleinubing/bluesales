@@ -15,7 +15,6 @@ import {
   Contact,
   Filter,
   Activity,
-  CheckSquare,
   Route as RouteIcon,
   CreditCard,
   Mic2,
@@ -74,7 +73,6 @@ export const MODULES: ModuleDef[] = [
         title: 'Engajamento',
         items: [
           { to: '/comercial/atividades', label: 'Atividades', icon: Activity },
-          { to: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare },
         ],
       },
       {
