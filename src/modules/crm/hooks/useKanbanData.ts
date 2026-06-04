@@ -52,6 +52,7 @@ export function useOppsKanban() {
         .from('opportunities')
         .select('id, titulo, gmv_estimado, stage_id, data_prevista_fechamento, organizations(nome)')
         .eq('org_id', orgId!)
+        .is('resultado', null)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
       return (data ?? []).map((o) => {

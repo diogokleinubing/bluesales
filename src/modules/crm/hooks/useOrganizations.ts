@@ -26,6 +26,8 @@ export interface OrgListRow extends Organization {
   stageNome: string | null
   stageCor: string | null
   ultimaAtividade: string | null
+  oppStageNome: string | null
+  oppStageCor: string | null
 }
 
 export function useOrganizations() {
@@ -35,7 +37,7 @@ export function useOrganizations() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'organizations', orgId],
     queryFn: async (): Promise<OrgListRow[]> => {
-      const [orgs, stages, acts] = await Promise.all([
+      const [orgs, stages, acts, opps] = await Promise.all([
         supabase
           .from('organizations')
           .select('*')
@@ -47,6 +49,12 @@ export function useOrganizations() {
           .select('organization_id, data_hora')
           .eq('org_id', orgId!)
           .not('organization_id', 'is', null),
+        supabase
+          .from('opportunities')
+          .select('organization_id, stage_id, created_at')
+          .eq('org_id', orgId!)
+          .is('resultado', null)
+          .order('created_at', { ascending: false }),
       ])
       if (orgs.error) throw new Error(orgs.error.message)
       const stageById = new Map(
@@ -58,13 +66,22 @@ export function useOrganizations() {
         const d = a.data_hora as string
         if (!lastAct.has(k) || d > lastAct.get(k)!) lastAct.set(k, d)
       }
+      // Oportunidade em aberto mais recente por organização.
+      const openOpp = new Map<string, string>()
+      for (const op of opps.data ?? []) {
+        const k = op.organization_id as string
+        if (k && !openOpp.has(k) && op.stage_id) openOpp.set(k, op.stage_id as string)
+      }
       return (orgs.data ?? []).map((o) => {
         const st = o.funil_stage_id ? stageById.get(o.funil_stage_id) : null
+        const oppSt = openOpp.has(o.id) ? stageById.get(openOpp.get(o.id)!) : null
         return {
           ...(o as Organization),
           stageNome: st?.nome ?? null,
           stageCor: st?.cor ?? null,
           ultimaAtividade: lastAct.get(o.id) ?? null,
+          oppStageNome: oppSt?.nome ?? null,
+          oppStageCor: oppSt?.cor ?? null,
         }
       })
     },

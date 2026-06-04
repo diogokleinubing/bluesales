@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -119,7 +120,17 @@ export function Organizacoes() {
                     </span>
                   ) : <span className="text-muted-foreground">—</span>}
                 </TableCell>
-                <TableCell><StatusComercialBadge status={o.status_comercial} /></TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusComercialBadge status={o.status_comercial} />
+                    {o.oppStageNome && (
+                      <Badge variant="outline" className="gap-1" title="Oportunidade em aberto">
+                        <span className="size-2 rounded-full" style={{ backgroundColor: o.oppStageCor ?? 'var(--muted-foreground)' }} />
+                        {o.oppStageNome}
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{o.ultimaAtividade ? fmtDate(new Date(o.ultimaAtividade)) : '—'}</TableCell>
               </TableRow>
             ))}

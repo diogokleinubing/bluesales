@@ -15,6 +15,8 @@ export interface Opportunity {
   gmv_estimado: number | null
   probabilidade: number | null
   observacoes: string | null
+  resultado: 'Ganho' | 'Perdida' | null
+  resultado_em: string | null
   created_at: string
   updated_at: string
 }
@@ -102,6 +104,19 @@ export async function updateOpportunity(id: string, patch: Partial<Opportunity>)
   const { error } = await supabase
     .from('opportunities')
     .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Define o resultado (Ganho/Perdida) ou reabre a oportunidade (null). */
+export async function setOpportunityOutcome(id: string, resultado: 'Ganho' | 'Perdida' | null) {
+  const { error } = await supabase
+    .from('opportunities')
+    .update({
+      resultado,
+      resultado_em: resultado ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id)
   if (error) throw new Error(error.message)
 }

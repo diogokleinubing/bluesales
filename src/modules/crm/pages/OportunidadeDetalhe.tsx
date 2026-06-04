@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, History } from 'lucide-react'
+import { ArrowLeft, History, Trophy, Ban, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -21,15 +22,29 @@ import { useProfile } from '../hooks/useProfile'
 import { canEdit } from '../lib/permissions'
 import { useEventGmvOptions, useOrgGmvOptions } from '../hooks/useCrmLookups'
 import { useGmvCopy } from '../hooks/useGmvCopy'
-import { useOpportunity, updateOpportunity, deleteOpportunity, type Opportunity } from '../hooks/useOpportunities'
+import { useOpportunity, updateOpportunity, deleteOpportunity, setOpportunityOutcome, type Opportunity } from '../hooks/useOpportunities'
 import { fmtBRL, fmtBRL0 } from '@/lib/format'
 
 export function OportunidadeDetalhe() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { profile } = useProfile()
   const { data: o, isLoading } = useOpportunity(id)
   const [histOpen, setHistOpen] = useState(false)
+
+  async function setOutcome(r: 'Ganho' | 'Perdida' | null) {
+    if (!o) return
+    try {
+      await setOpportunityOutcome(o.id, r)
+      qc.invalidateQueries({ queryKey: ['crm', 'opportunity', o.id] })
+      qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
 
   const orgQ = useQuery({
     enabled: !!o?.organization_id,
@@ -63,9 +78,39 @@ export function OportunidadeDetalhe() {
         </button>
       </div>
 
-      {/* Título */}
-      <div className="border-b border-border px-6 py-3">
-        <h1 className="text-xl font-semibold tracking-tight">{o.titulo}</h1>
+      {/* Título + resultado (Ganho/Perdida) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-6 py-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">{o.titulo}</h1>
+          {o.resultado === 'Ganho' && (
+            <Badge className="border-transparent bg-[var(--success)]/15 text-[var(--success)]">Ganho</Badge>
+          )}
+          {o.resultado === 'Perdida' && (
+            <Badge className="border-transparent bg-destructive/15 text-destructive">Perdida</Badge>
+          )}
+        </div>
+        {canEdit(profile, o.owner_id) && (
+          <div className="flex items-center gap-2">
+            {o.resultado ? (
+              <Button variant="ghost" size="sm" onClick={() => setOutcome(null)}>
+                <RotateCcw className="size-4" /> Reabrir
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  className="bg-[var(--success)] text-white hover:bg-[var(--success)]/90"
+                  onClick={() => setOutcome('Ganho')}
+                >
+                  <Trophy className="size-4" /> Ganho
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => setOutcome('Perdida')}>
+                  <Ban className="size-4" /> Perdida
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Corpo */}
