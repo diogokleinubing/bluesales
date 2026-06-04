@@ -172,23 +172,49 @@ function toRawEvent(
   }
 }
 
+async function getSource(): Promise<{ id: string; cfg: Record<string, unknown> } | null> {
+  const db = adminClient()
+  const { data } = await db.from('crawler_sources').select('id, config').eq('slug', 'sympla').maybeSingle()
+  if (!data) return null
+  return { id: data.id, cfg: (data.config ?? {}) as Record<string, unknown> }
+}
+
 export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
   const { cidade, janelaDias } = ctx
-  const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
+  const semCidade = !cidade // fonte sem cidades cadastradas -> não filtra por cidade
 
   const urls = await getSitemapUrls()
   const known = await getKnownIds()
 
   const ids: string[] = []
-  for (const u of urls) {
-    if (!u.includes(cidadeToken) || /online/i.test(u)) continue
-    const id = idDaUrl(u)
-    if (!id || known.has(id)) continue // pula para sempre os já coletados
-    ids.push(id)
-    if (ids.length >= MAX_POR_CIDADE) break
-  }
-  if (urls.length && ids.length === MAX_POR_CIDADE) {
-    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} novos por execução (restante na próxima)`)
+  let srcId: string | null = null
+  let novoOffset: number | null = null
+
+  if (semCidade) {
+    // Avança por um offset no sitemap (cobre tudo aos poucos, sem repetir).
+    const src = await getSource()
+    srcId = src?.id ?? null
+    const cfg = src?.cfg ?? {}
+    const cap = Number(cfg.scan ?? 150)
+    const offset = Number(cfg.sitemap_offset ?? 0)
+    const fim = Math.min(offset + cap, urls.length)
+    for (let i = offset; i < fim; i++) {
+      const u = urls[i]
+      if (/online/i.test(u)) continue
+      const id = idDaUrl(u)
+      if (!id || known.has(id)) continue
+      ids.push(id)
+    }
+    novoOffset = fim >= urls.length ? 0 : fim // ao terminar a passada, recomeça
+  } else {
+    const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
+    for (const u of urls) {
+      if (!u.includes(cidadeToken) || /online/i.test(u)) continue
+      const id = idDaUrl(u)
+      if (!id || known.has(id)) continue
+      ids.push(id)
+      if (ids.length >= MAX_POR_CIDADE) break
+    }
   }
 
   const agora = Date.now()
@@ -201,7 +227,7 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
     if (ev.cancelled || ev.published === false || ev.visible === false) continue
 
     const cidadeEv = ev.eventsAddress?.city ?? null
-    if (!cidadeEv || norm(cidadeEv) !== norm(cidade)) continue
+    if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) continue
 
     const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
     const t = dataIni ? Date.parse(dataIni) : NaN
@@ -213,5 +239,14 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
     const urlEvento = ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`
     out.push(toRawEvent(ev, id, urlEvento, precos, ehFree))
   }
+
+  if (semCidade && srcId && novoOffset != null) {
+    const db = adminClient()
+    const { data: cur } = await db.from('crawler_sources').select('config').eq('id', srcId).maybeSingle()
+    const cfg = (cur?.config ?? {}) as Record<string, unknown>
+    await db.from('crawler_sources').update({ config: { ...cfg, sitemap_offset: novoOffset } }).eq('id', srcId)
+    console.log(`[sympla] sitemap_offset -> ${novoOffset} (${ids.length} ids, ${out.length} válidos)`)
+  }
+
   return out
 }

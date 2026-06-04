@@ -170,10 +170,11 @@ export const biletoScraper: Scraper = async (ctx: ScrapeContext) => {
   const limite = agora + janelaDias * 86_400_000
   const out: RawEvent[] = []
 
+  const semCidade = !cidade // fonte sem cidades -> não filtra por cidade
   for (const { ev } of events) {
     if ((ev.status ?? '') !== 'STARTED') continue
     const cidadeEv = ev.venue?.locale?.city?.name ?? null
-    if (!cidadeEv || norm(cidadeEv) !== norm(cidade)) continue
+    if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) continue
     const dataIni = ev.presentations?.next_local_date_time ?? null
     const t = dataIni ? Date.parse(dataIni) : NaN
     if (isNaN(t) || t < agora - 86_400_000 || t > limite) continue

@@ -122,7 +122,7 @@ export function FontesConfig() {
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.nome}</TableCell>
                 <TableCell><Badge variant="outline">{METODO_LABEL[s.metodo] ?? s.metodo}</Badge></TableCell>
-                <TableCell className="text-muted-foreground">{s.config?.cidades?.length ?? 0}</TableCell>
+                <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>
                 <TableCell className="text-muted-foreground">{s.config?.janela_dias ?? 90} dias</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
                 <TableCell>

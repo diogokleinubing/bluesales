@@ -82,7 +82,9 @@ async function runSource(
   disparadoPor: 'manual' | 'cron',
 ): Promise<{ vistos: number; novos: number; ignorados: number; erros: number }> {
   const scraper = SCRAPERS[source.slug]
-  const cidades = source.config?.cidades ?? []
+  const cidadesCfg = source.config?.cidades ?? []
+  // Sem cidades cadastradas: roda uma única vez sem filtro de cidade.
+  const cidades = cidadesCfg.length ? cidadesCfg : [{ cidade: '', uf: '' }]
   const janelaDias = source.config?.janela_dias ?? 90
 
   const { data: run } = await db
