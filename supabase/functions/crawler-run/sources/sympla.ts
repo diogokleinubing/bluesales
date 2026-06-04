@@ -180,7 +180,7 @@ async function getSource(): Promise<{ id: string; cfg: Record<string, unknown> }
 }
 
 export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
-  const { cidade, janelaDias } = ctx
+  const { cidade } = ctx
   const semCidade = !cidade // fonte sem cidades cadastradas -> não filtra por cidade
 
   const urls = await getSitemapUrls()
@@ -218,7 +218,6 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
   }
 
   const agora = Date.now()
-  const limite = agora + janelaDias * 86_400_000
   const out: RawEvent[] = []
 
   for (const id of ids) {
@@ -229,13 +228,14 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
     const cidadeEv = ev.eventsAddress?.city ?? null
     if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) continue
 
+    // Capturamos eventos passados também (sem data não descarta). Só não
+    // buscamos preço de evento já encerrado (venda fechada).
     const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
     const t = dataIni ? Date.parse(dataIni) : NaN
-    if (isNaN(t) || t < agora - 86_400_000 || t > limite) continue
+    const ehPassado = !isNaN(t) && t < agora - 86_400_000
 
-    // Gratuito pelo tipo do evento evita uma chamada de preço.
     const ehFree = (ev.paymentEventType ?? '').toLowerCase() === 'free'
-    const precos = ehFree ? null : await fetchPrecos(id)
+    const precos = (ehFree || ehPassado) ? null : await fetchPrecos(id)
     const urlEvento = ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`
     out.push(toRawEvent(ev, id, urlEvento, precos, ehFree))
   }

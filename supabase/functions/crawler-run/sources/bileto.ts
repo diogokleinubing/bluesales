@@ -13,8 +13,8 @@ import { norm } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const API = 'https://bff-sales-api-cdn.bileto.sympla.com.br/api/v1/events'
-const MAX_SCAN = 800 // IDs varridos por execução
-const MISS_STREAK = 40 // IDs inexistentes seguidos => fronteira
+const MAX_SCAN = 1500 // IDs varridos por execução
+const MISS_STREAK = 200 // IDs inexistentes seguidos => fronteira (tolera buracos)
 const BATCH = 10
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -115,7 +115,9 @@ async function runScan(): Promise<Scanned[]> {
     }
   }
 
-  const newCursor = stop ? lastValid : id - 1
+  // Cursor = último ID válido encontrado. Não ultrapassa a fronteira: ao chegar
+  // no topo, fica re-checando os próximos IDs a cada execução (pega novos).
+  const newCursor = lastValid
   await db.from('crawler_sources')
     .update({ config: { ...cfg, id_cursor: newCursor } })
     .eq('id', src.id)
@@ -163,21 +165,17 @@ function mapBileto(ev: BiletoEvent): RawEvent | null {
 }
 
 export const biletoScraper: Scraper = async (ctx: ScrapeContext) => {
-  const { cidade, janelaDias } = ctx
+  const { cidade } = ctx
   const events = await runScan()
 
-  const agora = Date.now()
-  const limite = agora + janelaDias * 86_400_000
-  const out: RawEvent[] = []
-
   const semCidade = !cidade // fonte sem cidades -> não filtra por cidade
+  const out: RawEvent[] = []
   for (const { ev } of events) {
-    if ((ev.status ?? '') !== 'STARTED') continue
-    const cidadeEv = ev.venue?.locale?.city?.name ?? null
-    if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) continue
-    const dataIni = ev.presentations?.next_local_date_time ?? null
-    const t = dataIni ? Date.parse(dataIni) : NaN
-    if (isNaN(t) || t < agora - 86_400_000 || t > limite) continue
+    // Mantemos eventos passados também (não filtra por data).
+    if (!semCidade) {
+      const cidadeEv = ev.venue?.locale?.city?.name ?? null
+      if (!cidadeEv || norm(cidadeEv) !== norm(cidade)) continue
+    }
     const r = mapBileto(ev)
     if (r) out.push(r)
   }
