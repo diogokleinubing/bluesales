@@ -26,7 +26,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFilter?: string | null }) {
+export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFilter?: string[] | null }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -36,7 +36,8 @@ export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFi
   const cardsQ = kind === 'org' ? orgsQ : oppsQ
   const cards = useMemo(() => {
     const all = cardsQ.data ?? []
-    return statusFilter ? all.filter((c) => c.status === statusFilter) : all
+    if (!statusFilter || statusFilter.length === 0) return all
+    return all.filter((c) => c.status != null && statusFilter.includes(c.status))
   }, [cardsQ.data, statusFilter])
 
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -110,7 +111,7 @@ export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFi
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-2 pb-2">
         {columns.map((col) => (
           <Column
             key={col.id}
@@ -147,7 +148,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
-    <div className="flex w-64 shrink-0 flex-col rounded-lg border border-border bg-muted/30">
+    <div className="flex min-w-0 flex-1 basis-0 flex-col rounded-lg border border-border bg-muted/30">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <span

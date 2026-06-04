@@ -4,34 +4,47 @@ import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, CheckSquare, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { useCrmOrgId, type FunnelSlug } from '../hooks/useFunnelStages'
 import { STATUS_COMERCIAL } from '../hooks/useOrganizations'
 
-const ALL = '__all__'
-
 export function PainelComercial() {
   const [slug, setSlug] = useState<FunnelSlug>('relacionamento')
-  const [statusF, setStatusF] = useState<string>(ALL)
+  const [statuses, setStatuses] = useState<string[]>(['Eventual', 'Inativo'])
+
+  function toggleStatus(s: string) {
+    setStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {slug === 'relacionamento' && (
-            <Select value={statusF} onValueChange={setStatusF}>
-              <SelectTrigger className="h-9 w-48" size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os status</SelectItem>
-                {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              {STATUS_COMERCIAL.map((s) => {
+                const on = statuses.includes(s)
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleStatus(s)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      on
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary',
+                    )}
+                  >
+                    {s}
+                  </button>
+                )
+              })}
+            </div>
           )}
           <Tabs value={slug} onValueChange={(v) => setSlug(v as FunnelSlug)}>
             <TabsList>
@@ -42,7 +55,7 @@ export function PainelComercial() {
         </div>
       </div>
 
-      <KanbanBoard slug={slug} statusFilter={slug === 'relacionamento' && statusF !== ALL ? statusF : null} />
+      <KanbanBoard slug={slug} statusFilter={slug === 'relacionamento' ? statuses : null} />
 
       <Resumo />
     </div>
