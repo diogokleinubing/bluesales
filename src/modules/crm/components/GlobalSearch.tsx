@@ -30,9 +30,9 @@ export function GlobalSearch() {
 
   return (
     <div className="relative">
-      <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+      <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
-        className="h-9 bg-sidebar-accent/50 pl-8"
+        className="h-8 bg-sidebar-accent/50 pl-8 text-sm"
         placeholder="Buscar…"
         value={term}
         onChange={(e) => { setTerm(e.target.value); setOpen(true) }}

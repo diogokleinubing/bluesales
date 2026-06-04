@@ -70,6 +70,9 @@ export const LOCAL_TIPOS = [
 ] as const
 export type LocalTipo = (typeof LOCAL_TIPOS)[number]
 
+export const RELACAO_PLATAFORMA = ['Exclusividade', 'Homologada'] as const
+export type RelacaoPlataforma = (typeof RELACAO_PLATAFORMA)[number]
+
 export interface Local {
   id: string
   org_id: string
@@ -80,22 +83,71 @@ export interface Local {
   tipo: LocalTipo | null
 }
 
+export interface LocalPlatform {
+  platform_id: string
+  nome: string
+  tipo_relacao: RelacaoPlataforma | null
+}
+
+export interface LocalRow extends Local {
+  platforms: LocalPlatform[]
+}
+
 export function useLocais() {
   const orgId = useCrmOrgId()
   return useQuery({
     enabled: !!orgId,
     staleTime: 30 * 1000,
     queryKey: ['crm', 'locais', orgId],
-    queryFn: async (): Promise<Local[]> => {
-      const { data, error } = await supabase
-        .from('crm_locals')
-        .select('*')
-        .eq('org_id', orgId!)
-        .order('nome')
-      if (error) throw new Error(error.message)
-      return (data ?? []) as Local[]
+    queryFn: async (): Promise<LocalRow[]> => {
+      const [locs, lps] = await Promise.all([
+        supabase.from('crm_locals').select('*').eq('org_id', orgId!).order('nome'),
+        supabase
+          .from('local_platforms')
+          .select('local_id, platform_id, tipo_relacao, platforms(nome)')
+          .eq('org_id', orgId!),
+      ])
+      if (locs.error) throw new Error(locs.error.message)
+      const byLocal = new Map<string, LocalPlatform[]>()
+      for (const lp of lps.data ?? []) {
+        const arr = byLocal.get(lp.local_id) ?? []
+        arr.push({
+          platform_id: lp.platform_id,
+          nome: (lp.platforms as unknown as { nome: string } | null)?.nome ?? '?',
+          tipo_relacao: (lp.tipo_relacao as RelacaoPlataforma | null) ?? null,
+        })
+        byLocal.set(lp.local_id, arr)
+      }
+      return (locs.data ?? []).map((l) => ({
+        ...(l as Local),
+        platforms: byLocal.get(l.id) ?? [],
+      }))
     },
   })
+}
+
+/** Plataformas (com tipo de relação) de um local. */
+export async function fetchLocalPlatforms(localId: string): Promise<{ platform_id: string; tipo_relacao: RelacaoPlataforma | null }[]> {
+  const { data, error } = await supabase
+    .from('local_platforms')
+    .select('platform_id, tipo_relacao')
+    .eq('local_id', localId)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as { platform_id: string; tipo_relacao: RelacaoPlataforma | null }[]
+}
+
+/** Substitui as plataformas de um local pela lista fornecida. */
+export async function replaceLocalPlatforms(
+  orgId: string,
+  localId: string,
+  items: { platform_id: string; tipo_relacao: RelacaoPlataforma | null }[],
+) {
+  await supabase.from('local_platforms').delete().eq('local_id', localId)
+  if (items.length) {
+    const rows = items.map((i) => ({ org_id: orgId, local_id: localId, platform_id: i.platform_id, tipo_relacao: i.tipo_relacao }))
+    const { error } = await supabase.from('local_platforms').insert(rows)
+    if (error) throw new Error(error.message)
+  }
 }
 
 export async function saveLocal(
