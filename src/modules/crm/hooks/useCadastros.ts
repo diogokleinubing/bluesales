@@ -98,7 +98,11 @@ export function useLocais() {
   })
 }
 
-export async function saveLocal(orgId: string, l: Partial<Local> & { nome: string }, id?: string) {
+export async function saveLocal(
+  orgId: string,
+  l: Partial<Local> & { nome: string },
+  id?: string,
+): Promise<string> {
   const payload = {
     nome: l.nome,
     cidade: l.cidade ?? null,
@@ -106,10 +110,18 @@ export async function saveLocal(orgId: string, l: Partial<Local> & { nome: strin
     capacidade: l.capacidade ?? null,
     tipo: l.tipo ?? null,
   }
-  const { error } = id
-    ? await supabase.from('crm_locals').update(payload).eq('id', id)
-    : await supabase.from('crm_locals').insert({ org_id: orgId, ...payload })
+  if (id) {
+    const { error } = await supabase.from('crm_locals').update(payload).eq('id', id)
+    if (error) throw new Error(error.message)
+    return id
+  }
+  const { data, error } = await supabase
+    .from('crm_locals')
+    .insert({ org_id: orgId, ...payload })
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
+  return data.id as string
 }
 
 export async function deleteLocal(id: string) {
@@ -133,7 +145,7 @@ export interface CrmEvent {
   capacidade_estimada: number | null
   gmv_estimado: number | null
   segmento_id: string | null
-  status: EventoStatus
+  status: EventoStatus | null
   observacoes: string | null
   bi_event_codigo: string | null
   created_at: string
@@ -143,6 +155,13 @@ export interface CrmEventRow extends CrmEvent {
   local_nome: string | null
   organization_nome: string | null
   segmento_nome: string | null
+  datas: string[]
+}
+
+export interface CrmEventEdition {
+  id: string
+  data: string | null
+  platform_ids: string[]
 }
 
 export function useCrmEvents() {
@@ -152,23 +171,41 @@ export function useCrmEvents() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'events', orgId],
     queryFn: async (): Promise<CrmEventRow[]> => {
-      const { data, error } = await supabase
-        .from('crm_events')
-        .select('*, crm_locals(nome), organizations(nome), segments(nome)')
-        .eq('org_id', orgId!)
-        .order('data_prevista', { ascending: true, nullsFirst: false })
-      if (error) throw new Error(error.message)
-      return (data ?? []).map((e) => ({
+      const [evs, eds] = await Promise.all([
+        supabase
+          .from('crm_events')
+          .select('*, crm_locals(nome), organizations(nome), segments(nome)')
+          .eq('org_id', orgId!)
+          .order('nome'),
+        supabase
+          .from('crm_event_editions')
+          .select('crm_event_id, data')
+          .eq('org_id', orgId!),
+      ])
+      if (evs.error) throw new Error(evs.error.message)
+      const byEvent = new Map<string, string[]>()
+      for (const ed of eds.data ?? []) {
+        if (!ed.data) continue
+        const arr = byEvent.get(ed.crm_event_id) ?? []
+        arr.push(ed.data)
+        byEvent.set(ed.crm_event_id, arr)
+      }
+      return (evs.data ?? []).map((e) => ({
         ...(e as CrmEvent),
         local_nome: (e.crm_locals as unknown as { nome: string } | null)?.nome ?? null,
         organization_nome: (e.organizations as unknown as { nome: string } | null)?.nome ?? null,
         segmento_nome: (e.segments as unknown as { nome: string } | null)?.nome ?? null,
+        datas: (byEvent.get(e.id) ?? []).sort(),
       }))
     },
   })
 }
 
-export async function saveCrmEvent(orgId: string, e: Partial<CrmEvent> & { nome: string }, id?: string) {
+export async function saveCrmEvent(
+  orgId: string,
+  e: Partial<CrmEvent> & { nome: string },
+  id?: string,
+): Promise<string> {
   const payload = {
     nome: e.nome,
     data_prevista: e.data_prevista ?? null,
@@ -177,14 +214,49 @@ export async function saveCrmEvent(orgId: string, e: Partial<CrmEvent> & { nome:
     capacidade_estimada: e.capacidade_estimada ?? null,
     gmv_estimado: e.gmv_estimado ?? null,
     segmento_id: e.segmento_id ?? null,
-    status: e.status ?? 'Planejado',
+    status: e.status ?? null,
     observacoes: e.observacoes ?? null,
     bi_event_codigo: e.bi_event_codigo ?? null,
   }
-  const { error } = id
-    ? await supabase.from('crm_events').update(payload).eq('id', id)
-    : await supabase.from('crm_events').insert({ org_id: orgId, ...payload })
+  if (id) {
+    const { error } = await supabase.from('crm_events').update(payload).eq('id', id)
+    if (error) throw new Error(error.message)
+    return id
+  }
+  const { data, error } = await supabase
+    .from('crm_events')
+    .insert({ org_id: orgId, ...payload })
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
+  return data.id as string
+}
+
+/** Lê as edições (data + plataformas) de um evento. */
+export async function fetchEventEditions(eventId: string): Promise<CrmEventEdition[]> {
+  const { data, error } = await supabase
+    .from('crm_event_editions')
+    .select('id, data, platform_ids')
+    .eq('crm_event_id', eventId)
+    .order('data', { nullsFirst: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CrmEventEdition[]
+}
+
+/** Substitui todas as edições de um evento pela lista fornecida. */
+export async function replaceEventEditions(
+  orgId: string,
+  eventId: string,
+  edicoes: { data: string | null; platform_ids: string[] }[],
+) {
+  await supabase.from('crm_event_editions').delete().eq('crm_event_id', eventId)
+  const rows = edicoes
+    .filter((e) => e.data || e.platform_ids.length)
+    .map((e) => ({ org_id: orgId, crm_event_id: eventId, data: e.data, platform_ids: e.platform_ids }))
+  if (rows.length) {
+    const { error } = await supabase.from('crm_event_editions').insert(rows)
+    if (error) throw new Error(error.message)
+  }
 }
 
 export async function deleteCrmEvent(id: string) {

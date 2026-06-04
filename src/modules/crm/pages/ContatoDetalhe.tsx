@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,7 +20,6 @@ import {
 import { supabase } from '@/lib/supabase'
 import { StageSelector } from '../components/StageSelector'
 import { ActivityTimeline } from '../components/ActivityTimeline'
-import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
 import { TextField, TextareaField, FormActions, useDraft, toText } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -78,11 +77,6 @@ export function ContatoDetalhe() {
             </div>
 
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Objeções</CardTitle></CardHeader>
-                <CardContent><ObjecoesTags entityType="person" entityId={p.id} /></CardContent>
-              </Card>
-
               <Card>
                 <CardContent className="space-y-3 p-4">
                   <h3 className="text-sm font-medium">Atividades</h3>

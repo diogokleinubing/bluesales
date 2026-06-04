@@ -6,7 +6,6 @@ import { Plus, Search } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -32,6 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { useOrganizations, createOrganization } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
+import { ClasseBadge } from '../components/ClasseBadge'
 import { fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
@@ -150,11 +150,7 @@ export function Organizacoes() {
                   >
                     <TableCell className="font-medium">{o.nome}</TableCell>
                     <TableCell>
-                      {o.classificacao ? (
-                        <Badge variant="secondary">{o.classificacao}</Badge>
-                      ) : (
-                        '—'
-                      )}
+                      <ClasseBadge classe={o.classificacao} />
                     </TableCell>
                     <TableCell>
                       {[o.cidade, o.uf].filter(Boolean).join('/') || '—'}

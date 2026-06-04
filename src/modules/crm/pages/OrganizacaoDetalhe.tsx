@@ -2,12 +2,11 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Power } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +21,7 @@ import {
   TextField, SelectField, CurrencyField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
+import { ClasseBadge } from '../components/ClasseBadge'
 import {
   useOrganization,
   updateOrganization,
@@ -56,7 +56,7 @@ export function OrganizacaoDetalhe() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{org.nome}</h1>
-          {org.classificacao && <Badge variant="secondary">{org.classificacao}</Badge>}
+          {org.classificacao && <ClasseBadge classe={org.classificacao} />}
         </div>
         <DeleteEntityButton
           title="Excluir organização?"
@@ -162,18 +162,23 @@ function OrgContatos({ orgId }: { orgId: string }) {
   const [selected, setSelected] = useState<PersonPick | null>(null)
   const [papel, setPapel] = useState('')
 
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editPapel, setEditPapel] = useState('')
   const q = useQuery({
     queryKey: ['crm', 'org-contatos', orgId],
     queryFn: async () => {
       const { data } = await supabase
         .from('org_persons')
-        .select('id, papel, ativo, person_id, persons(nome, cargo, email, telefone)')
+        .select('id, papel, ativo, person_id, persons(nome, email, telefone, funnel_stages(nome, cor))')
         .eq('organization_id', orgId)
         .eq('ativo', true)
       return data ?? []
     },
   })
-  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'org-contatos', orgId] })
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['crm', 'org-contatos', orgId] })
+    qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
+  }
 
   async function vincular() {
     if (!selected || !tenantOrgId) return
@@ -191,11 +196,14 @@ function OrgContatos({ orgId }: { orgId: string }) {
     qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
   }
 
-  async function encerrar(id: string) {
-    const { error } = await supabase
-      .from('org_persons')
-      .update({ ativo: false, data_fim: new Date().toISOString().slice(0, 10) })
-      .eq('id', id)
+  async function salvarPapel(id: string) {
+    const { error } = await supabase.from('org_persons').update({ papel: editPapel.trim() || null }).eq('id', id)
+    if (error) return toast.error('Erro', { description: error.message })
+    setEditId(null); refresh()
+  }
+
+  async function remover(id: string) {
+    const { error } = await supabase.from('org_persons').delete().eq('id', id)
     if (error) return toast.error('Erro', { description: error.message })
     refresh()
   }
@@ -208,18 +216,67 @@ function OrgContatos({ orgId }: { orgId: string }) {
         <p className="text-sm text-muted-foreground">Nenhum contato vinculado.</p>
       )}
       {(q.data ?? []).map((r) => {
-        const p = r.persons as unknown as { nome: string; cargo: string | null; email: string | null; telefone: string | null } | null
+        const p = r.persons as unknown as {
+          nome: string; email: string | null; telefone: string | null
+          funnel_stages: { nome: string; cor: string | null } | null
+        } | null
+        const stage = p?.funnel_stages
+        const editing = editId === r.id
         return (
-          <div key={r.id} className="flex items-center justify-between rounded-md border border-border p-3">
-            <Link to={`/comercial/contatos/${r.person_id}`} className="hover:underline">
-              <div className="font-medium">{p?.nome}</div>
-              <div className="text-xs text-muted-foreground">
-                {[r.papel, p?.cargo, p?.email, p?.telefone].filter(Boolean).join(' · ') || '—'}
-              </div>
-            </Link>
-            <Button size="sm" variant="ghost" onClick={() => encerrar(r.id)} title="Encerrar vínculo">
-              <Power className="size-4" />
-            </Button>
+          <div key={r.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
+            <div className="min-w-0 flex-1">
+              <Link to={`/comercial/contatos/${r.person_id}`} className="inline-flex items-center gap-2 font-medium hover:underline">
+                {p?.nome}
+                {stage && (
+                  <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
+                    <span className="size-2 rounded-full" style={{ backgroundColor: stage.cor ?? 'var(--muted-foreground)' }} />
+                    {stage.nome}
+                  </span>
+                )}
+              </Link>
+              {editing ? (
+                <Input
+                  className="mt-1 h-8 max-w-56"
+                  placeholder="Papel"
+                  value={editPapel}
+                  autoFocus
+                  onChange={(e) => setEditPapel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') salvarPapel(r.id)
+                    if (e.key === 'Escape') setEditId(null)
+                  }}
+                />
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  {[r.papel, p?.email, p?.telefone].filter(Boolean).join(' · ') || '—'}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {editing ? (
+                <>
+                  <button onClick={() => salvarPapel(r.id)} className="text-muted-foreground hover:text-foreground" title="Salvar">
+                    <Check className="size-4" />
+                  </button>
+                  <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground" title="Cancelar">
+                    <X className="size-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setEditId(r.id); setEditPapel(r.papel ?? '') }}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Editar papel"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button onClick={() => remover(r.id)} className="text-muted-foreground hover:text-destructive" title="Remover relação">
+                    <Trash2 className="size-4" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )
       })}
