@@ -13,7 +13,7 @@ import { useOpportunities } from '../hooks/useOpportunities'
 import { useFunnel } from '../hooks/useFunnelStages'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import { ListView, TOOLBAR_TRIGGER } from '../components/ListView'
-import { fmtBRL, fmtDate } from '@/lib/format'
+import { fmtBRL } from '@/lib/format'
 
 const ALL = '__all__'
 
@@ -49,16 +49,16 @@ export function Oportunidades() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>Título</TableHead><TableHead>Organização</TableHead><TableHead>Estágio</TableHead>
-            <TableHead className="text-right">GMV est.</TableHead><TableHead className="text-right">Prob.</TableHead>
-            <TableHead>Responsável</TableHead><TableHead>Prev. fech.</TableHead>
+            <TableHead className="text-right">GMV est.</TableHead>
+            <TableHead>Responsável</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhuma oportunidade.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Nenhuma oportunidade.</TableCell></TableRow>
             ) : rows.map((o) => (
               <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/comercial/oportunidades/${o.id}`)}>
                 <TableCell className="font-medium">{o.titulo}</TableCell>
@@ -72,9 +72,7 @@ export function Oportunidades() {
                   ) : '—'}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{o.gmv_estimado != null ? fmtBRL(o.gmv_estimado) : '—'}</TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">{o.probabilidade != null ? `${o.probabilidade}%` : '—'}</TableCell>
                 <TableCell>{o.ownerNome ?? '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{o.data_prevista_fechamento ? fmtDate(new Date(o.data_prevista_fechamento)) : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

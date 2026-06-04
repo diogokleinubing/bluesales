@@ -18,6 +18,8 @@ import {
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useProfile } from '../hooks/useProfile'
 import { canEdit } from '../lib/permissions'
+import { useEventGmvOptions } from '../hooks/useCrmLookups'
+import { useGmvCopy } from '../hooks/useGmvCopy'
 import { useOpportunity, updateOpportunity, deleteOpportunity, type Opportunity } from '../hooks/useOpportunities'
 import { fmtBRL } from '@/lib/format'
 
@@ -141,21 +143,32 @@ function OppVisaoGeral({
 }) {
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
+  const eventOptions = useEventGmvOptions()
   const initial = useMemo(
     () => ({
       titulo: o.titulo ?? '',
       gmv_estimado: o.gmv_estimado != null ? String(Math.round(o.gmv_estimado)) : '',
+      crm_event_id: o.crm_event_id ?? '',
       owner_id: o.owner_id,
       observacoes: o.observacoes ?? '',
     }),
     [o],
   )
   const { draft, set, dirty, reset } = useDraft(initial, o.updated_at)
+  const { consider, dialog: gmvDialog } = useGmvCopy(draft.gmv_estimado, (v) => set('gmv_estimado', v))
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['crm', 'opportunity', o.id] })
     qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
     qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
+    qc.invalidateQueries({ queryKey: ['crm', 'events'] })
+  }
+
+  function onEventChange(id: string) {
+    set('crm_event_id', id)
+    if (!id) return
+    const e = eventOptions.data?.find((x) => x.id === id)
+    if (e) consider(e.gmv, `O evento "${e.nome}"`)
   }
 
   async function salvar() {
@@ -164,6 +177,7 @@ function OppVisaoGeral({
       await updateOpportunity(o.id, {
         titulo: draft.titulo.trim() || o.titulo,
         gmv_estimado: toNumber(draft.gmv_estimado),
+        crm_event_id: draft.crm_event_id || null,
         owner_id: draft.owner_id,
         observacoes: toText(draft.observacoes),
       })
@@ -193,6 +207,12 @@ function OppVisaoGeral({
         <Label className="text-xs text-muted-foreground">Estágio</Label>
         <StageSelector slug="oportunidade" value={o.stage_id} onChange={setStage} allowNone={false} className="h-8 w-full" />
       </div>
+      <SelectField
+        label="Evento"
+        value={draft.crm_event_id}
+        options={(eventOptions.data ?? []).map((e) => ({ value: e.id, label: e.nome }))}
+        onChange={onEventChange}
+      />
       <CurrencyField label="GMV estimado" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
       {isGestor && (
         <SelectField
@@ -205,6 +225,7 @@ function OppVisaoGeral({
       )}
       <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
+      {gmvDialog}
     </section>
   )
 }

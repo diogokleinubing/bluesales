@@ -7,6 +7,48 @@ export interface Lookup {
   nome: string
 }
 
+export interface GmvOption extends Lookup {
+  gmv: number | null
+}
+
+/** Organizações com GMV anual (para copiar para a oportunidade). */
+export function useOrgGmvOptions() {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'orgs-gmv', orgId],
+    queryFn: async (): Promise<GmvOption[]> => {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('id, nome, gmv_anual')
+        .eq('org_id', orgId!)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((o) => ({ id: o.id, nome: o.nome, gmv: o.gmv_anual }))
+    },
+  })
+}
+
+/** Eventos com GMV estimado (para vincular e copiar para a oportunidade). */
+export function useEventGmvOptions() {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'events-gmv', orgId],
+    queryFn: async (): Promise<GmvOption[]> => {
+      const { data, error } = await supabase
+        .from('crm_events')
+        .select('id, nome, gmv_estimado')
+        .eq('org_id', orgId!)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((e) => ({ id: e.id, nome: e.nome, gmv: e.gmv_estimado }))
+    },
+  })
+}
+
 export function useOrgOptions() {
   const orgId = useCrmOrgId()
   return useQuery({

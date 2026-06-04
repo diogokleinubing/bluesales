@@ -158,6 +158,7 @@ export interface CrmEventRow extends CrmEvent {
   organization_nome: string | null
   segmento_nome: string | null
   datas: string[]
+  oportunidade_status: string | null
 }
 
 export interface CrmEventEdition {
@@ -173,7 +174,7 @@ export function useCrmEvents() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'events', orgId],
     queryFn: async (): Promise<CrmEventRow[]> => {
-      const [evs, eds] = await Promise.all([
+      const [evs, eds, opps] = await Promise.all([
         supabase
           .from('crm_events')
           .select('*, crm_locals(nome), organizations(nome), segments(nome)')
@@ -183,6 +184,11 @@ export function useCrmEvents() {
           .from('crm_event_editions')
           .select('crm_event_id, data')
           .eq('org_id', orgId!),
+        supabase
+          .from('opportunities')
+          .select('crm_event_id, funnel_stages(nome)')
+          .eq('org_id', orgId!)
+          .not('crm_event_id', 'is', null),
       ])
       if (evs.error) throw new Error(evs.error.message)
       const byEvent = new Map<string, string[]>()
@@ -192,12 +198,19 @@ export function useCrmEvents() {
         arr.push(ed.data)
         byEvent.set(ed.crm_event_id, arr)
       }
+      const oppByEvent = new Map<string, string>()
+      for (const op of opps.data ?? []) {
+        if (!op.crm_event_id) continue
+        const st = (op.funnel_stages as unknown as { nome: string } | null)?.nome
+        if (st && !oppByEvent.has(op.crm_event_id)) oppByEvent.set(op.crm_event_id, st)
+      }
       return (evs.data ?? []).map((e) => ({
         ...(e as CrmEvent),
         local_nome: (e.crm_locals as unknown as { nome: string } | null)?.nome ?? null,
         organization_nome: (e.organizations as unknown as { nome: string } | null)?.nome ?? null,
         segmento_nome: (e.segments as unknown as { nome: string } | null)?.nome ?? null,
         datas: (byEvent.get(e.id) ?? []).sort(),
+        oportunidade_status: oppByEvent.get(e.id) ?? null,
       }))
     },
   })

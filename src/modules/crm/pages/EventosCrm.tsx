@@ -209,15 +209,15 @@ export function EventosCrm() {
           <TableHeader><TableRow>
             <TableHead>Nome</TableHead><TableHead>Datas</TableHead><TableHead>Local</TableHead>
             <TableHead>Organização</TableHead><TableHead className="text-right">GMV est.</TableHead>
-            <TableHead>Status</TableHead><TableHead className="w-20" />
+            <TableHead>Status</TableHead><TableHead>Oportunidade</TableHead><TableHead className="w-20" />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhum evento.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhum evento.</TableCell></TableRow>
             ) : rows.map((e) => (
               <TableRow key={e.id}>
                 <TableCell className="font-medium">{e.nome}</TableCell>
@@ -228,6 +228,7 @@ export function EventosCrm() {
                 <TableCell className="text-muted-foreground">{e.organization_nome ?? '—'}</TableCell>
                 <TableCell className="text-right">{e.gmv_estimado != null ? fmtBRL(e.gmv_estimado) : '—'}</TableCell>
                 <TableCell>{e.status ? <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'}>{e.status}</Badge> : '—'}</TableCell>
+                <TableCell>{e.oportunidade_status ? <Badge variant="outline">{e.oportunidade_status}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>
