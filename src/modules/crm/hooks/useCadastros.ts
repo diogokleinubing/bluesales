@@ -15,11 +15,14 @@ export interface Artist {
   genero_id: string | null
   escalao: Escalao | null
   organization_id: string | null
+  platform_id: string | null
+  observacoes: string | null
 }
 
 export interface ArtistRow extends Artist {
   genero_nome: string | null
   organization_nome: string | null
+  platform_nome: string | null
 }
 
 export function useArtists() {
@@ -31,7 +34,7 @@ export function useArtists() {
     queryFn: async (): Promise<ArtistRow[]> => {
       const { data, error } = await supabase
         .from('artists')
-        .select('*, generos(nome), organizations(nome)')
+        .select('*, generos(nome), organizations(nome), platforms(nome)')
         .eq('org_id', orgId!)
         .order('nome')
       if (error) throw new Error(error.message)
@@ -39,6 +42,7 @@ export function useArtists() {
         ...(a as Artist),
         genero_nome: (a.generos as unknown as { nome: string } | null)?.nome ?? null,
         organization_nome: (a.organizations as unknown as { nome: string } | null)?.nome ?? null,
+        platform_nome: (a.platforms as unknown as { nome: string } | null)?.nome ?? null,
       }))
     },
   })
@@ -50,6 +54,8 @@ export async function saveArtist(orgId: string, a: Partial<Artist> & { nome: str
     genero_id: a.genero_id ?? null,
     escalao: a.escalao ?? null,
     organization_id: a.organization_id ?? null,
+    platform_id: a.platform_id ?? null,
+    observacoes: a.observacoes ?? null,
   }
   const { error } = id
     ? await supabase.from('artists').update(payload).eq('id', id)
@@ -81,6 +87,7 @@ export interface Local {
   uf: string | null
   capacidade: number | null
   tipo: LocalTipo | null
+  observacoes: string | null
 }
 
 export interface LocalPlatform {
@@ -161,6 +168,7 @@ export async function saveLocal(
     uf: l.uf ?? null,
     capacidade: l.capacidade ?? null,
     tipo: l.tipo ?? null,
+    observacoes: l.observacoes ?? null,
   }
   if (id) {
     const { error } = await supabase.from('crm_locals').update(payload).eq('id', id)

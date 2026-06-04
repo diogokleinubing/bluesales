@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -23,10 +24,11 @@ import {
   type LocalRow, type LocalTipo, type RelacaoPlataforma,
 } from '../hooks/useCadastros'
 import { usePlatforms } from '../hooks/useConfigCadastros'
-import { ListView, ToolbarSearch } from '../components/ListView'
+import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
 import { fmtInt } from '@/lib/format'
 
 const NONE = '__none__'
+const ALL = '__all__'
 
 type PlatRel = { platform_id: string; tipo_relacao: RelacaoPlataforma | null }
 
@@ -40,6 +42,7 @@ export function Locais() {
     [platforms.data],
   )
   const [search, setSearch] = useState('')
+  const [platFilter, setPlatFilter] = useState<string>(ALL)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [nome, setNome] = useState('')
@@ -47,23 +50,26 @@ export function Locais() {
   const [uf, setUf] = useState('')
   const [capacidade, setCapacidade] = useState('')
   const [tipo, setTipo] = useState<string>(NONE)
+  const [obs, setObs] = useState('')
   const [plats, setPlats] = useState<PlatRel[]>([])
   const [newPlat, setNewPlat] = useState('')
   const [newRel, setNewRel] = useState<string>('Exclusividade')
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (data ?? []).filter((l) => !q || l.nome.toLowerCase().includes(q) || (l.cidade ?? '').toLowerCase().includes(q))
-  }, [data, search])
+    return (data ?? []).filter((l) =>
+      (!q || l.nome.toLowerCase().includes(q) || (l.cidade ?? '').toLowerCase().includes(q)) &&
+      (platFilter === ALL || l.platforms.some((p) => p.platform_id === platFilter)))
+  }, [data, search, platFilter])
 
   function openNew() {
-    setEditId(null); setNome(''); setCidade(''); setUf(''); setCapacidade(''); setTipo(NONE)
+    setEditId(null); setNome(''); setCidade(''); setUf(''); setCapacidade(''); setTipo(NONE); setObs('')
     setPlats([]); setNewPlat(''); setNewRel('Exclusividade'); setOpen(true)
   }
   async function openEdit(l: LocalRow) {
     setEditId(l.id); setNome(l.nome); setCidade(l.cidade ?? ''); setUf(l.uf ?? '')
     setCapacidade(l.capacidade != null ? String(l.capacidade) : ''); setTipo(l.tipo ?? NONE)
-    setNewPlat(''); setNewRel('Exclusividade'); setOpen(true)
+    setObs(l.observacoes ?? ''); setNewPlat(''); setNewRel('Exclusividade'); setOpen(true)
     try { setPlats(await fetchLocalPlatforms(l.id)) } catch { setPlats([]) }
   }
 
@@ -82,6 +88,7 @@ export function Locais() {
         uf: uf.trim() || null,
         capacidade: capacidade ? Number(capacidade) : null,
         tipo: tipo === NONE ? null : (tipo as LocalTipo),
+        observacoes: obs.trim() || null,
       }, editId ?? undefined)
       await replaceLocalPlatforms(orgId, id, plats)
       qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
@@ -104,7 +111,18 @@ export function Locais() {
         count={data ? String(data.length) : undefined}
         actions={<Button onClick={openNew}><Plus className="size-4" /> Novo local</Button>}
         footer={data ? `${rows.length} de ${data.length}` : undefined}
-        toolbar={<ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome ou cidade…" />}
+        toolbar={
+          <>
+            <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome ou cidade…" />
+            <Select value={platFilter} onValueChange={setPlatFilter}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-48`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todas as plataformas</SelectItem>
+                {(platforms.data ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        }
       >
         <Table>
           <TableHeader><TableRow>
@@ -128,27 +146,30 @@ export function Locais() {
                 <TableCell>
                   {l.platforms.length ? (
                     <div className="flex flex-wrap gap-1">
-                      {l.platforms.map((pl) => (
-                        <Badge
-                          key={pl.platform_id}
-                          variant="outline"
-                          className="gap-1.5"
-                          title={pl.tipo_relacao ?? undefined}
-                        >
-                          <span
-                            className="size-2 rounded-full"
-                            style={{
-                              backgroundColor:
-                                pl.tipo_relacao === 'Exclusividade'
-                                  ? 'var(--success)'
-                                  : pl.tipo_relacao === 'Homologada'
-                                    ? 'var(--warning)'
-                                    : 'var(--muted-foreground)',
-                            }}
-                          />
-                          {pl.nome}
-                        </Badge>
-                      ))}
+                      {l.platforms.map((pl) => {
+                        const isBt = pl.nome.toLowerCase() === 'blueticket'
+                        return (
+                          <Badge
+                            key={pl.platform_id}
+                            variant="outline"
+                            className={`gap-1.5 ${isBt ? 'border-sky-200 bg-sky-100 text-sky-700' : ''}`}
+                            title={pl.tipo_relacao ?? undefined}
+                          >
+                            <span
+                              className="size-2 rounded-full"
+                              style={{
+                                backgroundColor:
+                                  pl.tipo_relacao === 'Exclusividade'
+                                    ? 'var(--success)'
+                                    : pl.tipo_relacao === 'Homologada'
+                                      ? 'var(--warning)'
+                                      : 'var(--muted-foreground)',
+                              }}
+                            />
+                            {pl.nome}
+                          </Badge>
+                        )
+                      })}
                     </div>
                   ) : <span className="text-muted-foreground">—</span>}
                 </TableCell>
@@ -188,6 +209,8 @@ export function Locais() {
                   </SelectContent>
                 </Select></div>
             </div>
+            <div className="space-y-1"><Label>Observações</Label>
+              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} /></div>
 
             {/* Plataformas de ingressos */}
             <div className="space-y-2 rounded-md border border-border p-3">
