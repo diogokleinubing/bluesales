@@ -1,85 +1,163 @@
-// Fonte: Ingresse — API REST oficial pública (sem token).
-//   GET https://api.ingresse.com/event
-// Doc informal: aceita filtros de busca + paginação. Mapeamento defensivo:
-// qualquer campo ausente vira null e o evento ainda é coletado.
+// Fonte: Ingresse — API de busca pública (api-site.ingresse.com).
+//   GET /events/search?company_id=1&size=N&offset=K&order_by_date=true
+// Retorna a lista completa (paginada por offset) com título, sessão (data),
+// place (local/cidade/uf) e poster. Preço/organizador não vêm na busca.
 //
-// VALIDAR com dado real: confirmar nomes de parâmetros (state/city/term) e os
-// caminhos dos campos (venue, sessions, prices) com o JSON cru de 1 cidade.
+// Descoberta + dados na mesma chamada: avançamos um offset (config) cobrindo
+// toda a base aos poucos e pulamos os já coletados (dedupe por URL).
 
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
+import { adminClient } from '../../_shared/db.ts'
 
-const BASE = 'https://api.ingresse.com/event'
+const SEARCH = 'https://api-site.ingresse.com/events/search'
+const EMBED = 'https://api-embedstore.ingresse.com/api/v1/event'
+const UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
-interface IngresseEvent {
-  id?: number | string
-  title?: string
-  link?: string
-  slug?: string
-  poster?: string
-  description?: string
-  venue?: { name?: string; city?: string; state?: string }
-  producer?: { name?: string; id?: number | string }
-  sessions?: { date?: string; dateString?: string }[]
-  date?: { date?: string }
-  prices?: { value?: number }[]
-}
+// apikey pública do embed store da Ingresse — vem de um secret (nunca do git).
+const EMBED_KEY = Deno.env.get('INGRESSE_EMBED_APIKEY') ?? ''
 
-function precos(ev: IngresseEvent): { min: number | null; max: number | null } {
-  const vals = (ev.prices ?? [])
-    .map((p) => (typeof p.value === 'number' ? p.value : null))
-    .filter((v): v is number => v != null)
-  if (!vals.length) return { min: null, max: null }
-  return { min: Math.min(...vals), max: Math.max(...vals) }
-}
-
-export const ingresseScraper: Scraper = async ({ cidade, uf }) => {
-  const url = new URL(BASE)
-  url.searchParams.set('method', 'search')
-  url.searchParams.set('state', uf)
-  url.searchParams.set('city', cidade)
-  url.searchParams.set('size', '100')
-
-  // NOTA: api.ingresse.com responde 403 (Cloudflare) para requisições de
-  // servidor — esta fonte fica inativa até validarmos um endpoint alternativo
-  // ou movê-la para um worker com browser. Mantida defensiva: retorna [].
-  let payload: { data?: IngresseEvent[] }
+/** Faixa de preço (min–max) dos lotes de um evento (API embed store). */
+async function fetchPrecos(
+  id: number,
+): Promise<{ min: number | null; max: number | null; gratuito: boolean } | null> {
+  if (!EMBED_KEY) return null
   try {
-    const res = await fetch(url.toString(), {
-      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    const res = await fetch(`${EMBED}/${id}/session/0/tickets?apikey=${EMBED_KEY}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
     })
-    if (!res.ok) return []
+    if (!res.ok) return null
+    const j = await res.json() as {
+      detail?: { responseData?: { type?: { price?: number; hidden?: boolean }[] }[] }
+    }
+    const precos: number[] = []
+    for (const lot of j.detail?.responseData ?? []) {
+      for (const t of lot.type ?? []) {
+        if (t.hidden) continue
+        const p = Number(t.price)
+        if (Number.isFinite(p)) precos.push(p)
+      }
+    }
+    if (!precos.length) return null
+    const pos = precos.filter((p) => p > 0)
+    if (!pos.length) return { min: 0, max: 0, gratuito: true }
+    return { min: Math.min(...pos), max: Math.max(...pos), gratuito: false }
+  } catch (e) {
+    console.error('[ingresse] precos falhou', id, String(e))
+    return null
+  }
+}
+
+interface IngEvent {
+  id: number
+  slug?: string
+  title?: string
+  poster?: { large?: string; medium?: string; small?: string }
+  session?: { dateTime?: string }
+  place?: { name?: string; city?: string; state?: string }
+}
+
+let knownCache: Set<string> | null = null
+
+function urlDe(ev: IngEvent): string {
+  return ev.slug ? `https://www.ingresse.com/${ev.slug}` : `https://www.ingresse.com/evento/${ev.id}`
+}
+
+async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>> {
+  if (knownCache) return knownCache
+  const s = new Set<string>()
+  try {
+    const { data } = await db
+      .from('crawled_events')
+      .select('url_evento')
+      .ilike('url_evento', '%ingresse.com%')
+      .limit(100000)
+    for (const r of data ?? []) s.add(String(r.url_evento))
+  } catch (e) {
+    console.error('[ingresse] getKnown falhou', String(e))
+  }
+  knownCache = s
+  return s
+}
+
+async function getSource() {
+  const db = adminClient()
+  const { data } = await db.from('crawler_sources').select('id, config').eq('slug', 'ingresse').maybeSingle()
+  if (!data) return null
+  return { id: data.id, cfg: (data.config ?? {}) as Record<string, unknown> }
+}
+
+export const ingresseScraper: Scraper = async () => {
+  const db = adminClient()
+  const src = await getSource()
+  if (!src) return []
+  const cfg = src.cfg
+  const companyId = Number(cfg.company_id ?? 1)
+  const size = Number(cfg.scan ?? 500)
+  const offset = Number(cfg.offset ?? 0)
+
+  const url = new URL(SEARCH)
+  url.searchParams.set('company_id', String(companyId))
+  url.searchParams.set('title', '')
+  url.searchParams.set('size', String(size))
+  url.searchParams.set('offset', String(offset))
+  url.searchParams.set('order_by_date', 'true')
+
+  let payload: { events?: IngEvent[]; pagination?: { total?: number } }
+  try {
+    const res = await fetch(url.toString(), { headers: { 'User-Agent': UA, Accept: 'application/json' } })
+    if (!res.ok) {
+      console.error('[ingresse] busca HTTP', res.status)
+      return []
+    }
     payload = await res.json()
   } catch (e) {
-    console.error('[ingresse] fetch falhou', cidade, uf, String(e))
+    console.error('[ingresse] busca falhou', String(e))
     return []
   }
 
-  const list = Array.isArray(payload?.data) ? payload.data : []
+  const events = payload.events ?? []
+  const total = payload.pagination?.total ?? 0
+  const known = await getKnown(db)
+  const agora = Date.now()
+
   const out: RawEvent[] = []
-  for (const ev of list) {
-    const link =
-      ev.link ?? (ev.slug ? `https://www.ingresse.com/${ev.slug}` : null)
-    if (!link || !ev.title) continue
-    const { min, max } = precos(ev)
-    const dataInicio = ev.sessions?.[0]?.date ?? ev.date?.date ?? null
+  for (const ev of events) {
+    if (!ev.title) continue
+    const u = urlDe(ev)
+    if (known.has(u)) continue // pula os já coletados
+
+    // Preço só para eventos ativos (passados já encerraram a venda).
+    const dataIni = ev.session?.dateTime ?? null
+    const t = dataIni ? Date.parse(dataIni) : NaN
+    const ehPassado = !isNaN(t) && t < agora - 86_400_000
+    const precos = ehPassado ? null : await fetchPrecos(ev.id)
+
     out.push({
-      url_evento: link,
+      url_evento: u,
       nome: ev.title,
-      data_inicio: dataInicio,
+      data_inicio: dataIni,
       data_fim: null,
-      organizador_raw: ev.producer?.name ?? null,
+      organizador_raw: null,
       organizador_url: null,
-      local_raw: ev.venue?.name ?? null,
-      cidade: ev.venue?.city ?? cidade,
-      uf: ev.venue?.state ?? uf,
-      preco_min: min,
-      preco_max: max,
-      gratuito: max === 0,
+      local_raw: ev.place?.name ?? null,
+      cidade: ev.place?.city ?? null,
+      uf: ev.place?.state ?? null,
+      preco_min: precos?.min ?? null,
+      preco_max: precos?.max ?? null,
+      gratuito: precos?.gratuito ?? false,
       online: false,
-      imagem_url: ev.poster ?? null,
-      descricao: ev.description ?? null,
-      raw: ev,
+      categoria: null,
+      imagem_url: ev.poster?.large ?? ev.poster?.medium ?? null,
+      descricao: null,
+      raw: { id: ev.id, slug: ev.slug },
     })
   }
+
+  // Avança o offset (ao terminar a passada, recomeça).
+  const novoOffset = events.length < size || offset + size >= total ? 0 : offset + size
+  await db.from('crawler_sources').update({ config: { ...cfg, offset: novoOffset } }).eq('id', src.id)
+  console.log(`[ingresse] offset ${offset}->${novoOffset} total=${total} retornou=${events.length} novos=${out.length}`)
+
   return out
 }
