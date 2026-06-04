@@ -53,7 +53,7 @@ import { fmtBRL, fmtDate, fmtDelta } from '@/lib/format'
 
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
 
-type SortKey = 'nome' | 'gmvBase' | 'ytdBase' | 'ytd' | 'baseYtg' | 'forecast'
+type SortKey = 'nome' | 'gmvBase' | 'ytdBase' | 'ytd' | 'baseYtg' | 'forecast' | 'pct'
 
 function sortVal(it: ProvItem, k: SortKey): number | string {
   switch (k) {
@@ -63,6 +63,7 @@ function sortVal(it: ProvItem, k: SortKey): number | string {
     case 'ytd': return it.ytd
     case 'baseYtg': return it.baseYtg
     case 'forecast': return it.forecast
+    case 'pct': return it.gmvBase > 0 ? (it.forecast - it.gmvBase) / it.gmvBase : 0
   }
 }
 const MESES_LONGOS = [
@@ -407,6 +408,7 @@ export function ProvisionamentoPage() {
                     </Tooltip>
                   </SortHead>
                   <SortHead k="forecast" align="right">Previsão GMV {targetYear}</SortHead>
+                  <SortHead k="pct" align="right">Var. vs {baseYear}</SortHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -414,7 +416,7 @@ export function ProvisionamentoPage() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={8}>
                         <Skeleton className="h-5 w-full" />
                       </TableCell>
                     </TableRow>
@@ -473,9 +475,6 @@ export function ProvisionamentoPage() {
                           const d = drafts[it.itemKey]
                           const current = d != null && d !== '' ? Number(d) : it.forecast
                           const belowYtd = it.ytd > 0 && current < it.ytd
-                          const defined = d != null && d !== '' ? Number(d) : it.forecastManual
-                          const showPct = defined != null && it.gmvBase > 0
-                          const up = showPct && (defined as number) >= it.gmvBase
                           return (
                             <div className="flex items-center justify-end gap-1">
                               <div className="relative inline-block">
@@ -484,7 +483,7 @@ export function ProvisionamentoPage() {
                                 </span>
                                 <Input
                                   inputMode="numeric"
-                                  className="h-8 w-36 pl-8 text-right tabular-nums"
+                                  className="h-8 w-[124px] pl-8 text-right tabular-nums"
                                   value={grpDigits(
                                     drafts[it.itemKey] ??
                                       (it.forecastManual != null
@@ -505,17 +504,6 @@ export function ProvisionamentoPage() {
                                   }}
                                 />
                               </div>
-                              {showPct && (
-                                <span
-                                  className={cn(
-                                    'w-14 text-left text-xs tabular-nums',
-                                    up ? 'text-[var(--success)]' : 'text-[var(--destructive)]',
-                                  )}
-                                  title={`Variação vs ${baseYear} (${fmtBRL(it.gmvBase)})`}
-                                >
-                                  {fmtDelta(((defined as number) - it.gmvBase) / it.gmvBase)}
-                                </span>
-                              )}
                               {belowYtd && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -527,6 +515,20 @@ export function ProvisionamentoPage() {
                                 </Tooltip>
                               )}
                             </div>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {(() => {
+                          const d = drafts[it.itemKey]
+                          const defined = d != null && d !== '' ? Number(d) : it.forecastManual
+                          if (defined == null || it.gmvBase <= 0)
+                            return <span className="text-muted-foreground">—</span>
+                          const up = defined >= it.gmvBase
+                          return (
+                            <span className={up ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}>
+                              {fmtDelta((defined - it.gmvBase) / it.gmvBase, 0)}
+                            </span>
                           )
                         })()}
                       </TableCell>
