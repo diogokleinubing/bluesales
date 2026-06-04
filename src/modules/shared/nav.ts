@@ -51,33 +51,6 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   {
-    id: 'bi',
-    label: 'BI',
-    icon: BarChart3,
-    home: '/bi/dashboard',
-    groups: [
-      {
-        title: 'Visão geral',
-        items: [
-          { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange, requires: 'gestor' },
-          { to: '/bi/analises', label: 'Análises', icon: Layers },
-          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard },
-          { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp },
-          { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet },
-        ],
-      },
-      {
-        title: 'Configuração',
-        items: [
-          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal },
-          { to: '/bi/importacao', label: 'Importação', icon: Upload },
-          { to: '/bi/base', label: 'Base de dados', icon: Database, requires: 'admin' },
-        ],
-      },
-    ],
-  },
-  {
     id: 'comercial',
     label: 'Comercial',
     icon: Briefcase,
@@ -109,6 +82,33 @@ export const MODULES: ModuleDef[] = [
           { to: '/comercial/configuracao/plataformas', label: 'Plataformas', icon: Layers },
           { to: '/comercial/configuracao/objecoes', label: 'Objeções', icon: ShieldQuestion },
           { to: '/bi/regras', label: 'Segmentos', icon: SlidersHorizontal },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'bi',
+    label: 'BI',
+    icon: BarChart3,
+    home: '/bi/dashboard',
+    groups: [
+      {
+        title: 'Visão geral',
+        items: [
+          { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange, requires: 'gestor' },
+          { to: '/bi/analises', label: 'Análises', icon: Layers },
+          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard },
+          { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp },
+          { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet },
+        ],
+      },
+      {
+        title: 'Configuração',
+        items: [
+          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal },
+          { to: '/bi/importacao', label: 'Importação', icon: Upload },
+          { to: '/bi/base', label: 'Base de dados', icon: Database, requires: 'admin' },
         ],
       },
     ],

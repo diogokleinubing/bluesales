@@ -88,7 +88,7 @@ const ConfiguracoesPage = lazy(() =>
   import('@/modules/settings/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })),
 )
 
-/** Redireciona a raiz para a última tela visitada (fallback /bi/dashboard). */
+/** Redireciona a raiz para a última tela visitada (fallback /comercial/painel). */
 function RootRedirect() {
   return <Navigate to={lastRoute()} replace />
 }

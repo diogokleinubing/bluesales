@@ -25,7 +25,7 @@ export function lastRoute(): string {
   } catch {
     // ignore
   }
-  return getModule('bi').home
+  return getModule('comercial').home
 }
 
 /** Última rota visitada de um módulo, ou a home dele. */
