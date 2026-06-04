@@ -378,7 +378,23 @@ export function ProvisionamentoPage() {
                         <GmvValue value={it.gmvBase} onOpen={it.isOutros || it.isNovo ? undefined : () => openBase(it)} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        <GmvValue value={it.ytd} onOpen={it.isOutros || it.isNovo ? undefined : () => openYtd(it)} />
+                        <GmvValue
+                          value={it.ytd}
+                          onOpen={it.isOutros || it.isNovo ? undefined : () => openYtd(it)}
+                          before={
+                            it.gmvBase - it.baseYtg > 0 &&
+                            it.ytd < 0.5 * (it.gmvBase - it.baseYtg) ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="size-4 text-[var(--destructive)]" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Ritmo do YTD abaixo de 50% do mesmo período do ano anterior
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null
+                          }
+                        />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <GmvValue value={it.baseYtg} muted onOpen={it.isOutros || it.isNovo ? undefined : () => openYtg(it)} />
@@ -403,7 +419,7 @@ export function ProvisionamentoPage() {
                               {belowYtd && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <AlertTriangle className="size-4 text-[var(--warning)]" />
+                                    <AlertTriangle className="size-4 text-[var(--success)]" />
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     Previsão abaixo do YTD ({fmtBRL(it.ytd)})
@@ -517,14 +533,16 @@ export function ProvisionamentoPage() {
 
 /** Valor de GMV com lupa (aparece no hover) para abrir o detalhamento. */
 function GmvValue({
-  value, onOpen, muted,
+  value, onOpen, muted, before,
 }: {
   value: number
   onOpen?: () => void
   muted?: boolean
+  before?: React.ReactNode
 }) {
   return (
     <span className={`group inline-flex items-center justify-end gap-1 ${muted ? 'text-muted-foreground' : ''}`}>
+      {before}
       {onOpen && (
         <button
           onClick={onOpen}
