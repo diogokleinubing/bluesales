@@ -6,6 +6,7 @@ import {
 } from '@/components/ui/table'
 import { fmtDate } from '@/lib/format'
 import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
+import { EventosDialog } from '../components/EventosDialog'
 import { useCrawledEvents } from '../hooks/usePesquisa'
 
 interface Agg {
@@ -20,6 +21,17 @@ interface Agg {
 export function LocaisMercado() {
   const { data, isLoading } = useCrawledEvents()
   const [search, setSearch] = useState('')
+  const [sel, setSel] = useState<Agg | null>(null)
+
+  const eventosDoSel = useMemo(() => {
+    if (!sel) return []
+    return (data ?? []).filter((e) => {
+      if (e.ignorado) return false
+      const nome = (e.local_raw ?? '').trim().toLowerCase()
+      const cidade = e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : null
+      return nome === sel.nome.toLowerCase() && cidade === sel.cidade
+    })
+  }, [data, sel])
 
   const aggregated = useMemo(() => {
     const map = new Map<string, Agg>()
@@ -70,7 +82,7 @@ export function LocaisMercado() {
               Nenhum local detectado ainda.
             </TableCell></TableRow>
           ) : rows.map((a) => (
-            <TableRow key={a.key}>
+            <TableRow key={a.key} className="cursor-pointer" onClick={() => setSel(a)}>
               <TableCell className="font-medium">{a.nome}</TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">{a.cidade ?? '—'}</TableCell>
               <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
@@ -80,6 +92,14 @@ export function LocaisMercado() {
           ))}
         </TableBody>
       </Table>
+
+      <EventosDialog
+        open={!!sel}
+        onOpenChange={(o) => !o && setSel(null)}
+        titulo={sel?.nome ?? ''}
+        subtitulo={[sel?.cidade, `${eventosDoSel.length} evento(s) capturado(s)`].filter(Boolean).join(' · ')}
+        eventos={eventosDoSel}
+      />
     </ListView>
   )
 }

@@ -6,6 +6,7 @@ import {
 } from '@/components/ui/table'
 import { fmtDate } from '@/lib/format'
 import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
+import { EventosDialog } from '../components/EventosDialog'
 import { useCrawledEvents } from '../hooks/usePesquisa'
 
 interface Agg {
@@ -19,6 +20,12 @@ interface Agg {
 export function OrganizadoresMercado() {
   const { data, isLoading } = useCrawledEvents()
   const [search, setSearch] = useState('')
+  const [sel, setSel] = useState<string | null>(null)
+
+  const eventosDoSel = useMemo(
+    () => (sel ? (data ?? []).filter((e) => (e.organizador_raw ?? '').trim() === sel && !e.ignorado) : []),
+    [data, sel],
+  )
 
   const aggregated = useMemo(() => {
     const map = new Map<string, Agg>()
@@ -68,7 +75,7 @@ export function OrganizadoresMercado() {
               Nenhum organizador detectado ainda.
             </TableCell></TableRow>
           ) : rows.map((a) => (
-            <TableRow key={a.nome}>
+            <TableRow key={a.nome} className="cursor-pointer" onClick={() => setSel(a.nome)}>
               <TableCell className="font-medium">{a.nome}</TableCell>
               <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
               <TableCell className="text-muted-foreground">{[...a.cidades].slice(0, 3).join(', ')}{a.cidades.size > 3 ? ` +${a.cidades.size - 3}` : ''}</TableCell>
@@ -78,6 +85,14 @@ export function OrganizadoresMercado() {
           ))}
         </TableBody>
       </Table>
+
+      <EventosDialog
+        open={!!sel}
+        onOpenChange={(o) => !o && setSel(null)}
+        titulo={sel ?? ''}
+        subtitulo={`${eventosDoSel.length} evento(s) capturado(s)`}
+        eventos={eventosDoSel}
+      />
     </ListView>
   )
 }

@@ -18,9 +18,10 @@
 
 import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
 import { norm } from '../../_shared/classify.ts'
+import { adminClient } from '../../_shared/db.ts'
 
 const SITEMAP = 'https://www.sympla.com.br/sitemap-eventos.xml'
-const MAX_POR_CIDADE = 8
+const MAX_POR_CIDADE = 12
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -31,6 +32,39 @@ const jar = new Map<string, string>()
 
 // Memoiza a lista de URLs do sitemap durante a invocação (fetch de ~5 MB 1x).
 let sitemapCache: string[] | null = null
+
+// IDs de eventos Sympla já coletados — "pular para sempre" (não reentrar nos
+// mesmos eventos). Memoizado durante a invocação.
+let knownIdsCache: Set<string> | null = null
+
+/** Extrai o id do evento da URL do sitemap (…/<slug>__<id>). */
+function idDaUrl(u: string): string | null {
+  const m = u.match(/__(\d+)(?:[/?#]|$)/)
+  return m ? m[1] : null
+}
+
+async function getKnownIds(): Promise<Set<string>> {
+  if (knownIdsCache) return knownIdsCache
+  const s = new Set<string>()
+  try {
+    const db = adminClient()
+    const { data } = await db
+      .from('crawled_events')
+      .select('raw, url_evento')
+      .ilike('url_evento', '%sympla.com.br%')
+      .limit(100000)
+    for (const r of data ?? []) {
+      const rawId = (r.raw as { id?: number | string } | null)?.id
+      if (rawId != null) s.add(String(rawId))
+      const urlId = idDaUrl(String(r.url_evento ?? ''))
+      if (urlId) s.add(urlId)
+    }
+  } catch (e) {
+    console.error('[sympla] getKnownIds falhou', String(e))
+  }
+  knownIdsCache = s
+  return s
+}
 
 function readSetCookies(res: Response): string[] {
   const h = res.headers as unknown as { getSetCookie?: () => string[] }
@@ -127,12 +161,17 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
   const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
 
   const urls = await getSitemapUrls()
+  const known = await getKnownIds()
   const candidatas = urls
     .filter((u) => u.includes(cidadeToken) && !/online/i.test(u))
+    .filter((u) => {
+      const id = idDaUrl(u) // pula para sempre eventos já coletados
+      return !id || !known.has(id)
+    })
     .slice(0, MAX_POR_CIDADE)
 
   if (urls.length && candidatas.length === MAX_POR_CIDADE) {
-    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} URLs por execução atingido (cobertura parcial)`) // sem corte silencioso
+    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} novos por execução (restante segue na próxima)`) // sem corte silencioso
   }
 
   const agora = Date.now()

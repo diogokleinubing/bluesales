@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink, Ban, RotateCcw, ArrowUpRight, Check } from 'lucide-react'
+import { Ban, RotateCcw, ArrowUpRight, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,6 +15,7 @@ import {
 import { fmtBRL, fmtDate } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
+import { CopyUrlButton } from '../components/CopyUrlButton'
 import {
   useCrawledEvents, useCrawlerSources, usePesquisaOrgId,
   setEventoIgnorado, promoverEvento, type CrawledEventRow,
@@ -137,7 +138,7 @@ export function EventosCapturados() {
           <TableHead>Cidade</TableHead>
           <TableHead className="text-right">Preço</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead className="w-24" />
+          <TableHead className="w-32" />
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
@@ -153,17 +154,10 @@ export function EventosCapturados() {
             return (
               <TableRow
                 key={e.id}
-                className={`cursor-pointer ${e.ignorado ? 'opacity-50' : ''}`}
-                onDoubleClick={() => window.open(e.url_evento, '_blank', 'noreferrer')}
+                className={e.ignorado ? 'opacity-50' : ''}
               >
                 <TableCell className="max-w-[280px]">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <span className="truncate">{e.nome}</span>
-                    <a href={e.url_evento} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()}
-                      className="shrink-0 text-muted-foreground hover:text-foreground">
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  </div>
+                  <div className="truncate font-medium">{e.nome}</div>
                   {e.organizador_raw && (
                     <div className="truncate text-xs text-muted-foreground">{e.organizador_raw}</div>
                   )}
@@ -184,6 +178,7 @@ export function EventosCapturados() {
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
+                    <CopyUrlButton url={e.url_evento} />
                     {!promovido && (
                       <Button size="sm" variant="ghost" className="h-7 px-2" disabled={busy === e.id}
                         title="Promover ao Comercial" onClick={() => onPromover(e)}>
