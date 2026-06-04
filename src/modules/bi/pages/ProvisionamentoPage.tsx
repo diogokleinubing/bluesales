@@ -49,7 +49,7 @@ import {
 } from '../lib/prov-api'
 import type { ProvisioningRow, Status } from '@/lib/database.types'
 import { cn } from '@/lib/utils'
-import { fmtBRL, fmtDate, fmtDelta } from '@/lib/format'
+import { fmtBRL0, fmtDate, fmtDelta } from '@/lib/format'
 
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
 
@@ -380,11 +380,11 @@ export function ProvisionamentoPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KpiCard label={`GMV base ${baseYear}`} value={fmtBRL(totals.base)} loading={loading} />
-        <KpiCard label={`Previsão ${targetYear}`} value={fmtBRL(totalForecast)} loading={loading} />
+        <KpiCard label={`GMV base ${baseYear}`} value={fmtBRL0(totals.base)} loading={loading} />
+        <KpiCard label={`Previsão ${targetYear}`} value={fmtBRL0(totalForecast)} loading={loading} />
         <KpiCard
           label="Variação"
-          value={fmtBRL(totalForecast - totals.base)}
+          value={fmtBRL0(totalForecast - totals.base)}
           loading={loading}
         />
       </div>
@@ -510,7 +510,7 @@ export function ProvisionamentoPage() {
                                     <AlertTriangle className="size-4 text-[var(--success)]" />
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    Previsão abaixo do YTD ({fmtBRL(it.ytd)})
+                                    Previsão abaixo do YTD ({fmtBRL0(it.ytd)})
                                   </TooltipContent>
                                 </Tooltip>
                               )}
@@ -582,7 +582,7 @@ export function ProvisionamentoPage() {
                         {ev.data_evento ? fmtDate(ev.data_evento) : '—'}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(ev.gmv)}
+                        {fmtBRL0(ev.gmv)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -591,7 +591,7 @@ export function ProvisionamentoPage() {
                       Total ({(breakdownQuery.data ?? []).length})
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fmtBRL(
+                      {fmtBRL0(
                         (breakdownQuery.data ?? []).reduce((a, e) => a + Number(e.gmv), 0),
                       )}
                     </TableCell>
@@ -629,7 +629,7 @@ function GmvValue({
           <Search className="size-3.5" />
         </button>
       )}
-      {fmtBRL(value)}
+      {fmtBRL0(value)}
       {after}
     </span>
   )

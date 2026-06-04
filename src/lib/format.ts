@@ -14,6 +14,18 @@ export function fmtBRL(value: number | null | undefined): string {
   return brl.format(Number(value ?? 0))
 }
 
+const brl0 = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+
+/** R$ 1.235 (sem centavos) */
+export function fmtBRL0(value: number | null | undefined): string {
+  return brl0.format(Number(value ?? 0))
+}
+
 /** Forma compacta: "R$ 1,2M", "R$ 340,0K", "R$ 980". */
 export function fmtShort(value: number | null | undefined): string {
   const n = Number(value ?? 0)
