@@ -19,6 +19,20 @@ const BATCH = 10
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
+// A API do Bileto exige o header x-api-key (chave pública do front). Vem de um
+// secret da Edge Function (Supabase → Edge Functions → Secrets), nunca do git.
+const X_API_KEY = Deno.env.get('BILETO_API_KEY') ?? ''
+
+function biletoHeaders(): Record<string, string> {
+  return {
+    'User-Agent': UA,
+    Accept: 'application/json',
+    'x-api-key': X_API_KEY,
+    Origin: 'https://bileto.sympla.com.br',
+    Referer: 'https://bileto.sympla.com.br/',
+  }
+}
+
 // venue.locale.state.name vem por extenso ("São Paulo") — mapeia para a UF.
 const UF_POR_ESTADO: Record<string, string> = {
   acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA',
@@ -44,9 +58,7 @@ let knownCache: Set<string> | null = null
 
 async function fetchBileto(id: number): Promise<BiletoEvent | null> {
   try {
-    const res = await fetch(`${API}/${id}`, {
-      headers: { 'User-Agent': UA, Accept: 'application/json' },
-    })
+    const res = await fetch(`${API}/${id}`, { headers: biletoHeaders() })
     if (!res.ok) return null
     const j = await res.json()
     const ev = j?.data

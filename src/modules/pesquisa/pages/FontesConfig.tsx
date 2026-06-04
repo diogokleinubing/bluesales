@@ -53,12 +53,14 @@ export function FontesConfig() {
   async function executar(slug?: string) {
     setRunning(slug ?? '__all__')
     try {
-      const r = await runCrawler(slug) as { resumo?: { fonte: string; novos: number; vistos: number }[] }
-      const total = (r.resumo ?? []).reduce((s, x) => s + (x.novos ?? 0), 0)
-      qc.invalidateQueries({ queryKey: ['pesquisa'] })
-      toast.success('Coleta concluída', { description: `${total} novo(s) evento(s).` })
+      await runCrawler(slug)
+      toast.success('Coleta iniciada', {
+        description: 'Roda em segundo plano. Acompanhe em Execuções.',
+      })
+      // Dá um tempo e atualiza as listas (a coleta termina em segundo plano).
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['pesquisa'] }), 4000)
     } catch (e) {
-      toast.error('Falha na coleta', { description: (e as Error).message })
+      toast.error('Falha ao iniciar', { description: (e as Error).message })
     } finally { setRunning(null) }
   }
 

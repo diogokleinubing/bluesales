@@ -207,11 +207,24 @@ Deno.serve(async (req) => {
     .eq('ativo', true)
   const ignoreRules = (rules ?? []) as IgnoreRule[]
 
-  const resumo: Record<string, unknown>[] = []
-  for (const s of (sources ?? []) as SourceRow[]) {
-    const r = await runSource(db, s, ignoreRules, auth.disparadoPor)
-    resumo.push({ fonte: s.slug, ...r })
-  }
+  // Marca como erro runs antigas presas em "running" (timeout anterior).
+  const dezMinAtras = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  await db.from('crawler_runs')
+    .update({ status: 'error', erro_msg: 'interrompida (timeout)', finalizado_em: new Date().toISOString() })
+    .eq('org_id', org.id).eq('status', 'running').lt('iniciado_em', dezMinAtras)
 
-  return json({ ok: true, disparado_por: auth.disparadoPor, resumo })
+  // Coleta em segundo plano: responde já e processa depois (evita timeout do
+  // invoke). A run/UI refletem o resultado quando termina (tela Execuções).
+  const work = (async () => {
+    for (const s of (sources ?? []) as SourceRow[]) {
+      try { await runSource(db, s, ignoreRules, auth.disparadoPor) }
+      catch (e) { console.error('[crawler-run] fonte', s.slug, String(e)) }
+    }
+  })()
+
+  const er = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime
+  if (er?.waitUntil) er.waitUntil(work)
+  else await work // fallback local
+
+  return json({ ok: true, disparado_por: auth.disparadoPor, iniciado: true })
 })
