@@ -146,9 +146,8 @@ export function EventosPage() {
         (a, e) => ({
           vendas: a.vendas + e.vendas,
           gmv: a.gmv + e.gmv,
-          gmvOnline: a.gmvOnline + e.gmvOnline,
         }),
-        { vendas: 0, gmv: 0, gmvOnline: 0 },
+        { vendas: 0, gmv: 0 },
       ),
     [events],
   )
@@ -189,8 +188,7 @@ export function EventosPage() {
                     Cidade: e.cidade ?? '',
                     UF: e.uf ?? '',
                     Vendas: e.vendas,
-                    'GMV Total': e.gmv,
-                    'GMV On-Line': e.gmvOnline,
+                    GMV: e.gmv,
                   })),
                 },
               ])
@@ -276,8 +274,7 @@ export function EventosPage() {
                   <TableHead>Organizador</TableHead>
                   <TableHead>UF</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
-                  <TableHead className="text-right">GMV Total</TableHead>
-                  <TableHead className="text-right">GMV On-Line</TableHead>
+                  <TableHead className="text-right">GMV</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -286,7 +283,7 @@ export function EventosPage() {
                 ) : events.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={9}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Nenhum evento encontrado.
@@ -337,9 +334,6 @@ export function EventosPage() {
                         <TableCell className="text-right tabular-nums">
                           {fmtBRL(e.gmv)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtBRL(e.gmvOnline)}
-                        </TableCell>
                       </TableRow>
                     )
                   })
@@ -355,9 +349,6 @@ export function EventosPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtBRL(totals.gmv)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtBRL(totals.gmvOnline)}
                     </TableCell>
                   </TableRow>
                 )}

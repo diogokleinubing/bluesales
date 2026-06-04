@@ -63,9 +63,8 @@ export function RankingView({
   const navigate = useNavigate()
   const totalGmv = groups.reduce((a, g) => a + g.gmv, 0)
   const totalVendas = groups.reduce((a, g) => a + g.vendas, 0)
-  const totalGmvOnline = groups.reduce((a, g) => a + g.gmvOnline, 0)
   const totalGmvPrev = groups.reduce((a, g) => a + (g.gmvPrev ?? 0), 0)
-  const cols = 5 + (compare ? 2 : 0) + (crmLink ? 1 : 0)
+  const cols = 4 + (compare ? 2 : 0) + (crmLink ? 1 : 0)
 
   function drill(label: string) {
     if (label && label !== '—')
@@ -108,8 +107,7 @@ export function RankingView({
                 <TableRow>
                   <TableHead>{title}</TableHead>
                   <TableHead className="text-right">Vendas</TableHead>
-                  <TableHead className="text-right">GMV Total</TableHead>
-                  <TableHead className="text-right">GMV On-Line</TableHead>
+                  <TableHead className="text-right">GMV</TableHead>
                   <TableHead className="text-right">% do total</TableHead>
                   {compare && (
                     <>
@@ -152,9 +150,6 @@ export function RankingView({
                       <TableCell className="text-right tabular-nums">
                         {fmtBRL(g.gmv)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtBRL(g.gmvOnline)}
-                      </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {fmtPct(totalGmv > 0 ? g.gmv / totalGmv : 0)}
                       </TableCell>
@@ -189,9 +184,6 @@ export function RankingView({
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtBRL(totalGmv)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtBRL(totalGmvOnline)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {fmtPct(1)}
