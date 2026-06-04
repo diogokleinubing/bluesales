@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,10 +27,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { KpiCard } from '../components/KpiCard'
 import { useDefaultOrg } from '@/lib/org'
 import { useControls } from '@/modules/shared/controls-context'
-import { biProvStats, biMonthsElapsed } from '../lib/rpc'
+import { biProvStats, biMonthsElapsed, biProvOrgEvents } from '../lib/rpc'
 import {
   buildWaterfall,
   OUTROS_KEY,
@@ -43,7 +49,7 @@ import {
   upsertProvisioning,
 } from '../lib/prov-api'
 import type { ProvisioningRow, Status } from '@/lib/database.types'
-import { fmtBRL, fmtInt } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 
 const STATUS_CYCLE: Status[] = ['Ativo', 'Risco', 'Perdido', 'Novo']
 const STATUS_COLOR: Record<Status, string> = {
@@ -72,6 +78,27 @@ export function ProvisionamentoPage() {
   const baseYear = year - 1
   const [topN, setTopN] = useState(20)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [breakdown, setBreakdown] = useState<{
+    organizador: string
+    year: number
+    monthMin: number
+    monthMax: number
+    title: string
+  } | null>(null)
+
+  const breakdownQuery = useQuery({
+    enabled: !!orgId && !!breakdown,
+    staleTime: 5 * 60 * 1000,
+    queryKey: [
+      'bi', 'prov-events', orgId, breakdown?.organizador, breakdown?.year,
+      breakdown?.monthMin, breakdown?.monthMax, dateBase, pdv,
+    ],
+    queryFn: () =>
+      biProvOrgEvents(
+        orgId!, breakdown!.organizador, breakdown!.year,
+        breakdown!.monthMin, breakdown!.monthMax, dateBase, pdv,
+      ),
+  })
 
   const provQuery = useQuery({
     enabled: !!orgId,
@@ -108,6 +135,16 @@ export function ProvisionamentoPage() {
   const monthsElapsed = statsQuery.data?.monthsElapsed ?? 12
   const ytgTooltip = `${baseYear} de ${MESES_LONGOS[Math.min(monthsElapsed, 11)]} a Dezembro`
 
+  function openBase(it: ProvItem) {
+    setBreakdown({ organizador: it.itemKey, year: baseYear, monthMin: 1, monthMax: 12, title: `${it.nome} · GMV ${baseYear}` })
+  }
+  function openYtd(it: ProvItem) {
+    setBreakdown({ organizador: it.itemKey, year: targetYear, monthMin: 1, monthMax: monthsElapsed, title: `${it.nome} · YTD ${targetYear}` })
+  }
+  function openYtg(it: ProvItem) {
+    setBreakdown({ organizador: it.itemKey, year: baseYear, monthMin: monthsElapsed + 1, monthMax: 12, title: `${it.nome} · ${baseYear} YTG` })
+  }
+
   const effectiveTop = topN === 0 ? stats.length : topN
 
   const items = useMemo<ProvItem[]>(() => {
@@ -116,6 +153,7 @@ export function ProvisionamentoPage() {
 
     const orgItems: ProvItem[] = top.map((s) => {
       const p = persisted.get(s.organizador)
+      const manual = p?.forecast ?? null
       return {
         itemKey: s.organizador,
         nome: s.organizador,
@@ -123,7 +161,8 @@ export function ProvisionamentoPage() {
         gmvBase: s.gmvBase,
         ytd: s.ytd,
         baseYtg: s.baseYtg,
-        forecast: p?.forecast ?? s.ytd + s.baseYtg,
+        forecast: manual ?? s.gmvBase, // padrão: faturamento do ano anterior
+        forecastManual: manual,
         isNovo: false,
         isOutros: false,
       }
@@ -140,6 +179,7 @@ export function ProvisionamentoPage() {
         { gmvBase: 0, ytd: 0, baseYtg: 0 },
       )
       const p = persisted.get(OUTROS_KEY)
+      const manual = p?.forecast ?? null
       orgItems.push({
         itemKey: OUTROS_KEY,
         nome: `Demais organizadores (${rest.length})`,
@@ -147,7 +187,8 @@ export function ProvisionamentoPage() {
         gmvBase: agg.gmvBase,
         ytd: agg.ytd,
         baseYtg: agg.baseYtg,
-        forecast: p?.forecast ?? agg.ytd + agg.baseYtg,
+        forecast: manual ?? agg.gmvBase,
+        forecastManual: manual,
         isNovo: false,
         isOutros: true,
       })
@@ -164,6 +205,7 @@ export function ProvisionamentoPage() {
         ytd: 0,
         baseYtg: 0,
         forecast: r.forecast ?? 0,
+        forecastManual: r.forecast ?? null,
         isNovo: true,
         isOutros: false,
       })
@@ -211,9 +253,12 @@ export function ProvisionamentoPage() {
   function commitForecast(item: ProvItem) {
     const raw = drafts[item.itemKey]
     if (raw == null) return
-    const val = Number(raw.replace(/\D/g, ''))
-    if (!Number.isFinite(val)) return
-    persist(item.itemKey, { forecast: val })
+    const digits = raw.replace(/\D/g, '')
+    // Vazio = mantém o padrão (faturamento do ano anterior); não persiste.
+    if (digits !== '') {
+      const val = Number(digits)
+      if (Number.isFinite(val)) persist(item.itemKey, { forecast: val })
+    }
     setDrafts((d) => {
       const n = { ...d }
       delete n[item.itemKey]
@@ -282,7 +327,7 @@ export function ProvisionamentoPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label={`GMV base ${baseYear}`} value={fmtBRL(totals.base)} loading={loading} />
         <KpiCard label={`Previsão ${targetYear}`} value={fmtBRL(totalForecast)} loading={loading} />
         <KpiCard
@@ -290,7 +335,6 @@ export function ProvisionamentoPage() {
           value={fmtBRL(totalForecast - totals.base)}
           loading={loading}
         />
-        <KpiCard label="Itens" value={fmtInt(items.length)} loading={loading} />
       </div>
 
       <Card>
@@ -311,7 +355,7 @@ export function ProvisionamentoPage() {
                     </Tooltip>
                   </TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Previsão GMV</TableHead>
+                  <TableHead className="text-right">Previsão GMV {targetYear}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -331,13 +375,13 @@ export function ProvisionamentoPage() {
                         {it.nome}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(it.gmvBase)}
+                        <GmvValue value={it.gmvBase} onOpen={it.isOutros || it.isNovo ? undefined : () => openBase(it)} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {fmtBRL(it.ytd)}
+                        <GmvValue value={it.ytd} onOpen={it.isOutros || it.isNovo ? undefined : () => openYtd(it)} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {fmtBRL(it.baseYtg)}
+                      <TableCell className="text-right tabular-nums">
+                        <GmvValue value={it.baseYtg} muted onOpen={it.isOutros || it.isNovo ? undefined : () => openYtg(it)} />
                       </TableCell>
                       <TableCell>
                         <button onClick={() => cycleStatus(it)}>
@@ -358,8 +402,12 @@ export function ProvisionamentoPage() {
                             inputMode="numeric"
                             className="h-8 w-36 pl-8 text-right tabular-nums"
                             value={grpDigits(
-                              drafts[it.itemKey] ?? String(Math.round(it.forecast)),
+                              drafts[it.itemKey] ??
+                                (it.forecastManual != null
+                                  ? String(Math.round(it.forecastManual))
+                                  : ''),
                             )}
+                            placeholder={grpDigits(String(Math.round(it.gmvBase)))}
                             onChange={(e) =>
                               setDrafts((d) => ({
                                 ...d,
@@ -392,6 +440,82 @@ export function ProvisionamentoPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!breakdown} onOpenChange={(o) => !o && setBreakdown(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{breakdown?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {breakdownQuery.isLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : (breakdownQuery.data ?? []).length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Nenhum evento no período.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Evento</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead className="text-right">GMV</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(breakdownQuery.data ?? []).map((ev) => (
+                    <TableRow key={ev.codigo_evento}>
+                      <TableCell className="max-w-80 truncate font-medium">
+                        {ev.nome ?? ev.codigo_evento}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {ev.data_evento ? fmtDate(ev.data_evento) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmtBRL(ev.gmv)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2 font-semibold">
+                    <TableCell colSpan={2}>
+                      Total ({(breakdownQuery.data ?? []).length})
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtBRL(
+                        (breakdownQuery.data ?? []).reduce((a, e) => a + Number(e.gmv), 0),
+                      )}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+/** Valor de GMV com lupa (aparece no hover) para abrir o detalhamento. */
+function GmvValue({
+  value, onOpen, muted,
+}: {
+  value: number
+  onOpen?: () => void
+  muted?: boolean
+}) {
+  return (
+    <span className={`group inline-flex items-center justify-end gap-1 ${muted ? 'text-muted-foreground' : ''}`}>
+      {onOpen && (
+        <button
+          onClick={onOpen}
+          className="text-muted-foreground opacity-0 transition hover:text-primary group-hover:opacity-100"
+          title="Ver eventos"
+        >
+          <Search className="size-3.5" />
+        </button>
+      )}
+      {fmtBRL(value)}
+    </span>
   )
 }

@@ -338,6 +338,33 @@ export async function biProvStats(
   })
 }
 
+export interface ProvEventRow {
+  codigo_evento: string
+  nome: string | null
+  data_evento: string | null
+  gmv: number
+}
+
+export async function biProvOrgEvents(
+  orgId: string,
+  organizador: string,
+  year: number,
+  monthMin: number,
+  monthMax: number,
+  dateBase: DateBase,
+  pdv: Pdv[],
+): Promise<ProvEventRow[]> {
+  return rpc<ProvEventRow[]>('bi_prov_org_events', {
+    p_org: orgId,
+    p_organizador: organizador,
+    p_year: year,
+    p_month_min: monthMin,
+    p_month_max: monthMax,
+    p_datebase: dateBase,
+    p_pdv: pdvArg(pdv),
+  })
+}
+
 export async function biMonthsElapsed(
   orgId: string,
   year: number,

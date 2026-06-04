@@ -16,7 +16,8 @@ export interface ProvItem {
   gmvBase: number
   ytd: number
   baseYtg: number
-  forecast: number
+  forecast: number // efetivo usado nos totais (manual, se houver; senão = gmvBase)
+  forecastManual: number | null // valor inserido manualmente (null = usa padrão)
   isNovo: boolean
   isOutros: boolean
 }
