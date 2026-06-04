@@ -50,16 +50,19 @@ export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFi
     [stages],
   )
 
-  // Colunas: estágios ativos + "Sem estágio" (apenas no relacionamento).
+  // Colunas: estágios ativos + "Sem estágio" como PRIMEIRA coluna, apenas no
+  // relacionamento e somente quando há organização sem estágio.
   const columns = useMemo(() => {
     const cols = activeStages.map((s) => ({
       id: s.id,
       nome: s.nome,
       cor: s.cor,
     }))
-    if (kind === 'org') cols.push({ id: NONE, nome: 'Sem estágio', cor: null })
+    if (kind === 'org' && cards.some((c) => c.stageId == null)) {
+      cols.unshift({ id: NONE, nome: 'Sem estágio', cor: null })
+    }
     return cols
-  }, [activeStages, kind])
+  }, [activeStages, kind, cards])
 
   const byStage = useMemo(() => {
     const m = new Map<string, KanbanCard[]>()
