@@ -26,7 +26,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug }: { slug: FunnelSlug }) {
+export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFilter?: string | null }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -34,7 +34,10 @@ export function KanbanBoard({ slug }: { slug: FunnelSlug }) {
   const orgsQ = useOrgsKanban()
   const oppsQ = useOppsKanban()
   const cardsQ = kind === 'org' ? orgsQ : oppsQ
-  const cards = cardsQ.data ?? []
+  const cards = useMemo(() => {
+    const all = cardsQ.data ?? []
+    return statusFilter ? all.filter((c) => c.status === statusFilter) : all
+  }, [cardsQ.data, statusFilter])
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(

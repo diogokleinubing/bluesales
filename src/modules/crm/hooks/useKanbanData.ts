@@ -9,6 +9,7 @@ export interface KanbanCard {
   subtitle?: string | null
   badge?: string | null
   meta?: string | null
+  status?: string | null
   href: string
 }
 
@@ -22,7 +23,7 @@ export function useOrgsKanban() {
     queryFn: async (): Promise<KanbanCard[]> => {
       const { data, error } = await supabase
         .from('organizations')
-        .select('id, nome, cidade, uf, classificacao, funil_stage_id')
+        .select('id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id')
         .eq('org_id', orgId!)
         .order('nome')
       if (error) throw new Error(error.message)
@@ -32,6 +33,7 @@ export function useOrgsKanban() {
         title: o.nome,
         badge: o.classificacao,
         subtitle: [o.cidade, o.uf].filter(Boolean).join('/') || null,
+        status: o.status_comercial,
         href: `/comercial/organizacoes/${o.id}`,
       }))
     },

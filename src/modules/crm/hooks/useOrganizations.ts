@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCrmOrgId } from './useFunnelStages'
 
+export const STATUS_COMERCIAL = ['Ativo', 'Eventual', 'Inativo'] as const
+
 export interface Organization {
   id: string
   org_id: string
@@ -13,6 +15,7 @@ export interface Organization {
   origem_lead: string | null
   sociedade: string | null
   estrutura: string | null
+  status_comercial: string | null
   funil_stage_id: string | null
   bi_organizador: string | null
   created_at: string

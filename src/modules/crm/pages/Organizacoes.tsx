@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { useOrganizations, createOrganization } from '../hooks/useOrganizations'
+import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
@@ -23,6 +24,12 @@ import { fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
 const ALL = '__all__'
+
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
+  Ativo: 'default',
+  Eventual: 'secondary',
+  Inativo: 'outline',
+}
 
 export function Organizacoes() {
   const navigate = useNavigate()
@@ -34,6 +41,7 @@ export function Organizacoes() {
   const { data, isLoading } = useOrganizations()
   const [search, setSearch] = useState(biOrganizador)
   const [classe, setClasse] = useState<string>(ALL)
+  const [statusF, setStatusF] = useState<string>(ALL)
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
 
@@ -42,9 +50,10 @@ export function Organizacoes() {
     return (data ?? []).filter(
       (o) =>
         (!q || o.nome.toLowerCase().includes(q)) &&
-        (classe === ALL || o.classificacao === classe),
+        (classe === ALL || o.classificacao === classe) &&
+        (statusF === ALL || o.status_comercial === statusF),
     )
-  }, [data, search, classe])
+  }, [data, search, classe, statusF])
 
   async function criar() {
     if (!orgId || !novoNome.trim()) return
@@ -73,6 +82,13 @@ export function Organizacoes() {
                 {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={statusF} onValueChange={setStatusF}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os status</SelectItem>
+                {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </>
         }
       >
@@ -84,16 +100,17 @@ export function Organizacoes() {
               <TableHead>Cidade/UF</TableHead>
               <TableHead>Estrutura</TableHead>
               <TableHead>Estágio</TableHead>
+              <TableHead>Status comercial</TableHead>
               <TableHead>Última atividade</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhuma organização — adicione a primeira.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhuma organização — adicione a primeira.</TableCell></TableRow>
             ) : rows.map((o) => (
               <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/comercial/organizacoes/${o.id}`)}>
                 <TableCell className="font-medium">{o.nome}</TableCell>
@@ -107,6 +124,11 @@ export function Organizacoes() {
                       {o.stageNome}
                     </span>
                   ) : <span className="text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell>
+                  {o.status_comercial
+                    ? <Badge variant={STATUS_VARIANT[o.status_comercial] ?? 'secondary'}>{o.status_comercial}</Badge>
+                    : <span className="text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{o.ultimaAtividade ? fmtDate(new Date(o.ultimaAtividade)) : '—'}</TableCell>
               </TableRow>

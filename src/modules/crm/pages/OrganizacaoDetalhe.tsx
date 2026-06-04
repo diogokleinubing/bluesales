@@ -25,6 +25,7 @@ import {
   useOrganization,
   updateOrganization,
   deleteOrganization,
+  STATUS_COMERCIAL,
   type Organization,
 } from '../hooks/useOrganizations'
 import { useOpportunities } from '../hooks/useOpportunities'
@@ -314,6 +315,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
       uf: org.uf ?? '',
       gmv_anual: org.gmv_anual != null ? String(Math.round(org.gmv_anual)) : '',
       classificacao: org.classificacao ?? '',
+      status_comercial: org.status_comercial ?? '',
       origem_lead: org.origem_lead ?? '',
       sociedade: org.sociedade ?? '',
       estrutura: org.estrutura ?? '',
@@ -336,6 +338,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         uf: toText(draft.uf),
         gmv_anual: toNumber(draft.gmv_anual),
         classificacao: toText(draft.classificacao),
+        status_comercial: toText(draft.status_comercial),
         origem_lead: toText(draft.origem_lead),
         sociedade: toText(draft.sociedade),
         estrutura: toText(draft.estrutura),
@@ -373,6 +376,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <CurrencyField label="GMV anual" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
         <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
       </div>
+      <SelectField label="Status comercial" value={draft.status_comercial} options={[...STATUS_COMERCIAL]} onChange={(v) => set('status_comercial', v)} />
       <div className="grid grid-cols-2 gap-3">
         <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
         <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />

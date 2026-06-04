@@ -4,34 +4,45 @@ import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, CheckSquare, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { useCrmOrgId, type FunnelSlug } from '../hooks/useFunnelStages'
+import { STATUS_COMERCIAL } from '../hooks/useOrganizations'
+
+const ALL = '__all__'
 
 export function PainelComercial() {
   const [slug, setSlug] = useState<FunnelSlug>('relacionamento')
+  const [statusF, setStatusF] = useState<string>(ALL)
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
-          <p className="text-sm text-muted-foreground">
-            Funil de{' '}
-            {slug === 'relacionamento' ? 'relacionamento' : 'oportunidades'}.
-            Arraste os cards para mudar o estágio.
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
+        <div className="flex items-center gap-2">
+          {slug === 'relacionamento' && (
+            <Select value={statusF} onValueChange={setStatusF}>
+              <SelectTrigger className="h-9 w-48" size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os status</SelectItem>
+                {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Tabs value={slug} onValueChange={(v) => setSlug(v as FunnelSlug)}>
+            <TabsList>
+              <TabsTrigger value="relacionamento">Relacionamento</TabsTrigger>
+              <TabsTrigger value="oportunidade">Oportunidades</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-        <Tabs value={slug} onValueChange={(v) => setSlug(v as FunnelSlug)}>
-          <TabsList>
-            <TabsTrigger value="relacionamento">Relacionamento</TabsTrigger>
-            <TabsTrigger value="oportunidade">Oportunidades</TabsTrigger>
-          </TabsList>
-        </Tabs>
       </div>
 
-      <KanbanBoard slug={slug} />
+      <KanbanBoard slug={slug} statusFilter={slug === 'relacionamento' && statusF !== ALL ? statusF : null} />
 
       <Resumo />
     </div>
