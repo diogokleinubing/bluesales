@@ -5,7 +5,6 @@ import { Plus, Search, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -51,13 +50,6 @@ import {
 import type { ProvisioningRow, Status } from '@/lib/database.types'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
-const STATUS_CYCLE: Status[] = ['Ativo', 'Risco', 'Perdido', 'Novo']
-const STATUS_COLOR: Record<Status, string> = {
-  Ativo: 'bg-[var(--success)]/15 text-[var(--success)]',
-  Risco: 'bg-[var(--warning)]/15 text-[var(--warning)]',
-  Perdido: 'bg-destructive/15 text-destructive',
-  Novo: 'bg-[var(--info)]/15 text-[var(--info)]',
-}
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
 const MESES_LONGOS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -137,6 +129,9 @@ export function ProvisionamentoPage() {
 
   function openBase(it: ProvItem) {
     setBreakdown({ organizador: it.itemKey, year: baseYear, monthMin: 1, monthMax: 12, title: `${it.nome} · GMV ${baseYear}` })
+  }
+  function openYtdBase(it: ProvItem) {
+    setBreakdown({ organizador: it.itemKey, year: baseYear, monthMin: 1, monthMax: monthsElapsed, title: `${it.nome} · YTD ${baseYear}` })
   }
   function openYtd(it: ProvItem) {
     setBreakdown({ organizador: it.itemKey, year: targetYear, monthMin: 1, monthMax: monthsElapsed, title: `${it.nome} · YTD ${targetYear}` })
@@ -244,12 +239,6 @@ export function ProvisionamentoPage() {
     }
   }
 
-  function cycleStatus(item: ProvItem) {
-    const idx = STATUS_CYCLE.indexOf(item.status)
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
-    persist(item.itemKey, { status: next })
-  }
-
   function commitForecast(item: ProvItem) {
     const raw = drafts[item.itemKey]
     if (raw == null) return
@@ -345,16 +334,16 @@ export function ProvisionamentoPage() {
                 <TableRow>
                   <TableHead>Organizador</TableHead>
                   <TableHead className="text-right">GMV {baseYear}</TableHead>
+                  <TableHead className="text-right">YTD {baseYear}</TableHead>
                   <TableHead className="text-right">YTD {targetYear}</TableHead>
                   <TableHead className="text-right">
                     <Tooltip>
-                      <TooltipTrigger className="cursor-default underline decoration-dotted underline-offset-2">
+                      <TooltipTrigger className="cursor-default">
                         {baseYear} YTG
                       </TooltipTrigger>
                       <TooltipContent>{ytgTooltip}</TooltipContent>
                     </Tooltip>
                   </TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Previsão GMV {targetYear}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -378,36 +367,44 @@ export function ProvisionamentoPage() {
                         <GmvValue value={it.gmvBase} onOpen={it.isOutros || it.isNovo ? undefined : () => openBase(it)} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
+                        <GmvValue value={it.gmvBase - it.baseYtg} muted onOpen={it.isOutros || it.isNovo ? undefined : () => openYtdBase(it)} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         <GmvValue
                           value={it.ytd}
                           onOpen={it.isOutros || it.isNovo ? undefined : () => openYtd(it)}
-                          before={
-                            it.gmvBase - it.baseYtg > 0 &&
-                            it.ytd < 0.5 * (it.gmvBase - it.baseYtg) ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <AlertTriangle className="size-4 text-[var(--destructive)]" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Ritmo do YTD abaixo de 50% do mesmo período do ano anterior
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : null
-                          }
+                          before={(() => {
+                            const priorYtd = it.gmvBase - it.baseYtg
+                            if (priorYtd <= 0) return null
+                            const ratio = it.ytd / priorYtd
+                            if (ratio < 0.5)
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="size-4 text-[var(--destructive)]" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    YTD 50%+ abaixo do mesmo período do ano anterior
+                                  </TooltipContent>
+                                </Tooltip>
+                              )
+                            if (ratio < 0.8)
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="size-4 text-[var(--warning)]" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    YTD ~20% abaixo do mesmo período do ano anterior
+                                  </TooltipContent>
+                                </Tooltip>
+                              )
+                            return null
+                          })()}
                         />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <GmvValue value={it.baseYtg} muted onOpen={it.isOutros || it.isNovo ? undefined : () => openYtg(it)} />
-                      </TableCell>
-                      <TableCell>
-                        <button onClick={() => cycleStatus(it)}>
-                          <Badge
-                            className={`cursor-pointer ${STATUS_COLOR[it.status]}`}
-                            variant="secondary"
-                          >
-                            {it.status}
-                          </Badge>
-                        </button>
                       </TableCell>
                       <TableCell className="text-right">
                         {(() => {
@@ -541,7 +538,10 @@ function GmvValue({
   before?: React.ReactNode
 }) {
   return (
-    <span className={`group inline-flex items-center justify-end gap-1 ${muted ? 'text-muted-foreground' : ''}`}>
+    <span
+      className={`group inline-flex items-center justify-end gap-1 ${muted ? 'text-muted-foreground' : ''} ${onOpen ? 'cursor-default select-none' : ''}`}
+      onDoubleClick={onOpen}
+    >
       {before}
       {onOpen && (
         <button
