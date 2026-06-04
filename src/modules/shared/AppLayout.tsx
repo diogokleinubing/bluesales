@@ -13,7 +13,8 @@ export function AppLayout() {
   useEffect(() => {
     if (
       location.pathname.startsWith('/bi/') ||
-      location.pathname.startsWith('/comercial/')
+      location.pathname.startsWith('/comercial/') ||
+      location.pathname.startsWith('/pesquisa/')
     ) {
       rememberRoute(location.pathname, location.search)
     }

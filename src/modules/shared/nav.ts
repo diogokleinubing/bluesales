@@ -20,9 +20,14 @@ import {
   Mic2,
   MapPin,
   ShieldQuestion,
+  Radar,
+  CalendarSearch,
+  Rss,
+  FilterX,
+  ScrollText,
 } from 'lucide-react'
 
-export type ModuleId = 'bi' | 'comercial'
+export type ModuleId = 'bi' | 'comercial' | 'pesquisa'
 
 export interface NavItem {
   to: string
@@ -121,10 +126,36 @@ export const MODULES: ModuleDef[] = [
       },
     ],
   },
+  {
+    id: 'pesquisa',
+    label: 'Pesquisa',
+    icon: Radar,
+    home: '/pesquisa/eventos',
+    groups: [
+      {
+        title: 'Operação',
+        items: [
+          { to: '/pesquisa/eventos', label: 'Eventos capturados', icon: CalendarSearch },
+          { to: '/pesquisa/organizadores', label: 'Organizadores', icon: Building2 },
+          { to: '/pesquisa/locais', label: 'Locais', icon: MapPin },
+        ],
+      },
+      {
+        title: 'Configuração',
+        items: [
+          { to: '/pesquisa/configuracao/fontes', label: 'Fontes', icon: Rss, requires: 'gestor' },
+          { to: '/pesquisa/configuracao/filtros', label: 'Filtros de ignorar', icon: FilterX, requires: 'gestor' },
+          { to: '/pesquisa/configuracao/execucoes', label: 'Execuções', icon: ScrollText, requires: 'gestor' },
+        ],
+      },
+    ],
+  },
 ]
 
 export function moduleFromPath(pathname: string): ModuleId {
-  return pathname.startsWith('/comercial') ? 'comercial' : 'bi'
+  if (pathname.startsWith('/comercial')) return 'comercial'
+  if (pathname.startsWith('/pesquisa')) return 'pesquisa'
+  return 'bi'
 }
 
 export function getModule(id: ModuleId): ModuleDef {

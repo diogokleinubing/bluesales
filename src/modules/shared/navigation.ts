@@ -7,12 +7,17 @@ import { getModule } from './nav'
 const LAST_GLOBAL = 'bt-last-route'
 const lastByModuleKey = (m: ModuleId) => `bt-last-route:${m}`
 
+function moduleOf(pathname: string): ModuleId {
+  if (pathname.startsWith('/comercial')) return 'comercial'
+  if (pathname.startsWith('/pesquisa')) return 'pesquisa'
+  return 'bi'
+}
+
 export function rememberRoute(pathname: string, search = '') {
   const full = pathname + search
-  const mod: ModuleId = pathname.startsWith('/comercial') ? 'comercial' : 'bi'
   try {
     localStorage.setItem(LAST_GLOBAL, full)
-    localStorage.setItem(lastByModuleKey(mod), full)
+    localStorage.setItem(lastByModuleKey(moduleOf(pathname)), full)
   } catch {
     // ignore
   }
@@ -21,7 +26,7 @@ export function rememberRoute(pathname: string, search = '') {
 export function lastRoute(): string {
   try {
     const v = localStorage.getItem(LAST_GLOBAL)
-    if (v && (v.startsWith('/bi/') || v.startsWith('/comercial/'))) return v
+    if (v && (v.startsWith('/bi/') || v.startsWith('/comercial/') || v.startsWith('/pesquisa/'))) return v
   } catch {
     // ignore
   }
@@ -32,7 +37,7 @@ export function lastRoute(): string {
 export function lastRouteOfModule(m: ModuleId): string {
   try {
     const v = localStorage.getItem(lastByModuleKey(m))
-    if (v && v.startsWith(`/${m === 'bi' ? 'bi' : 'comercial'}/`)) return v
+    if (v && v.startsWith(`/${m}/`)) return v
   } catch {
     // ignore
   }

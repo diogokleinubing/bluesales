@@ -80,6 +80,26 @@ const ObjecoesConfig = lazy(() =>
   import('@/modules/crm/pages/config/Objecoes').then((m) => ({ default: m.ObjecoesConfig })),
 )
 
+// --- Módulo Pesquisa ---
+const EventosCapturados = lazy(() =>
+  import('@/modules/pesquisa/pages/EventosCapturados').then((m) => ({ default: m.EventosCapturados })),
+)
+const OrganizadoresMercado = lazy(() =>
+  import('@/modules/pesquisa/pages/OrganizadoresMercado').then((m) => ({ default: m.OrganizadoresMercado })),
+)
+const LocaisMercado = lazy(() =>
+  import('@/modules/pesquisa/pages/LocaisMercado').then((m) => ({ default: m.LocaisMercado })),
+)
+const FontesConfig = lazy(() =>
+  import('@/modules/pesquisa/pages/FontesConfig').then((m) => ({ default: m.FontesConfig })),
+)
+const FiltrosConfig = lazy(() =>
+  import('@/modules/pesquisa/pages/FiltrosConfig').then((m) => ({ default: m.FiltrosConfig })),
+)
+const ExecucoesConfig = lazy(() =>
+  import('@/modules/pesquisa/pages/ExecucoesConfig').then((m) => ({ default: m.ExecucoesConfig })),
+)
+
 // --- Ambiente ---
 const ConfiguracoesPage = lazy(() =>
   import('@/modules/settings/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })),
@@ -159,6 +179,14 @@ export const router = createBrowserRouter([
       { path: 'comercial/configuracao/funis', element: <FunisConfig /> },
       { path: 'comercial/configuracao/plataformas', element: <PlataformasConfig /> },
       { path: 'comercial/configuracao/objecoes', element: <ObjecoesConfig /> },
+
+      // Módulo Pesquisa
+      { path: 'pesquisa/eventos', element: <EventosCapturados /> },
+      { path: 'pesquisa/organizadores', element: <OrganizadoresMercado /> },
+      { path: 'pesquisa/locais', element: <LocaisMercado /> },
+      { path: 'pesquisa/configuracao/fontes', element: <FontesConfig /> },
+      { path: 'pesquisa/configuracao/filtros', element: <FiltrosConfig /> },
+      { path: 'pesquisa/configuracao/execucoes', element: <ExecucoesConfig /> },
 
       // Ambiente (somente admin)
       {
