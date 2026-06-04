@@ -1,68 +1,180 @@
-// Fonte: Sympla — API JSON interna (consumida pelo próprio site via HTTP).
-//   GET https://www.sympla.com.br/api/v1/search?...
-// Não é API pública documentada: o endpoint/parâmetros podem mudar.
+// Fonte: Sympla — descoberta via sitemap + extração do __NEXT_DATA__.
 //
-// VALIDAR com dado real ANTES de confiar no mapeamento: rodar 1 cidade e
-// inspecionar o JSON cru (campos de local, organizador, preço, data).
+// Por que assim:
+//  - Não há API de busca pública; a página de evento é SPA mas embute todo o
+//    evento em <script id="__NEXT_DATA__"> (props.pageProps.hydrationData
+//    .eventHydration.event).
+//  - O acesso passa por Cloudflare + Queue-it (sala de espera): seguimos os
+//    redirects manualmente com um cookie-jar, o que libera o QueueITAccepted.
+//  - Descoberta: sitemap-eventos.xml lista ~31k eventos (slug__id), SEM lastmod
+//    nem cidade. Abrir todos por semana é inviável numa Edge Function.
+//
+// Estratégia (v1, roda dentro do limite de tempo da Edge Function):
+//  - Pré-filtra as URLs do sitemap cujo SLUG contém a cidade-alvo.
+//  - Abre no máximo MAX_POR_CIDADE por execução (teto logado, sem corte
+//    silencioso) e confirma cidade/data pelo __NEXT_DATA__.
+//  Limitações conhecidas: perde eventos sem a cidade no slug; preço não vem no
+//  HTML (carregado à parte) -> fica nulo.
 
-import type { RawEvent, Scraper } from '../../_shared/types.ts'
+import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
+import { norm } from '../../_shared/classify.ts'
 
-const SEARCH = 'https://www.sympla.com.br/api/v1/search'
+const SITEMAP = 'https://www.sympla.com.br/sitemap-eventos.xml'
+const MAX_POR_CIDADE = 8
+
+const UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+// Cookie-jar compartilhado entre chamadas do mesmo isolate (reaproveita o
+// QueueITAccepted entre cidades/eventos).
+const jar = new Map<string, string>()
+
+// Memoiza a lista de URLs do sitemap durante a invocação (fetch de ~5 MB 1x).
+let sitemapCache: string[] | null = null
+
+function readSetCookies(res: Response): string[] {
+  const h = res.headers as unknown as { getSetCookie?: () => string[] }
+  if (typeof h.getSetCookie === 'function') return h.getSetCookie()
+  const raw = res.headers.get('set-cookie')
+  return raw ? [raw] : []
+}
+
+async function fetchSeguindoRedirects(start: string): Promise<{ status: number; body: string } | null> {
+  let url = start
+  for (let hop = 0; hop < 8; hop++) {
+    const cookieHeader = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
+    const res = await fetch(url, {
+      redirect: 'manual',
+      headers: {
+        'User-Agent': UA,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+      },
+    })
+    for (const sc of readSetCookies(res)) {
+      const first = sc.split(';')[0]
+      const eq = first.indexOf('=')
+      if (eq > 0) jar.set(first.slice(0, eq).trim(), first.slice(eq + 1).trim())
+    }
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location')
+      if (!loc) return null
+      url = loc.startsWith('http') ? loc : new URL(loc, url).toString()
+      await res.body?.cancel()
+      continue
+    }
+    return { status: res.status, body: await res.text() }
+  }
+  return null
+}
+
+async function getSitemapUrls(): Promise<string[]> {
+  if (sitemapCache) return sitemapCache
+  try {
+    const res = await fetch(SITEMAP, { headers: { 'User-Agent': UA } })
+    const xml = await res.text()
+    sitemapCache = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1].trim())
+  } catch (e) {
+    console.error('[sympla] sitemap falhou', String(e))
+    sitemapCache = []
+  }
+  return sitemapCache
+}
 
 interface SymplaEvent {
   id?: number | string
   name?: string
-  url?: string
-  images?: { original?: string; thumb?: string }
-  location?: { name?: string; city?: string; state?: string; address?: string }
-  start_date?: string
-  end_date?: string
-  organizer?: { name?: string }
-  min_price?: number
-  max_price?: number
-  is_online?: boolean
+  slug?: string
+  newUrl?: string
+  startDate?: string
+  endDate?: string
+  logoUrl?: string
+  cancelled?: boolean
+  published?: boolean
+  visible?: boolean
+  onlineInfo?: unknown
+  eventsAddress?: { name?: string; city?: string; state?: string }
+  eventsHost?: { name?: string } | string | null
 }
 
-export const symplaScraper: Scraper = async ({ cidade, uf }) => {
-  const url = new URL(SEARCH)
-  url.searchParams.set('city', cidade)
-  url.searchParams.set('state', uf)
-  url.searchParams.set('only', 'events')
-  url.searchParams.set('pageSize', '100')
+function hostName(h: SymplaEvent['eventsHost']): string | null {
+  if (!h) return null
+  if (typeof h === 'string') return h
+  return h.name ?? null
+}
 
-  let payload: { data?: SymplaEvent[]; events?: SymplaEvent[] }
+function toIso(s?: string): string | null {
+  if (!s) return null
+  return s.includes(' ') ? s.replace(' ', 'T') : s
+}
+
+function parseEvento(body: string, fallbackUrl: string): SymplaEvent | null {
+  const m = body.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (!m) return null
   try {
-    const res = await fetch(url.toString(), {
-      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    payload = await res.json()
-  } catch (e) {
-    console.error('[sympla] fetch falhou', cidade, uf, String(e))
-    return []
+    const ev = JSON.parse(m[1])?.props?.pageProps?.hydrationData?.eventHydration?.event
+    if (!ev?.name) return null
+    if (!ev.newUrl) ev.newUrl = fallbackUrl
+    return ev as SymplaEvent
+  } catch {
+    return null
+  }
+}
+
+export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
+  const { cidade, uf, janelaDias } = ctx
+  const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
+
+  const urls = await getSitemapUrls()
+  const candidatas = urls
+    .filter((u) => u.includes(cidadeToken) && !/online/i.test(u))
+    .slice(0, MAX_POR_CIDADE)
+
+  if (urls.length && candidatas.length === MAX_POR_CIDADE) {
+    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} URLs por execução atingido (cobertura parcial)`) // sem corte silencioso
   }
 
-  const list = payload?.data ?? payload?.events ?? []
+  const agora = Date.now()
+  const limite = agora + janelaDias * 86_400_000
   const out: RawEvent[] = []
-  for (const ev of Array.isArray(list) ? list : []) {
-    if (!ev.url || !ev.name) continue
+
+  for (const url of candidatas) {
+    let r: { status: number; body: string } | null = null
+    try {
+      r = await fetchSeguindoRedirects(url)
+    } catch (e) {
+      console.error('[sympla] fetch evento falhou', url, String(e))
+      continue
+    }
+    if (!r || r.status !== 200) continue
+    const ev = parseEvento(r.body, url)
+    if (!ev) continue
+    if (ev.cancelled || ev.published === false || ev.visible === false) continue
+
+    // Confirma cidade real e janela de data.
+    const cidadeEv = ev.eventsAddress?.city ?? null
+    if (!cidadeEv || norm(cidadeEv) !== norm(cidade)) continue
+    const t = ev.startDate ? Date.parse(toIso(ev.startDate)!) : NaN
+    if (isNaN(t) || t < agora - 86_400_000 || t > limite) continue
+
     out.push({
-      url_evento: ev.url,
-      nome: ev.name,
-      data_inicio: ev.start_date ?? null,
-      data_fim: ev.end_date ?? null,
-      organizador_raw: ev.organizer?.name ?? null,
+      url_evento: ev.newUrl ?? url,
+      nome: ev.name!,
+      data_inicio: toIso(ev.startDate),
+      data_fim: toIso(ev.endDate),
+      organizador_raw: hostName(ev.eventsHost),
       organizador_url: null,
-      local_raw: ev.location?.name ?? ev.location?.address ?? null,
-      cidade: ev.location?.city ?? cidade,
-      uf: ev.location?.state ?? uf,
-      preco_min: typeof ev.min_price === 'number' ? ev.min_price : null,
-      preco_max: typeof ev.max_price === 'number' ? ev.max_price : null,
-      gratuito: ev.min_price === 0 && ev.max_price === 0,
-      online: ev.is_online ?? false,
-      imagem_url: ev.images?.original ?? ev.images?.thumb ?? null,
+      local_raw: ev.eventsAddress?.name ?? null,
+      cidade: cidadeEv,
+      uf: ev.eventsAddress?.state ?? uf,
+      preco_min: null, // preço não vem no HTML (API de ingressos à parte)
+      preco_max: null,
+      gratuito: false,
+      online: !!ev.onlineInfo,
+      imagem_url: ev.logoUrl ?? null,
       descricao: null,
-      raw: ev,
+      raw: { id: ev.id, slug: ev.slug },
     })
   }
   return out

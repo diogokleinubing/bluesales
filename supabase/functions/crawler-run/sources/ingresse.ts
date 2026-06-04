@@ -39,12 +39,15 @@ export const ingresseScraper: Scraper = async ({ cidade, uf }) => {
   url.searchParams.set('city', cidade)
   url.searchParams.set('size', '100')
 
+  // NOTA: api.ingresse.com responde 403 (Cloudflare) para requisições de
+  // servidor — esta fonte fica inativa até validarmos um endpoint alternativo
+  // ou movê-la para um worker com browser. Mantida defensiva: retorna [].
   let payload: { data?: IngresseEvent[] }
   try {
     const res = await fetch(url.toString(), {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) return []
     payload = await res.json()
   } catch (e) {
     console.error('[ingresse] fetch falhou', cidade, uf, String(e))
