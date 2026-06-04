@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -19,17 +18,12 @@ import {
 import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { ClasseBadge } from '../components/ClasseBadge'
+import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
 import { fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
 const ALL = '__all__'
-
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
-  Ativo: 'default',
-  Eventual: 'secondary',
-  Inativo: 'outline',
-}
 
 export function Organizacoes() {
   const navigate = useNavigate()
@@ -125,11 +119,7 @@ export function Organizacoes() {
                     </span>
                   ) : <span className="text-muted-foreground">—</span>}
                 </TableCell>
-                <TableCell>
-                  {o.status_comercial
-                    ? <Badge variant={STATUS_VARIANT[o.status_comercial] ?? 'secondary'}>{o.status_comercial}</Badge>
-                    : <span className="text-muted-foreground">—</span>}
-                </TableCell>
+                <TableCell><StatusComercialBadge status={o.status_comercial} /></TableCell>
                 <TableCell className="text-muted-foreground">{o.ultimaAtividade ? fmtDate(new Date(o.ultimaAtividade)) : '—'}</TableCell>
               </TableRow>
             ))}
