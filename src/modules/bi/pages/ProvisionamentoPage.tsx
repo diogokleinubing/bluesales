@@ -408,7 +408,7 @@ export function ProvisionamentoPage() {
                     </Tooltip>
                   </SortHead>
                   <SortHead k="forecast" align="right">Previsão GMV {targetYear}</SortHead>
-                  <SortHead k="pct" align="right">Var. vs {baseYear}</SortHead>
+                  <TableHead className="w-0 px-0" />
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -518,7 +518,7 @@ export function ProvisionamentoPage() {
                           )
                         })()}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="w-0 whitespace-nowrap px-0 pl-1 text-left text-xs tabular-nums">
                         {(() => {
                           const d = drafts[it.itemKey]
                           const defined = d != null && d !== '' ? Number(d) : it.forecastManual
