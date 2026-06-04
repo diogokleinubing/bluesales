@@ -30,15 +30,45 @@ function idDaUrl(u: string): string | null {
   return m ? m[1] : null
 }
 
+const SITEMAP_TTL_MS = 24 * 60 * 60 * 1000 // 24h
+
 async function getSitemapUrls(): Promise<string[]> {
-  if (sitemapCache) return sitemapCache
+  if (sitemapCache) return sitemapCache // memo da invocação
+  const db = adminClient()
+
+  // 1) Cache no banco (válido por 24h) — evita rebaixar a Sympla a cada run.
+  try {
+    const { data } = await db
+      .from('crawler_cache')
+      .select('sitemap, fetched_at')
+      .eq('source_slug', 'sympla')
+      .maybeSingle()
+    if (data?.sitemap && Array.isArray(data.sitemap) && data.fetched_at) {
+      const age = Date.now() - new Date(data.fetched_at).getTime()
+      if (age < SITEMAP_TTL_MS) {
+        sitemapCache = data.sitemap as string[]
+        return sitemapCache
+      }
+    }
+  } catch (e) {
+    console.error('[sympla] cache leitura', String(e))
+  }
+
+  // 2) Cache vencido/ausente: busca fresco e regrava.
   try {
     const res = await fetch(SITEMAP, { headers: { 'User-Agent': UA } })
     const xml = await res.text()
-    sitemapCache = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1].trim())
+    const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1].trim())
+    sitemapCache = urls
+    await db.from('crawler_cache').upsert({
+      source_slug: 'sympla',
+      sitemap: urls,
+      fetched_at: new Date().toISOString(),
+    })
+    console.log(`[sympla] sitemap atualizado no cache (${urls.length} urls)`)
   } catch (e) {
     console.error('[sympla] sitemap falhou', String(e))
-    sitemapCache = []
+    sitemapCache = sitemapCache ?? []
   }
   return sitemapCache
 }
