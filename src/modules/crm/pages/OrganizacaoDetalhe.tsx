@@ -44,27 +44,33 @@ export function OrganizacaoDetalhe() {
   if (!org) return <p className="text-muted-foreground">Organização não encontrada.</p>
 
   return (
-    <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/comercial/organizacoes')}>
-        <ArrowLeft className="size-4" /> Organizações
-      </Button>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{org.nome}</h1>
-          {org.classificacao && <ClasseBadge classe={org.classificacao} />}
+    <div className="-mx-6 -mt-6 flex min-h-[calc(100%+3rem)] flex-col bg-background">
+      {/* Cabeçalho */}
+      <div className="border-b border-border px-6 py-3">
+        <button
+          onClick={() => navigate('/comercial/organizacoes')}
+          className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> Organizações
+        </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">{org.nome}</h1>
+            {org.classificacao && <ClasseBadge classe={org.classificacao} />}
+          </div>
+          <DeleteEntityButton
+            title="Excluir organização?"
+            description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
+            onDelete={() => deleteOrganization(org.id)}
+            onDeleted={() => navigate('/comercial/organizacoes')}
+          />
         </div>
-        <DeleteEntityButton
-          title="Excluir organização?"
-          description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
-          onDelete={() => deleteOrganization(org.id)}
-          onDeleted={() => navigate('/comercial/organizacoes')}
-        />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+      {/* Corpo: principal | divisória | detalhes */}
+      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
         {/* Coluna principal — atividades com abas */}
-        <div className="min-w-0">
+        <div className="min-w-0 px-6 py-4">
           <Tabs defaultValue="atividade">
             <TabsList className="h-auto gap-4 border-b border-border bg-transparent p-0">
               <TabsTrigger
@@ -89,8 +95,8 @@ export function OrganizacaoDetalhe() {
           </Tabs>
         </div>
 
-        {/* Coluna direita — detalhes e contatos (flat, sem boxes) */}
-        <aside className="space-y-6">
+        {/* Coluna direita — detalhes e contatos (delimitada por linha) */}
+        <aside className="space-y-5 border-border px-6 py-4 lg:border-l">
           <OrgVisaoGeral org={org} />
 
           <section className="border-t border-border pt-4">

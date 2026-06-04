@@ -5,7 +5,6 @@ import {
   Users, Phone, Mail, MessageCircle, StickyNote, CircleDot,
   ShieldQuestion, FileText, type LucideIcon,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -144,9 +143,8 @@ export function AtividadesPanel({ entityType, entityId, organizationId, opportun
   return (
     <div className="space-y-4">
       {/* Composer */}
-      <Card>
-        <CardContent className="space-y-3 p-3">
-          <div className="flex flex-wrap gap-1">
+      <div className="space-y-3 rounded-lg border border-border p-3">
+        <div className="flex flex-wrap gap-1">
             {TYPES.map((t) => {
               const on = tipo === t.tipo
               return (
@@ -184,13 +182,12 @@ export function AtividadesPanel({ entityType, entityId, organizationId, opportun
             placeholder={tipo === 'Objeção' ? 'Comentário sobre a objeção…' : `Escreva ${tipo === 'Nota' ? 'a nota' : 'o resumo'}…`}
             className="min-h-[72px]"
           />
-          <div className="flex justify-end">
-            <Button size="sm" onClick={registrar} disabled={!canSubmit || saving}>
-              {saving ? 'Registrando…' : `Registrar ${tipo.toLowerCase()}`}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex justify-end">
+          <Button size="sm" onClick={registrar} disabled={!canSubmit || saving}>
+            {saving ? 'Registrando…' : `Registrar ${tipo.toLowerCase()}`}
+          </Button>
+        </div>
+      </div>
 
       {/* Timeline */}
       {acts.isLoading || objs.isLoading ? (

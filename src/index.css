@@ -12,27 +12,27 @@
 :root {
   --radius: 0.625rem;
 
-  /* ---- Tema CLARO ---- */
-  --background: #f6f8fb;
-  --foreground: #0f1c34;
+  /* ---- Tema CLARO (fundo branco, bordas finas tipo Attio) ---- */
+  --background: #ffffff;
+  --foreground: #1a1d21;
 
   --card: #ffffff;
-  --card-foreground: #0f1c34;
+  --card-foreground: #1a1d21;
 
   --popover: #ffffff;
-  --popover-foreground: #0f1c34;
+  --popover-foreground: #1a1d21;
 
-  --primary: #1a7fe8;
+  --primary: #2f6df6;
   --primary-foreground: #ffffff;
 
-  --secondary: #eef2f8;
-  --secondary-foreground: #0f1c34;
+  --secondary: #f4f5f7;
+  --secondary-foreground: #1a1d21;
 
-  --muted: #eef2f8;
-  --muted-foreground: #5a7290;
+  --muted: #f5f6f8;
+  --muted-foreground: #6b7280;
 
-  --accent: #e8eef7;
-  --accent-foreground: #0f1c34;
+  --accent: #f1f3f5;
+  --accent-foreground: #1a1d21;
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
@@ -41,33 +41,33 @@
   --warning: #d97706;
   --info: #7c5cf0;
 
-  --border: #d8e0ec;
-  --input: #d8e0ec;
-  --ring: #1a7fe8;
+  --border: #e8eaed;
+  --input: #e4e6ea;
+  --ring: #2f6df6;
 
   /* Cores de gráfico (Recharts) — accents de marca */
-  --chart-1: #1a7fe8;
+  --chart-1: #2f6df6;
   --chart-2: #22c55e;
   --chart-3: #a78bfa;
   --chart-4: #f59e0b;
   --chart-5: #ef4444;
 
   /* Tokens auxiliares dos gráficos */
-  --chart-axis: #5a7290;
-  --chart-grid: #e2e8f0;
-  --chart-cursor: rgba(26, 127, 232, 0.08);
+  --chart-axis: #6b7280;
+  --chart-grid: #eef0f2;
+  --chart-cursor: rgba(47, 109, 246, 0.07);
   --tooltip-bg: #ffffff;
-  --tooltip-border: #d8e0ec;
-  --tooltip-fg: #0f1c34;
+  --tooltip-border: #e8eaed;
+  --tooltip-fg: #1a1d21;
 
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f1c34;
-  --sidebar-primary: #1a7fe8;
+  --sidebar: #fbfbfc;
+  --sidebar-foreground: #1a1d21;
+  --sidebar-primary: #2f6df6;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef2f8;
-  --sidebar-accent-foreground: #0f1c34;
-  --sidebar-border: #d8e0ec;
-  --sidebar-ring: #1a7fe8;
+  --sidebar-accent: #f1f3f5;
+  --sidebar-accent-foreground: #1a1d21;
+  --sidebar-border: #e8eaed;
+  --sidebar-ring: #2f6df6;
 }
 
 /* ---- Tema ESCURO (paleta Blueticket) ---- */
