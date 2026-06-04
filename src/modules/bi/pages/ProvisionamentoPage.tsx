@@ -49,7 +49,7 @@ import {
 } from '../lib/prov-api'
 import type { ProvisioningRow, Status } from '@/lib/database.types'
 import { cn } from '@/lib/utils'
-import { fmtBRL, fmtDate } from '@/lib/format'
+import { fmtBRL, fmtDate, fmtDelta } from '@/lib/format'
 
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
 
@@ -435,7 +435,7 @@ export function ProvisionamentoPage() {
                         <GmvValue
                           value={it.ytd}
                           onOpen={it.isOutros || it.isNovo ? undefined : () => openYtd(it)}
-                          before={(() => {
+                          after={(() => {
                             const priorYtd = it.gmvBase - it.baseYtg
                             if (priorYtd <= 0) return null
                             const ratio = it.ytd / priorYtd
@@ -473,18 +473,11 @@ export function ProvisionamentoPage() {
                           const d = drafts[it.itemKey]
                           const current = d != null && d !== '' ? Number(d) : it.forecast
                           const belowYtd = it.ytd > 0 && current < it.ytd
+                          const defined = d != null && d !== '' ? Number(d) : it.forecastManual
+                          const showPct = defined != null && it.gmvBase > 0
+                          const up = showPct && (defined as number) >= it.gmvBase
                           return (
                             <div className="flex items-center justify-end gap-1">
-                              {belowYtd && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <AlertTriangle className="size-4 text-[var(--success)]" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Previsão abaixo do YTD ({fmtBRL(it.ytd)})
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
                               <div className="relative inline-block">
                                 <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                                   R$
@@ -512,6 +505,27 @@ export function ProvisionamentoPage() {
                                   }}
                                 />
                               </div>
+                              {showPct && (
+                                <span
+                                  className={cn(
+                                    'w-14 text-left text-xs tabular-nums',
+                                    up ? 'text-[var(--success)]' : 'text-[var(--destructive)]',
+                                  )}
+                                  title={`Variação vs ${baseYear} (${fmtBRL(it.gmvBase)})`}
+                                >
+                                  {fmtDelta(((defined as number) - it.gmvBase) / it.gmvBase)}
+                                </span>
+                              )}
+                              {belowYtd && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="size-4 text-[var(--success)]" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Previsão abaixo do YTD ({fmtBRL(it.ytd)})
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
                           )
                         })()}
@@ -592,19 +606,18 @@ export function ProvisionamentoPage() {
 
 /** Valor de GMV com lupa (aparece no hover) para abrir o detalhamento. */
 function GmvValue({
-  value, onOpen, muted, before,
+  value, onOpen, muted, after,
 }: {
   value: number
   onOpen?: () => void
   muted?: boolean
-  before?: React.ReactNode
+  after?: React.ReactNode
 }) {
   return (
     <span
       className={`group inline-flex items-center justify-end gap-1 ${muted ? 'text-muted-foreground' : ''} ${onOpen ? 'cursor-default select-none' : ''}`}
       onDoubleClick={onOpen}
     >
-      {before}
       {onOpen && (
         <button
           onClick={onOpen}
@@ -615,6 +628,7 @@ function GmvValue({
         </button>
       )}
       {fmtBRL(value)}
+      {after}
     </span>
   )
 }
