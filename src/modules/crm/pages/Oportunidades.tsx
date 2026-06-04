@@ -11,8 +11,10 @@ import {
 } from '@/components/ui/table'
 import { useOpportunities } from '../hooks/useOpportunities'
 import { useFunnel } from '../hooks/useFunnelStages'
+import { useViewPref } from '../hooks/useViewPref'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
-import { ListView, TOOLBAR_TRIGGER } from '../components/ListView'
+import { KanbanBoard } from '../components/KanbanBoard'
+import { ListView, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
 import { fmtBRL } from '@/lib/format'
 
 const ALL = '__all__'
@@ -21,6 +23,7 @@ export function Oportunidades() {
   const navigate = useNavigate()
   const { data, isLoading } = useOpportunities()
   const { stages } = useFunnel('oportunidade')
+  const [view, setView] = useViewPref('crm:oppView', 'list')
   const [stageF, setStageF] = useState(ALL)
   const [open, setOpen] = useState(false)
 
@@ -34,18 +37,30 @@ export function Oportunidades() {
       <ListView
         title="Oportunidades"
         count={data ? String(data.length) : undefined}
-        actions={<Button onClick={() => setOpen(true)}><Plus className="size-4" /> Nova oportunidade</Button>}
-        footer={data ? `${rows.length} de ${data.length}` : undefined}
+        actions={
+          <>
+            <ViewToggle view={view} onChange={setView} />
+            <Button onClick={() => setOpen(true)}><Plus className="size-4" /> Nova oportunidade</Button>
+          </>
+        }
+        footer={view === 'list' && data ? `${rows.length} de ${data.length}` : undefined}
         toolbar={
-          <Select value={stageF} onValueChange={setStageF}>
-            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-56`} size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todos os estágios</SelectItem>
-              {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          view === 'list' ? (
+            <Select value={stageF} onValueChange={setStageF}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-56`} size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os estágios</SelectItem>
+                {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : undefined
         }
       >
+        {view === 'kanban' ? (
+          <div className="p-4">
+            <KanbanBoard slug="oportunidade" />
+          </div>
+        ) : (
         <Table>
           <TableHeader><TableRow>
             <TableHead>Título</TableHead><TableHead>Organização</TableHead><TableHead>Estágio</TableHead>
@@ -77,6 +92,7 @@ export function Oportunidades() {
             ))}
           </TableBody>
         </Table>
+        )}
       </ListView>
       <NovaOportunidadeDialog open={open} onOpenChange={setOpen} />
     </>

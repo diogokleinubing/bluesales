@@ -66,8 +66,8 @@ export const MODULES: ModuleDef[] = [
         title: 'Operação',
         items: [
           { to: '/comercial/organizacoes', label: 'Organizações', icon: Building2 },
-          { to: '/comercial/contatos', label: 'Contatos', icon: Contact },
           { to: '/comercial/oportunidades', label: 'Oportunidades', icon: Filter },
+          { to: '/comercial/contatos', label: 'Contatos', icon: Contact },
         ],
       },
       {

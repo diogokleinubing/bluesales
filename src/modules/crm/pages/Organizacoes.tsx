@@ -18,9 +18,12 @@ import {
 } from '@/components/ui/dialog'
 import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
+import { useViewPref } from '../hooks/useViewPref'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
-import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
+import { KanbanBoard } from '../components/KanbanBoard'
+import { ListView, ToolbarSearch, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
+import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
@@ -34,11 +37,17 @@ export function Organizacoes() {
   const biOrganizador = params.get('bi_organizador') ?? ''
 
   const { data, isLoading } = useOrganizations()
+  const [view, setView] = useViewPref('crm:orgView', 'list')
   const [search, setSearch] = useState(biOrganizador)
   const [classe, setClasse] = useState<string>(ALL)
   const [statusF, setStatusF] = useState<string>(ALL)
+  const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
+
+  function toggleKbStatus(s: string) {
+    setKbStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -65,28 +74,59 @@ export function Organizacoes() {
       <ListView
         title="Organizações"
         count={data ? String(data.length) : undefined}
-        actions={<Button onClick={() => setNovoOpen(true)}><Plus className="size-4" /> Nova organização</Button>}
-        footer={data ? `${rows.length} de ${data.length}` : undefined}
-        toolbar={
+        actions={
           <>
-            <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
-            <Select value={classe} onValueChange={setClasse}>
-              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue placeholder="Classe" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas as classes</SelectItem>
-                {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={statusF} onValueChange={setStatusF}>
-              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os status</SelectItem>
-                {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <ViewToggle view={view} onChange={setView} />
+            <Button onClick={() => setNovoOpen(true)}><Plus className="size-4" /> Nova organização</Button>
           </>
         }
+        footer={view === 'list' && data ? `${rows.length} de ${data.length}` : undefined}
+        toolbar={
+          view === 'list' ? (
+            <>
+              <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
+              <Select value={classe} onValueChange={setClasse}>
+                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue placeholder="Classe" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todas as classes</SelectItem>
+                  {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={statusF} onValueChange={setStatusF}>
+                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os status</SelectItem>
+                  {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <div className="flex items-center gap-1">
+              {STATUS_COMERCIAL.map((s) => {
+                const on = kbStatuses.includes(s)
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleKbStatus(s)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+                    )}
+                  >
+                    {s}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        }
       >
+        {view === 'kanban' ? (
+          <div className="p-4">
+            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} />
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -136,6 +176,7 @@ export function Organizacoes() {
             ))}
           </TableBody>
         </Table>
+        )}
       </ListView>
 
       <Dialog open={novoOpen} onOpenChange={setNovoOpen}>

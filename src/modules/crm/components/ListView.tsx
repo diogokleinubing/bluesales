@@ -1,8 +1,35 @@
 import type { ReactNode } from 'react'
-import { Search } from 'lucide-react'
+import { Search, List, Kanban } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { ListKanban } from '../hooks/useViewPref'
 
 /** Classe para os controles de filtro no estilo "pill" do toolbar. */
 export const TOOLBAR_TRIGGER = 'h-8 gap-1.5 rounded-lg border-border bg-card text-sm'
+
+/** Alternador de visão Lista / Kanban. */
+export function ViewToggle({ view, onChange }: { view: ListKanban; onChange: (v: ListKanban) => void }) {
+  return (
+    <div className="inline-flex rounded-lg border border-border p-0.5">
+      {([
+        { v: 'list' as const, icon: List, label: 'Lista' },
+        { v: 'kanban' as const, icon: Kanban, label: 'Kanban' },
+      ]).map(({ v, icon: Icon, label }) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          title={label}
+          className={cn(
+            'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+            view === v ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Icon className="size-4" /> {label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 /** Campo de busca em formato pill para o toolbar. */
 export function ToolbarSearch({
