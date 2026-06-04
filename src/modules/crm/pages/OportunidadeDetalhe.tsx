@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, History } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { StageSelector } from '../components/StageSelector'
@@ -18,10 +19,10 @@ import {
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useProfile } from '../hooks/useProfile'
 import { canEdit } from '../lib/permissions'
-import { useEventGmvOptions } from '../hooks/useCrmLookups'
+import { useEventGmvOptions, useOrgGmvOptions } from '../hooks/useCrmLookups'
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { useOpportunity, updateOpportunity, deleteOpportunity, type Opportunity } from '../hooks/useOpportunities'
-import { fmtBRL } from '@/lib/format'
+import { fmtBRL, fmtBRL0 } from '@/lib/format'
 
 export function OportunidadeDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -144,6 +145,8 @@ function OppVisaoGeral({
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
   const eventOptions = useEventGmvOptions()
+  const orgOptions = useOrgGmvOptions()
+  const [propagate, setPropagate] = useState<{ kind: 'event' | 'org'; id: string; nome: string; gmv: number } | null>(null)
   const initial = useMemo(
     () => ({
       titulo: o.titulo ?? '',
@@ -173,19 +176,59 @@ function OppVisaoGeral({
 
   async function salvar() {
     setSaving(true)
+    const newGmv = toNumber(draft.gmv_estimado)
+    const prevGmv = o.gmv_estimado != null ? Math.round(o.gmv_estimado) : null
+    const gmvChanged = newGmv != null && newGmv !== prevGmv
     try {
       await updateOpportunity(o.id, {
         titulo: draft.titulo.trim() || o.titulo,
-        gmv_estimado: toNumber(draft.gmv_estimado),
+        gmv_estimado: newGmv,
         crm_event_id: draft.crm_event_id || null,
         owner_id: draft.owner_id,
         observacoes: toText(draft.observacoes),
       })
       invalidate()
+      // Propagar o GMV: para o evento (se vinculado) ou para a organização.
+      if (gmvChanged) {
+        if (draft.crm_event_id) {
+          const ev = eventOptions.data?.find((x) => x.id === draft.crm_event_id)
+          if (ev && Math.round(ev.gmv ?? 0) !== newGmv) {
+            setPropagate({ kind: 'event', id: ev.id, nome: ev.nome, gmv: newGmv })
+          }
+        } else if (o.organization_id) {
+          const og = orgOptions.data?.find((x) => x.id === o.organization_id)
+          if (og && Math.round(og.gmv ?? 0) !== newGmv) {
+            setPropagate({ kind: 'org', id: og.id, nome: og.nome, gmv: newGmv })
+          }
+        }
+      }
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function confirmPropagate() {
+    if (!propagate) return
+    try {
+      if (propagate.kind === 'event') {
+        const { error } = await supabase.from('crm_events').update({ gmv_estimado: propagate.gmv }).eq('id', propagate.id)
+        if (error) throw new Error(error.message)
+        qc.invalidateQueries({ queryKey: ['crm', 'events'] })
+        qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'events-gmv'] })
+      } else {
+        const { error } = await supabase.from('organizations').update({ gmv_anual: propagate.gmv }).eq('id', propagate.id)
+        if (error) throw new Error(error.message)
+        qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+        qc.invalidateQueries({ queryKey: ['crm', 'organization', propagate.id] })
+        qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'orgs-gmv'] })
+      }
+      toast.success('GMV atualizado')
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setPropagate(null)
     }
   }
 
@@ -226,6 +269,22 @@ function OppVisaoGeral({
       <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
       {gmvDialog}
+
+      <Dialog open={!!propagate} onOpenChange={(o) => !o && setPropagate(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atualizar GMV {propagate?.kind === 'event' ? 'do evento' : 'da organização'}?</DialogTitle>
+            <DialogDescription>
+              {propagate &&
+                `Deseja atualizar o GMV ${propagate.kind === 'event' ? 'do evento' : 'da organização'} "${propagate.nome}" para ${fmtBRL0(propagate.gmv)}?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPropagate(null)}>Não</Button>
+            <Button onClick={confirmPropagate}>Sim, atualizar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
