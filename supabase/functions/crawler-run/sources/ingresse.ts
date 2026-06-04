@@ -25,6 +25,7 @@ async function fetchPrecos(
   try {
     const res = await fetch(`${EMBED}/${id}/session/0/tickets?apikey=${EMBED_KEY}`, {
       headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000),
     })
     if (!res.ok) return null
     const j = await res.json() as {
@@ -93,7 +94,7 @@ export const ingresseScraper: Scraper = async () => {
   if (!src) return []
   const cfg = src.cfg
   const companyId = Number(cfg.company_id ?? 1)
-  const size = Number(cfg.scan ?? 500)
+  const size = Number(cfg.scan ?? 150)
   const offset = Number(cfg.offset ?? 0)
 
   const url = new URL(SEARCH)
@@ -105,7 +106,10 @@ export const ingresseScraper: Scraper = async () => {
 
   let payload: { events?: IngEvent[]; pagination?: { total?: number } }
   try {
-    const res = await fetch(url.toString(), { headers: { 'User-Agent': UA, Accept: 'application/json' } })
+    const res = await fetch(url.toString(), {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    })
     if (!res.ok) {
       console.error('[ingresse] busca HTTP', res.status)
       return []
@@ -118,25 +122,17 @@ export const ingresseScraper: Scraper = async () => {
 
   const events = payload.events ?? []
   const total = payload.pagination?.total ?? 0
+  console.log(`[ingresse] busca offset=${offset} total=${total} retornou=${events.length}`)
+
   const known = await getKnown(db)
   const agora = Date.now()
+  const novos = events.filter((ev) => ev.title && !known.has(urlDe(ev)))
 
-  const out: RawEvent[] = []
-  for (const ev of events) {
-    if (!ev.title) continue
-    const u = urlDe(ev)
-    if (known.has(u)) continue // pula os já coletados
-
-    // Preço só para eventos ativos (passados já encerraram a venda).
-    const dataIni = ev.session?.dateTime ?? null
-    const t = dataIni ? Date.parse(dataIni) : NaN
-    const ehPassado = !isNaN(t) && t < agora - 86_400_000
-    const precos = ehPassado ? null : await fetchPrecos(ev.id)
-
-    out.push({
-      url_evento: u,
-      nome: ev.title,
-      data_inicio: dataIni,
+  function toRaw(ev: IngEvent, precos: { min: number | null; max: number | null; gratuito: boolean } | null): RawEvent {
+    return {
+      url_evento: urlDe(ev),
+      nome: ev.title!,
+      data_inicio: ev.session?.dateTime ?? null,
       data_fim: null,
       organizador_raw: null,
       organizador_url: null,
@@ -151,13 +147,27 @@ export const ingresseScraper: Scraper = async () => {
       imagem_url: ev.poster?.large ?? ev.poster?.medium ?? null,
       descricao: null,
       raw: { id: ev.id, slug: ev.slug },
-    })
+    }
+  }
+
+  // Preço em paralelo (lotes), só para eventos ativos.
+  const out: RawEvent[] = []
+  const BATCH = 8
+  for (let i = 0; i < novos.length; i += BATCH) {
+    const slice = novos.slice(i, i + BATCH)
+    const mapped = await Promise.all(slice.map(async (ev) => {
+      const t = ev.session?.dateTime ? Date.parse(ev.session.dateTime) : NaN
+      const ehPassado = !isNaN(t) && t < agora - 86_400_000
+      const precos = ehPassado ? null : await fetchPrecos(ev.id)
+      return toRaw(ev, precos)
+    }))
+    out.push(...mapped)
   }
 
   // Avança o offset (ao terminar a passada, recomeça).
   const novoOffset = events.length < size || offset + size >= total ? 0 : offset + size
   await db.from('crawler_sources').update({ config: { ...cfg, offset: novoOffset } }).eq('id', src.id)
-  console.log(`[ingresse] offset ${offset}->${novoOffset} total=${total} retornou=${events.length} novos=${out.length}`)
+  console.log(`[ingresse] offset ${offset}->${novoOffset} novos=${out.length}`)
 
   return out
 }
