@@ -9,14 +9,23 @@ export interface Person {
   email: string | null
   telefone: string | null
   linkedin: string | null
+  instagram: string | null
+  observacoes: string | null
   cargo: string | null
   funil_stage_id: string | null
   created_at: string
   updated_at: string
 }
 
+export interface PersonOrgLink {
+  nome: string
+  papel: string | null
+}
+
 export interface PersonListRow extends Person {
-  orgs: string[]
+  orgs: PersonOrgLink[]
+  stageNome: string | null
+  stageCor: string | null
 }
 
 export function useContacts() {
@@ -27,24 +36,34 @@ export function useContacts() {
     queryKey: ['crm', 'contacts', orgId],
     queryFn: async (): Promise<PersonListRow[]> => {
       const [persons, links] = await Promise.all([
-        supabase.from('persons').select('*').eq('org_id', orgId!).order('nome'),
+        supabase
+          .from('persons')
+          .select('*, funnel_stages(nome, cor)')
+          .eq('org_id', orgId!)
+          .order('nome'),
         supabase
           .from('org_persons')
-          .select('person_id, ativo, organizations(nome)')
+          .select('person_id, ativo, papel, organizations(nome)')
           .eq('ativo', true),
       ])
       if (persons.error) throw new Error(persons.error.message)
-      const byPerson = new Map<string, string[]>()
+      const byPerson = new Map<string, PersonOrgLink[]>()
       for (const l of links.data ?? []) {
         const arr = byPerson.get(l.person_id) ?? []
-        const nome = (l.organizations as { nome?: string } | null)?.nome
-        if (nome) arr.push(nome)
+        const nome = (l.organizations as unknown as { nome?: string } | null)?.nome
+        if (nome) arr.push({ nome, papel: l.papel ?? null })
         byPerson.set(l.person_id, arr)
       }
-      return (persons.data ?? []).map((p) => ({
-        ...(p as Person),
-        orgs: byPerson.get(p.id) ?? [],
-      }))
+      return (persons.data ?? []).map((p) => {
+        const stage = (p as unknown as { funnel_stages?: { nome: string; cor: string | null } | null })
+          .funnel_stages
+        return {
+          ...(p as Person),
+          orgs: byPerson.get(p.id) ?? [],
+          stageNome: stage?.nome ?? null,
+          stageCor: stage?.cor ?? null,
+        }
+      })
     },
   })
 }

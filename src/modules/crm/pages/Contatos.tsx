@@ -14,22 +14,43 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { useContacts, createContact } from '../hooks/useContacts'
-import { useCrmOrgId } from '../hooks/useFunnelStages'
+import { useCrmOrgId, useFunnel } from '../hooks/useFunnelStages'
+import { LinkedinIcon, InstagramIcon } from '../components/SocialIcons'
+
+const ALL = '__all__'
+const NONE = '__none__'
+
+function linkedinUrl(v: string) {
+  return v.startsWith('http') ? v : `https://www.linkedin.com/in/${v.replace(/^@/, '')}`
+}
+function instagramUrl(v: string) {
+  return v.startsWith('http') ? v : `https://instagram.com/${v.replace(/^@/, '')}`
+}
 
 export function Contatos() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
   const { data, isLoading } = useContacts()
+  const { stages } = useFunnel('relacionamento')
   const [search, setSearch] = useState('')
+  const [stageFilter, setStageFilter] = useState(ALL)
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState('')
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (data ?? []).filter((p) => !q || p.nome.toLowerCase().includes(q))
-  }, [data, search])
+    return (data ?? []).filter((p) => {
+      if (q && !p.nome.toLowerCase().includes(q)) return false
+      if (stageFilter === ALL) return true
+      if (stageFilter === NONE) return !p.funil_stage_id
+      return p.funil_stage_id === stageFilter
+    })
+  }, [data, search, stageFilter])
 
   async function criar() {
     if (!orgId || !nome.trim()) return
@@ -50,17 +71,30 @@ export function Contatos() {
         </div>
         <Button onClick={() => setOpen(true)}><Plus className="size-4" /> Novo contato</Button>
       </div>
-      <Card><CardContent className="p-3">
-        <div className="relative max-w-sm">
+      <Card><CardContent className="flex flex-wrap items-center gap-2 p-3">
+        <div className="relative max-w-sm flex-1">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input placeholder="Buscar por nome…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        <Select value={stageFilter} onValueChange={setStageFilter}>
+          <SelectTrigger className="w-52" size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todos os estágios</SelectItem>
+            <SelectItem value={NONE}>Sem estágio</SelectItem>
+            {stages.filter((s) => s.ativo).map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </CardContent></Card>
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Nome</TableHead><TableHead>Cargo</TableHead>
-            <TableHead>Organizações</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead>
+            <TableHead>Nome</TableHead>
+            <TableHead>Organizações / cargo</TableHead>
+            <TableHead>Estágio</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Telefone</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
@@ -68,15 +102,59 @@ export function Contatos() {
                 <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Nenhum contato — adicione o primeiro.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Nenhum contato.</TableCell></TableRow>
             ) : rows.map((p) => (
               <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/comercial/contatos/${p.id}`)}>
-                <TableCell className="font-medium">{p.nome}</TableCell>
-                <TableCell>{p.cargo ?? '—'}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{p.nome}</span>
+                    {p.linkedin && (
+                      <a
+                        href={linkedinUrl(p.linkedin)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-primary"
+                        title="LinkedIn"
+                      >
+                        <LinkedinIcon className="size-4" />
+                      </a>
+                    )}
+                    {p.instagram && (
+                      <a
+                        href={instagramUrl(p.instagram)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-primary"
+                        title="Instagram"
+                      >
+                        <InstagramIcon className="size-4" />
+                      </a>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {p.orgs.length ? p.orgs.map((o, i) => <Badge key={i} variant="outline">{o}</Badge>) : '—'}
+                    {p.orgs.length ? p.orgs.map((o, i) => (
+                      <Badge key={i} variant="outline">
+                        {o.nome}{o.papel ? ` · ${o.papel}` : ''}
+                      </Badge>
+                    )) : '—'}
                   </div>
+                </TableCell>
+                <TableCell>
+                  {p.stageNome ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: p.stageCor ?? 'var(--muted-foreground)' }}
+                      />
+                      {p.stageNome}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{p.email ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{p.telefone ?? '—'}</TableCell>

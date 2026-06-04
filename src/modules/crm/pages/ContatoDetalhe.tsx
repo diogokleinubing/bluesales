@@ -22,7 +22,7 @@ import { StageSelector } from '../components/StageSelector'
 import { ActivityTimeline } from '../components/ActivityTimeline'
 import { ObjecoesTags } from '../components/ObjecoesTags'
 import { AuditLog } from '../components/AuditLog'
-import { TextField, FormActions, useDraft, toText } from '../components/EditFields'
+import { TextField, TextareaField, FormActions, useDraft, toText } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useContact, updateContact, deleteContact, type Person } from '../hooks/useContacts'
 import { usePersonOptions } from '../hooks/useCrmLookups'
@@ -235,10 +235,12 @@ function ContatoDados({ p }: { p: Person }) {
   const initial = useMemo(
     () => ({
       nome: p.nome ?? '',
-      cargo: p.cargo ?? '',
+      funil_stage_id: p.funil_stage_id ?? '',
       email: p.email ?? '',
       telefone: p.telefone ?? '',
       linkedin: p.linkedin ?? '',
+      instagram: p.instagram ?? '',
+      observacoes: p.observacoes ?? '',
     }),
     [p],
   )
@@ -254,10 +256,12 @@ function ContatoDados({ p }: { p: Person }) {
     try {
       await updateContact(p.id, {
         nome: draft.nome.trim() || p.nome,
-        cargo: toText(draft.cargo),
+        funil_stage_id: draft.funil_stage_id || null,
         email: toText(draft.email),
         telefone: toText(draft.telefone),
         linkedin: toText(draft.linkedin),
+        instagram: toText(draft.instagram),
+        observacoes: toText(draft.observacoes),
       })
       invalidate()
     } catch (e) {
@@ -267,32 +271,26 @@ function ContatoDados({ p }: { p: Person }) {
     }
   }
 
-  async function setStage(s: string | null) {
-    try {
-      await updateContact(p.id, { funil_stage_id: s })
-      invalidate()
-    } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
-    }
-  }
-
   return (
     <Card>
       <CardContent className="space-y-4 p-4">
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
-          <TextField label="Cargo" value={draft.cargo} onChange={(v) => set('cargo', v)} />
-          <TextField label="Email" type="email" value={draft.email} onChange={(v) => set('email', v)} />
-          <TextField label="Telefone" value={draft.telefone} onChange={(v) => set('telefone', v)} />
-          <TextField label="LinkedIn" value={draft.linkedin} onChange={(v) => set('linkedin', v)} />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
             <StageSelector
               slug="relacionamento"
-              value={p.funil_stage_id}
-              onChange={setStage}
+              value={draft.funil_stage_id || null}
+              onChange={(s) => set('funil_stage_id', s ?? '')}
               className="h-8 w-full"
             />
+          </div>
+          <TextField label="Email" type="email" value={draft.email} onChange={(v) => set('email', v)} />
+          <TextField label="Telefone" value={draft.telefone} onChange={(v) => set('telefone', v)} />
+          <TextField label="LinkedIn" value={draft.linkedin} onChange={(v) => set('linkedin', v)} />
+          <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} />
+          <div className="col-span-2">
+            <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
           </div>
         </div>
         <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
