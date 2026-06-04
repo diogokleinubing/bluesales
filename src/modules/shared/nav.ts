@@ -57,12 +57,22 @@ export const MODULES: ModuleDef[] = [
     home: '/comercial/painel',
     groups: [
       {
+        title: 'Visão geral',
+        items: [
+          { to: '/comercial/painel', label: 'Visão Geral', icon: Gauge },
+        ],
+      },
+      {
         title: 'Operação',
         items: [
-          { to: '/comercial/painel', label: 'Painel', icon: Gauge },
           { to: '/comercial/organizacoes', label: 'Organizações', icon: Building2 },
           { to: '/comercial/contatos', label: 'Contatos', icon: Contact },
           { to: '/comercial/oportunidades', label: 'Oportunidades', icon: Filter },
+        ],
+      },
+      {
+        title: 'Engajamento',
+        items: [
           { to: '/comercial/atividades', label: 'Atividades', icon: Activity },
           { to: '/comercial/tarefas', label: 'Tarefas', icon: CheckSquare },
         ],
