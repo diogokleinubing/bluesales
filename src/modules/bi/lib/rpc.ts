@@ -319,6 +319,7 @@ export interface ProvStatRow {
   organizador: string
   gmv_base: number
   ytd: number
+  base_ytg: number
 }
 
 export async function biProvStats(

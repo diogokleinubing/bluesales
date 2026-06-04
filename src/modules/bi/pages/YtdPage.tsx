@@ -21,11 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { KpiCard } from '../components/KpiCard'
-import {
-  ComparisonBars,
-  GrowthBars,
-  MultiLineChart,
-} from '../components/charts'
+import { GrowthBars, MultiLineChart } from '../components/charts'
 import { MONTH_LABELS } from '../components/chart-theme'
 import { useControls } from '@/modules/shared/controls-context'
 import { useBiYears, useOrgId } from '../hooks/useBi'
@@ -291,23 +287,6 @@ export function YtdPage() {
           )}
         </ChartCard>
       </div>
-
-      <ChartCard title={`Comparativo por ${YTD_VIEW_LABELS[view]} (top 15)`}>
-        {isLoading ? (
-          <Skeleton className="h-[300px] w-full" />
-        ) : (
-          <ComparisonBars
-            data={sortedRows.slice(0, 15).map((g) => ({
-              label: g.label,
-              target: g.target,
-              base: g.base,
-            }))}
-            targetLabel={String(targetYear)}
-            baseLabel={String(baseYear)}
-            onClickBar={drill}
-          />
-        )}
-      </ChartCard>
 
       {/* Tabela completa */}
       <Card>

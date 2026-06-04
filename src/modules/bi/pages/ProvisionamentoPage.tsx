@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -22,15 +22,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { KpiCard } from '../components/KpiCard'
-import { WaterfallChart } from '../components/charts'
 import { useDefaultOrg } from '@/lib/org'
 import { useControls } from '@/modules/shared/controls-context'
 import { biProvStats, biMonthsElapsed } from '../lib/rpc'
 import {
   buildWaterfall,
   OUTROS_KEY,
-  waterfallBars,
   type OrgStat,
   type ProvItem,
 } from '../lib/provisioning'
@@ -50,6 +53,15 @@ const STATUS_COLOR: Record<Status, string> = {
   Novo: 'bg-[var(--info)]/15 text-[var(--info)]',
 }
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
+const MESES_LONGOS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+/** Formata uma string de dígitos como número agrupado pt-BR ("1.234.567"). */
+function grpDigits(raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  return d ? new Intl.NumberFormat('pt-BR').format(Number(d)) : ''
+}
 
 export function ProvisionamentoPage() {
   const org = useDefaultOrg()
@@ -81,19 +93,20 @@ export function ProvisionamentoPage() {
         biProvStats(orgId!, baseYear, targetYear, dateBase, pdv),
         biMonthsElapsed(orgId!, targetYear, dateBase, pdv),
       ])
-      const m = months > 0 ? months : 12
       const stats: OrgStat[] = rows
         .map((r) => ({
           organizador: r.organizador,
           gmvBase: Number(r.gmv_base),
           ytd: Number(r.ytd),
-          runRate: (Number(r.ytd) / m) * 12,
+          baseYtg: Number(r.base_ytg),
         }))
         .sort((a, b) => b.gmvBase - a.gmvBase)
-      return stats
+      return { stats, monthsElapsed: months > 0 ? months : 12 }
     },
   })
-  const stats = useMemo(() => statsQuery.data ?? [], [statsQuery.data])
+  const stats = useMemo(() => statsQuery.data?.stats ?? [], [statsQuery.data])
+  const monthsElapsed = statsQuery.data?.monthsElapsed ?? 12
+  const ytgTooltip = `${baseYear} de ${MESES_LONGOS[Math.min(monthsElapsed, 11)]} a Dezembro`
 
   const effectiveTop = topN === 0 ? stats.length : topN
 
@@ -109,8 +122,8 @@ export function ProvisionamentoPage() {
         status: (p?.status as Status) ?? 'Ativo',
         gmvBase: s.gmvBase,
         ytd: s.ytd,
-        runRate: s.runRate,
-        forecast: p?.forecast ?? s.runRate,
+        baseYtg: s.baseYtg,
+        forecast: p?.forecast ?? s.ytd + s.baseYtg,
         isNovo: false,
         isOutros: false,
       }
@@ -122,9 +135,9 @@ export function ProvisionamentoPage() {
         (a, s) => ({
           gmvBase: a.gmvBase + s.gmvBase,
           ytd: a.ytd + s.ytd,
-          runRate: a.runRate + s.runRate,
+          baseYtg: a.baseYtg + s.baseYtg,
         }),
-        { gmvBase: 0, ytd: 0, runRate: 0 },
+        { gmvBase: 0, ytd: 0, baseYtg: 0 },
       )
       const p = persisted.get(OUTROS_KEY)
       orgItems.push({
@@ -133,8 +146,8 @@ export function ProvisionamentoPage() {
         status: (p?.status as Status) ?? 'Ativo',
         gmvBase: agg.gmvBase,
         ytd: agg.ytd,
-        runRate: agg.runRate,
-        forecast: p?.forecast ?? agg.runRate,
+        baseYtg: agg.baseYtg,
+        forecast: p?.forecast ?? agg.ytd + agg.baseYtg,
         isNovo: false,
         isOutros: true,
       })
@@ -149,7 +162,7 @@ export function ProvisionamentoPage() {
         status: 'Novo',
         gmvBase: 0,
         ytd: 0,
-        runRate: 0,
+        baseYtg: 0,
         forecast: r.forecast ?? 0,
         isNovo: true,
         isOutros: false,
@@ -159,9 +172,9 @@ export function ProvisionamentoPage() {
     return orgItems
   }, [stats, effectiveTop, persisted, provQuery.data])
 
-  const waterfall = useMemo(() => {
-    const { steps, base, total } = buildWaterfall(items)
-    return { bars: waterfallBars(steps), base, total }
+  const totals = useMemo(() => {
+    const { base, total } = buildWaterfall(items)
+    return { base, total }
   }, [items])
 
   async function persist(
@@ -198,7 +211,7 @@ export function ProvisionamentoPage() {
   function commitForecast(item: ProvItem) {
     const raw = drafts[item.itemKey]
     if (raw == null) return
-    const val = Number(raw.replace(/\./g, '').replace(',', '.'))
+    const val = Number(raw.replace(/\D/g, ''))
     if (!Number.isFinite(val)) return
     persist(item.itemKey, { forecast: val })
     setDrafts((d) => {
@@ -237,7 +250,7 @@ export function ProvisionamentoPage() {
   }
 
   const loading = statsQuery.isLoading || provQuery.isLoading
-  const totalForecast = waterfall.total
+  const totalForecast = totals.total
 
   return (
     <div className="space-y-4">
@@ -270,30 +283,15 @@ export function ProvisionamentoPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label={`GMV base ${baseYear}`} value={fmtBRL(waterfall.base)} loading={loading} />
+        <KpiCard label={`GMV base ${baseYear}`} value={fmtBRL(totals.base)} loading={loading} />
         <KpiCard label={`Previsão ${targetYear}`} value={fmtBRL(totalForecast)} loading={loading} />
         <KpiCard
           label="Variação"
-          value={fmtBRL(totalForecast - waterfall.base)}
+          value={fmtBRL(totalForecast - totals.base)}
           loading={loading}
         />
         <KpiCard label="Itens" value={fmtInt(items.length)} loading={loading} />
       </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Composição da previsão (waterfall)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-[320px] w-full" />
-          ) : (
-            <WaterfallChart data={waterfall.bars} />
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="p-0">
@@ -304,7 +302,14 @@ export function ProvisionamentoPage() {
                   <TableHead>Organizador</TableHead>
                   <TableHead className="text-right">GMV {baseYear}</TableHead>
                   <TableHead className="text-right">YTD {targetYear}</TableHead>
-                  <TableHead className="text-right">Run-rate</TableHead>
+                  <TableHead className="text-right">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-default underline decoration-dotted underline-offset-2">
+                        {baseYear} YTG
+                      </TooltipTrigger>
+                      <TooltipContent>{ytgTooltip}</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Previsão GMV</TableHead>
                   <TableHead></TableHead>
@@ -332,7 +337,7 @@ export function ProvisionamentoPage() {
                         {fmtBRL(it.ytd)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {fmtBRL(it.runRate)}
+                        {fmtBRL(it.baseYtg)}
                       </TableCell>
                       <TableCell>
                         <button onClick={() => cycleStatus(it)}>
@@ -345,24 +350,29 @@ export function ProvisionamentoPage() {
                         </button>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Input
-                          className="h-8 w-32 text-right tabular-nums"
-                          value={
-                            drafts[it.itemKey] ??
-                            String(Math.round(it.forecast))
-                          }
-                          onChange={(e) =>
-                            setDrafts((d) => ({
-                              ...d,
-                              [it.itemKey]: e.target.value,
-                            }))
-                          }
-                          onBlur={() => commitForecast(it)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter')
-                              (e.target as HTMLInputElement).blur()
-                          }}
-                        />
+                        <div className="relative inline-block">
+                          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                            R$
+                          </span>
+                          <Input
+                            inputMode="numeric"
+                            className="h-8 w-36 pl-8 text-right tabular-nums"
+                            value={grpDigits(
+                              drafts[it.itemKey] ?? String(Math.round(it.forecast)),
+                            )}
+                            onChange={(e) =>
+                              setDrafts((d) => ({
+                                ...d,
+                                [it.itemKey]: e.target.value.replace(/\D/g, ''),
+                              }))
+                            }
+                            onBlur={() => commitForecast(it)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter')
+                                (e.target as HTMLInputElement).blur()
+                            }}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell>
                         {it.isNovo && (

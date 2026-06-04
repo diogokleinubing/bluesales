@@ -1,61 +1,12 @@
-import type { SaleEnriched } from './dataset'
-import type { DateBase, Pdv } from './controls'
 import type { Status } from '@/lib/database.types'
-import { matchesPdv, saleMonth, saleYear } from './metrics'
 
 export const OUTROS_KEY = '__OUTROS__'
 
 export interface OrgStat {
   organizador: string
-  gmvBase: number // GMV no ano-base
+  gmvBase: number // GMV no ano-base (ano completo)
   ytd: number // GMV acumulado no ano-alvo
-  runRate: number // YTD anualizado
-}
-
-export interface ProvisioningInput {
-  baseYear: number
-  targetYear: number
-  dateBase: DateBase
-  pdv: Pdv[]
-}
-
-/** Estatísticas por organizador + nº de meses com dados no ano-alvo. */
-export function computeOrgStats(
-  sales: SaleEnriched[],
-  input: ProvisioningInput,
-): { stats: OrgStat[]; monthsElapsed: number } {
-  const base = new Map<string, number>()
-  const ytd = new Map<string, number>()
-  let maxMonth = -1
-
-  for (const s of sales) {
-    if (!matchesPdv(s, input.pdv)) continue
-    const y = saleYear(s, input.dateBase)
-    const org = s.organizador?.trim() || 'Sem organizador'
-    if (y === input.baseYear) {
-      base.set(org, (base.get(org) ?? 0) + s.gmv)
-    } else if (y === input.targetYear) {
-      ytd.set(org, (ytd.get(org) ?? 0) + s.gmv)
-      const m = saleMonth(s, input.dateBase)
-      if (m != null && m > maxMonth) maxMonth = m
-    }
-  }
-
-  const monthsElapsed = maxMonth >= 0 ? maxMonth + 1 : 12
-  const orgs = new Set([...base.keys(), ...ytd.keys()])
-  const stats: OrgStat[] = [...orgs]
-    .map((organizador) => {
-      const y = ytd.get(organizador) ?? 0
-      return {
-        organizador,
-        gmvBase: base.get(organizador) ?? 0,
-        ytd: y,
-        runRate: (y / monthsElapsed) * 12,
-      }
-    })
-    .sort((a, b) => b.gmvBase - a.gmvBase)
-
-  return { stats, monthsElapsed }
+  baseYtg: number // GMV do ano-base nos meses seguintes ao YTD (FY − YTD do ano-base)
 }
 
 export interface ProvItem {
@@ -64,7 +15,7 @@ export interface ProvItem {
   status: Status
   gmvBase: number
   ytd: number
-  runRate: number
+  baseYtg: number
   forecast: number
   isNovo: boolean
   isOutros: boolean
