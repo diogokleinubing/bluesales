@@ -15,6 +15,8 @@ export interface RawEvent {
   gratuito?: boolean
   online?: boolean
   categoria?: string | null
+  capacidade_total?: number | null
+  vendidos?: number | null
   imagem_url?: string | null
   descricao?: string | null
   raw?: unknown // payload bruto da fonte (para auditoria)

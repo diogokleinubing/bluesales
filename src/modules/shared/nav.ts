@@ -141,7 +141,10 @@ export const MODULES: ModuleDef[] = [
         ],
       },
       {
-        title: 'Configuração',
+        // Título != 'Configuração' de propósito: assim a Pesquisa NÃO usa o
+        // drill-in de configurações; estes itens ficam inline na home do
+        // módulo, com uma divisória antes (depois de Locais).
+        title: 'Gestão',
         items: [
           { to: '/pesquisa/configuracao/fontes', label: 'Fontes', icon: Rss, requires: 'gestor' },
           { to: '/pesquisa/configuracao/filtros', label: 'Filtros de ignorar', icon: FilterX, requires: 'gestor' },
