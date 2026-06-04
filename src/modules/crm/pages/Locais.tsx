@@ -131,9 +131,21 @@ export function Locais() {
                       {l.platforms.map((pl) => (
                         <Badge
                           key={pl.platform_id}
-                          variant={pl.tipo_relacao === 'Exclusividade' ? 'default' : 'outline'}
+                          variant="outline"
+                          className="gap-1.5"
                           title={pl.tipo_relacao ?? undefined}
                         >
+                          <span
+                            className="size-2 rounded-full"
+                            style={{
+                              backgroundColor:
+                                pl.tipo_relacao === 'Exclusividade'
+                                  ? 'var(--success)'
+                                  : pl.tipo_relacao === 'Homologada'
+                                    ? 'var(--warning)'
+                                    : 'var(--muted-foreground)',
+                            }}
+                          />
                           {pl.nome}
                         </Badge>
                       ))}
