@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase'
 import { StageSelector } from '../components/StageSelector'
-import { ActivityTimeline } from '../components/ActivityTimeline'
+import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import { TextField, TextareaField, FormActions, useDraft, toText } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -31,66 +32,77 @@ export function ContatoDetalhe() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: p, isLoading } = useContact(id)
+  const [histOpen, setHistOpen] = useState(false)
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
   if (!p) return <p className="text-muted-foreground">Contato não encontrado.</p>
 
   return (
-    <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/comercial/contatos')}>
-        <ArrowLeft className="size-4" /> Contatos
-      </Button>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{p.nome}</h1>
-        <DeleteEntityButton
-          title="Excluir contato?"
-          description={`Esta ação remove "${p.nome}" e seus vínculos com organizações e conexões. Não pode ser desfeita.`}
-          onDelete={() => deleteContact(p.id)}
-          onDeleted={() => navigate('/comercial/contatos')}
-        />
+    <div className="-mx-6 -mt-6 flex min-h-[calc(100%+3rem)] flex-col bg-background">
+      {/* Breadcrumb */}
+      <div className="border-b border-border px-6 py-2">
+        <button
+          onClick={() => navigate('/comercial/contatos')}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" /> Contatos
+        </button>
       </div>
 
-      <Tabs defaultValue="geral">
-        <TabsList>
-          <TabsTrigger value="geral">Visão geral</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-        </TabsList>
+      {/* Título */}
+      <div className="border-b border-border px-6 py-3">
+        <h1 className="text-xl font-semibold tracking-tight">{p.nome}</h1>
+      </div>
 
-        <TabsContent value="geral" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-            <div className="space-y-4">
-              <ContatoDados p={p} />
+      {/* Corpo */}
+      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
+        <div className="min-w-0 px-6 py-4">
+          <AtividadesPanel entityType="person" entityId={p.id} allowObjection={false} />
+        </div>
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <h3 className="text-sm font-medium">Organizações</h3>
-                  <ContatoOrgs personId={p.id} />
-                </CardContent>
-              </Card>
+        <aside className="space-y-5 border-border px-6 py-4 lg:border-l">
+          <ContatoDados p={p} />
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <h3 className="text-sm font-medium">Conexões</h3>
-                  <ContatoConexoes personId={p.id} />
-                </CardContent>
-              </Card>
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Organizações</h3>
+            <ContatoOrgs personId={p.id} />
+          </section>
+
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Conexões</h3>
+            <ContatoConexoes personId={p.id} />
+          </section>
+
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Opções</h3>
+            <div className="space-y-1">
+              <button
+                onClick={() => setHistOpen(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <History className="size-4" /> Histórico
+              </button>
+              <DeleteEntityButton
+                title="Excluir contato?"
+                description={`Esta ação remove "${p.nome}" e seus vínculos com organizações e conexões. Não pode ser desfeita.`}
+                onDelete={() => deleteContact(p.id)}
+                onDeleted={() => navigate('/comercial/contatos')}
+                variant="menu"
+                label="Remover"
+              />
             </div>
+          </section>
+        </aside>
+      </div>
 
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <h3 className="text-sm font-medium">Atividades</h3>
-                  <ActivityTimeline filter={{ personId: p.id }} showOrg />
-                </CardContent>
-              </Card>
-            </div>
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Histórico</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <AuditLog entityType="person" entityId={p.id} />
           </div>
-        </TabsContent>
-
-        <TabsContent value="historico" className="mt-4">
-          <AuditLog entityType="person" entityId={p.id} />
-        </TabsContent>
-      </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -323,29 +335,28 @@ function ContatoDados({ p }: { p: Person }) {
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
-            <StageSelector
-              slug="relacionamento"
-              value={draft.funil_stage_id || null}
-              onChange={(s) => set('funil_stage_id', s ?? '')}
-              className="h-8 w-full"
-            />
-          </div>
-          <TextField label="Email" type="email" value={draft.email} onChange={(v) => set('email', v)} />
-          <TextField label="Telefone" value={draft.telefone} onChange={(v) => set('telefone', v)} />
-          <TextField label="LinkedIn" value={draft.linkedin} onChange={(v) => set('linkedin', v)} />
-          <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} />
-          <div className="col-span-2">
-            <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
-          </div>
-        </div>
-        <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
-      </CardContent>
-    </Card>
+    <section className="space-y-3">
+      <h3 className="text-sm font-medium">Detalhes</h3>
+      <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
+        <StageSelector
+          slug="relacionamento"
+          value={draft.funil_stage_id || null}
+          onChange={(s) => set('funil_stage_id', s ?? '')}
+          className="h-8 w-full"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <TextField label="Email" type="email" value={draft.email} onChange={(v) => set('email', v)} />
+        <TextField label="Telefone" value={draft.telefone} onChange={(v) => set('telefone', v)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <TextField label="LinkedIn" value={draft.linkedin} onChange={(v) => set('linkedin', v)} />
+        <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} />
+      </div>
+      <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
+      {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
+    </section>
   )
 }

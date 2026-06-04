@@ -43,14 +43,19 @@ export interface AtividadesPanelProps {
   entityId: string
   organizationId?: string
   opportunityId?: string
+  /** Exibir "Objeção" como tipo de atividade (org/oportunidade sim, contato não). */
+  allowObjection?: boolean
 }
 
 /** Composer (atividade por tipo, incluindo Objeção) + timeline única. */
-export function AtividadesPanel({ entityType, entityId, organizationId, opportunityId }: AtividadesPanelProps) {
+export function AtividadesPanel({
+  entityType, entityId, organizationId, opportunityId, allowObjection = true,
+}: AtividadesPanelProps) {
   const qc = useQueryClient()
   const tenantOrgId = useCrmOrgId()
   const { profile } = useProfile()
   const base = useObjectionsBase()
+  const types = allowObjection ? TYPES : TYPES.filter((t) => t.tipo !== 'Objeção')
 
   const [tipo, setTipo] = useState<Tipo>('Nota')
   const [resumo, setResumo] = useState('')
@@ -66,6 +71,7 @@ export function AtividadesPanel({ entityType, entityId, organizationId, opportun
   )
 
   const objs = useQuery({
+    enabled: allowObjection,
     queryKey: ['crm', 'timeline-objections', entityType, entityId],
     queryFn: async () => {
       const { data } = await supabase
@@ -145,7 +151,7 @@ export function AtividadesPanel({ entityType, entityId, organizationId, opportun
       {/* Composer */}
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="flex flex-wrap gap-1">
-            {TYPES.map((t) => {
+            {types.map((t) => {
               const on = tipo === t.tipo
               return (
                 <button
