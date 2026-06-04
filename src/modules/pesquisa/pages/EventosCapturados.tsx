@@ -12,7 +12,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { fmtBRL, fmtDate, fmtInt } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { CopyUrlButton } from '../components/CopyUrlButton'
@@ -155,17 +155,15 @@ export function EventosCapturados() {
           <TableHead>Cidade</TableHead>
           <TableHead>Categoria</TableHead>
           <TableHead className="text-right">Preço</TableHead>
-          <TableHead className="text-right">Vendas</TableHead>
-          <TableHead>Status</TableHead>
           <TableHead className="w-32" />
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 10 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={10}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
               Nenhum evento capturado ainda. Rode uma coleta em Configuração → Fontes.
             </TableCell></TableRow>
           ) : rows.map((e) => {
@@ -187,20 +185,6 @@ export function EventosCapturados() {
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : '—'}</TableCell>
                 <TableCell className="max-w-[160px] truncate text-muted-foreground">{e.categoria ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right">{preco(e)}</TableCell>
-                <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">
-                  {e.capacidade_total != null
-                    ? `${fmtInt(e.vendidos ?? 0)} / ${fmtInt(e.capacidade_total)}`
-                    : '—'}
-                </TableCell>
-                <TableCell>
-                  {promovido ? (
-                    <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Promovido</Badge>
-                  ) : e.ignorado ? (
-                    <Badge variant="outline" className="text-muted-foreground">Ignorado</Badge>
-                  ) : (
-                    <Badge variant="secondary">Novo</Badge>
-                  )}
-                </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
                     <CopyUrlButton url={e.url_evento} />
