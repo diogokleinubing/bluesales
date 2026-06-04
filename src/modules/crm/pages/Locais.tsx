@@ -120,7 +120,7 @@ export function Locais() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhum local.</TableCell></TableRow>
             ) : rows.map((l) => (
-              <TableRow key={l.id}>
+              <TableRow key={l.id} className="cursor-pointer" onDoubleClick={() => openEdit(l)}>
                 <TableCell className="font-medium">{l.nome}</TableCell>
                 <TableCell className="text-muted-foreground">{[l.cidade, l.uf].filter(Boolean).join(' / ') || '—'}</TableCell>
                 <TableCell>{l.capacidade != null ? fmtInt(l.capacidade) : '—'}</TableCell>

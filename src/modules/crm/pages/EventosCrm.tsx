@@ -63,6 +63,7 @@ export function EventosCrm() {
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('todos')
+  const [oppFilter, setOppFilter] = useState<string>('todos')
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [f, setF] = useState({ ...EMPTY_FORM })
@@ -77,12 +78,22 @@ export function EventosCrm() {
   const [noOpen, setNoOpen] = useState(false)
   const [noNome, setNoNome] = useState('')
 
+  const oppStages = useMemo(
+    () => [...new Set((data ?? []).map((e) => e.oportunidade_status).filter(Boolean))] as string[],
+    [data],
+  )
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (data ?? []).filter((e) =>
-      (!q || e.nome.toLowerCase().includes(q)) &&
-      (statusFilter === 'todos' || e.status === statusFilter))
-  }, [data, search, statusFilter])
+    return (data ?? []).filter((e) => {
+      if (q && !e.nome.toLowerCase().includes(q)) return false
+      if (statusFilter !== 'todos' && e.status !== statusFilter) return false
+      if (oppFilter === '__com__' && !e.oportunidade_status) return false
+      if (oppFilter === '__sem__' && e.oportunidade_status) return false
+      if (oppFilter !== 'todos' && oppFilter !== '__com__' && oppFilter !== '__sem__'
+        && e.oportunidade_status !== oppFilter) return false
+      return true
+    })
+  }, [data, search, statusFilter, oppFilter])
 
   function openNew() {
     setEditId(null)
@@ -202,6 +213,15 @@ export function EventosCrm() {
                 {EVENTO_STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={oppFilter} onValueChange={setOppFilter}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-48`} size="sm"><SelectValue placeholder="Oportunidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as oportunidades</SelectItem>
+                <SelectItem value="__com__">Com oportunidade</SelectItem>
+                <SelectItem value="__sem__">Sem oportunidade</SelectItem>
+                {oppStages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </>
         }
       >
@@ -219,7 +239,7 @@ export function EventosCrm() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhum evento.</TableCell></TableRow>
             ) : rows.map((e) => (
-              <TableRow key={e.id}>
+              <TableRow key={e.id} className="cursor-pointer" onDoubleClick={() => openEdit(e)}>
                 <TableCell className="font-medium">{e.nome}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {e.datas.length ? e.datas.map((d) => fmtDate(d)).join(', ') : '—'}

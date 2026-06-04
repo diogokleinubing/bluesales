@@ -93,7 +93,7 @@ export function Artistas() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Nenhum artista.</TableCell></TableRow>
             ) : rows.map((a) => (
-              <TableRow key={a.id}>
+              <TableRow key={a.id} className="cursor-pointer" onDoubleClick={() => openEdit(a)}>
                 <TableCell className="font-medium">{a.nome}</TableCell>
                 <TableCell>{a.genero_nome ?? '—'}</TableCell>
                 <TableCell>{a.escalao ? <Badge variant="outline">{a.escalao}</Badge> : '—'}</TableCell>
