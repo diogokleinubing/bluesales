@@ -38,6 +38,7 @@ export interface CrawledEventRow {
   gratuito: boolean
   online: boolean
   segmento: string | null
+  categoria: string | null
   imagem_url: string | null
   ignorado: boolean
   ignorado_motivo: string | null

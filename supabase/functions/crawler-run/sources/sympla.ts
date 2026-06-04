@@ -1,46 +1,46 @@
-// Fonte: Sympla — descoberta via sitemap + extração do __NEXT_DATA__.
+// Fonte: Sympla — descoberta via sitemap + APIs de BFF (JSON limpo).
 //
-// Por que assim:
-//  - Não há API de busca pública; a página de evento é SPA mas embute todo o
-//    evento em <script id="__NEXT_DATA__"> (props.pageProps.hydrationData
-//    .eventHydration.event).
-//  - O acesso passa por Cloudflare + Queue-it (sala de espera): seguimos os
-//    redirects manualmente com um cookie-jar, o que libera o QueueITAccepted.
-//  - Descoberta: sitemap-eventos.xml lista ~31k eventos (slug__id), SEM lastmod
-//    nem cidade. Abrir todos por semana é inviável numa Edge Function.
+// Descoberta: sitemap-eventos.xml lista ~31k eventos (slug__id), aberto e sem
+// Queue-it. Pré-filtra pelo slug com a cidade-alvo e pula os já coletados.
 //
-// Estratégia (v1, roda dentro do limite de tempo da Edge Function):
-//  - Pré-filtra as URLs do sitemap cujo SLUG contém a cidade-alvo.
-//  - Abre no máximo MAX_POR_CIDADE por execução (teto logado, sem corte
-//    silencioso) e confirma cidade/data pelo __NEXT_DATA__.
-//  Limitações conhecidas: perde eventos sem a cidade no slug; preço não vem no
-//  HTML (carregado à parte) -> fica nulo.
+// Dados: dois endpoints de backend (host event-page.svc, sem Queue-it/HTML):
+//   GET /api/event-bff/purchase/event/<id>          -> evento completo (JSON)
+//   GET /api/event-bff/purchase/event/<id>/tickets/grouped -> lotes/preços
+//
+// Limitação: cobre eventos cujo slug cita a cidade (teto por execução, logado).
 
 import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
 import { norm } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const SITEMAP = 'https://www.sympla.com.br/sitemap-eventos.xml'
-const MAX_POR_CIDADE = 12
+const API = 'https://event-page.svc.sympla.com.br/api/event-bff/purchase/event'
+const MAX_POR_CIDADE = 15
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
-// Cookie-jar compartilhado entre chamadas do mesmo isolate (reaproveita o
-// QueueITAccepted entre cidades/eventos).
-const jar = new Map<string, string>()
-
-// Memoiza a lista de URLs do sitemap durante a invocação (fetch de ~5 MB 1x).
+// --- memo por invocação ---------------------------------------------------
 let sitemapCache: string[] | null = null
-
-// IDs de eventos Sympla já coletados — "pular para sempre" (não reentrar nos
-// mesmos eventos). Memoizado durante a invocação.
 let knownIdsCache: Set<string> | null = null
 
 /** Extrai o id do evento da URL do sitemap (…/<slug>__<id>). */
 function idDaUrl(u: string): string | null {
   const m = u.match(/__(\d+)(?:[/?#]|$)/)
   return m ? m[1] : null
+}
+
+async function getSitemapUrls(): Promise<string[]> {
+  if (sitemapCache) return sitemapCache
+  try {
+    const res = await fetch(SITEMAP, { headers: { 'User-Agent': UA } })
+    const xml = await res.text()
+    sitemapCache = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1].trim())
+  } catch (e) {
+    console.error('[sympla] sitemap falhou', String(e))
+    sitemapCache = []
+  }
+  return sitemapCache
 }
 
 async function getKnownIds(): Promise<Set<string>> {
@@ -66,92 +66,73 @@ async function getKnownIds(): Promise<Set<string>> {
   return s
 }
 
-function readSetCookies(res: Response): string[] {
-  const h = res.headers as unknown as { getSetCookie?: () => string[] }
-  if (typeof h.getSetCookie === 'function') return h.getSetCookie()
-  const raw = res.headers.get('set-cookie')
-  return raw ? [raw] : []
-}
-
-async function fetchSeguindoRedirects(start: string): Promise<{ status: number; body: string } | null> {
-  let url = start
-  for (let hop = 0; hop < 8; hop++) {
-    const cookieHeader = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
-    const res = await fetch(url, {
-      redirect: 'manual',
-      headers: {
-        'User-Agent': UA,
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
-      },
-    })
-    for (const sc of readSetCookies(res)) {
-      const first = sc.split(';')[0]
-      const eq = first.indexOf('=')
-      if (eq > 0) jar.set(first.slice(0, eq).trim(), first.slice(eq + 1).trim())
-    }
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get('location')
-      if (!loc) return null
-      url = loc.startsWith('http') ? loc : new URL(loc, url).toString()
-      await res.body?.cancel()
-      continue
-    }
-    return { status: res.status, body: await res.text() }
-  }
-  return null
-}
-
-async function getSitemapUrls(): Promise<string[]> {
-  if (sitemapCache) return sitemapCache
-  try {
-    const res = await fetch(SITEMAP, { headers: { 'User-Agent': UA } })
-    const xml = await res.text()
-    sitemapCache = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1].trim())
-  } catch (e) {
-    console.error('[sympla] sitemap falhou', String(e))
-    sitemapCache = []
-  }
-  return sitemapCache
-}
-
+// --- tipos da API ---------------------------------------------------------
 interface SymplaEvent {
   id?: number | string
   name?: string
-  slug?: string
-  newUrl?: string
-  startDate?: string
-  endDate?: string
-  logoUrl?: string
   cancelled?: boolean
   published?: boolean
   visible?: boolean
   onlineInfo?: unknown
+  paymentEventType?: string // "paid" | "free" | ...
+  startDate?: string
+  endDate?: string
+  startDateMultiFormat?: { ISO8601?: string }
+  endDateMultiFormat?: { ISO8601?: string }
+  oldUrl?: string
+  newUrl?: string
+  slug?: string
   eventsAddress?: { name?: string; city?: string; state?: string }
-  eventsHost?: { name?: string } | string | null
+  eventsHost?: { name?: string }
+  eventsCategory?: { description?: string; vertical?: string }
+  images?: { logoLarge?: string; logoUrl?: string }
 }
 
-function hostName(h: SymplaEvent['eventsHost']): string | null {
-  if (!h) return null
-  if (typeof h === 'string') return h
-  return h.name ?? null
+interface SymplaTicket {
+  show?: boolean
+  isFree?: boolean
+  salePriceMonetary?: { decimal?: number }
 }
 
-function toIso(s?: string): string | null {
-  if (!s) return null
-  return s.includes(' ') ? s.replace(' ', 'T') : s
-}
-
-function parseEvento(body: string, fallbackUrl: string): SymplaEvent | null {
-  const m = body.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)
-  if (!m) return null
+async function fetchEvento(id: string): Promise<SymplaEvent | null> {
   try {
-    const ev = JSON.parse(m[1])?.props?.pageProps?.hydrationData?.eventHydration?.event
-    if (!ev?.name) return null
-    if (!ev.newUrl) ev.newUrl = fallbackUrl
-    return ev as SymplaEvent
-  } catch {
+    const res = await fetch(`${API}/${id}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    return await res.json() as SymplaEvent
+  } catch (e) {
+    console.error('[sympla] fetchEvento falhou', id, String(e))
+    return null
+  }
+}
+
+async function fetchPrecos(
+  id: string,
+): Promise<{ min: number | null; max: number | null; gratuito: boolean } | null> {
+  try {
+    const res = await fetch(`${API}/${id}/tickets/grouped`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const data = await res.json() as {
+      tickets?: SymplaTicket[]
+      groups?: { tickets?: SymplaTicket[] }[]
+    }
+    let pool = (data.tickets ?? []).filter((t) => t.show !== false)
+    if (!pool.length) {
+      pool = (data.groups ?? []).flatMap((g) => g.tickets ?? []).filter((t) => t.show !== false)
+    }
+    if (!pool.length) return null
+    const pagos = pool.filter((t) => !t.isFree)
+    if (!pagos.length) return { min: 0, max: 0, gratuito: true }
+    const precos = pagos
+      .map((t) => t.salePriceMonetary?.decimal)
+      .filter((v): v is number => typeof v === 'number')
+    if (!precos.length) return null
+    return { min: Math.min(...precos), max: Math.max(...precos), gratuito: false }
+  } catch (e) {
+    console.error('[sympla] precos falhou', id, String(e))
     return null
   }
 }
@@ -162,58 +143,62 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
 
   const urls = await getSitemapUrls()
   const known = await getKnownIds()
-  const candidatas = urls
-    .filter((u) => u.includes(cidadeToken) && !/online/i.test(u))
-    .filter((u) => {
-      const id = idDaUrl(u) // pula para sempre eventos já coletados
-      return !id || !known.has(id)
-    })
-    .slice(0, MAX_POR_CIDADE)
 
-  if (urls.length && candidatas.length === MAX_POR_CIDADE) {
-    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} novos por execução (restante segue na próxima)`) // sem corte silencioso
+  const ids: string[] = []
+  for (const u of urls) {
+    if (!u.includes(cidadeToken) || /online/i.test(u)) continue
+    const id = idDaUrl(u)
+    if (!id || known.has(id)) continue // pula para sempre os já coletados
+    ids.push(id)
+    if (ids.length >= MAX_POR_CIDADE) break
+  }
+  if (urls.length && ids.length === MAX_POR_CIDADE) {
+    console.log(`[sympla] ${cidade}: teto de ${MAX_POR_CIDADE} novos por execução (restante na próxima)`)
   }
 
   const agora = Date.now()
   const limite = agora + janelaDias * 86_400_000
   const out: RawEvent[] = []
 
-  for (const url of candidatas) {
-    let r: { status: number; body: string } | null = null
-    try {
-      r = await fetchSeguindoRedirects(url)
-    } catch (e) {
-      console.error('[sympla] fetch evento falhou', url, String(e))
-      continue
-    }
-    if (!r || r.status !== 200) continue
-    const ev = parseEvento(r.body, url)
-    if (!ev) continue
+  for (const id of ids) {
+    const ev = await fetchEvento(id)
+    if (!ev?.name) continue
     if (ev.cancelled || ev.published === false || ev.visible === false) continue
 
-    // Confirma cidade real e janela de data.
     const cidadeEv = ev.eventsAddress?.city ?? null
     if (!cidadeEv || norm(cidadeEv) !== norm(cidade)) continue
-    const t = ev.startDate ? Date.parse(toIso(ev.startDate)!) : NaN
+
+    const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
+    const t = dataIni ? Date.parse(dataIni) : NaN
     if (isNaN(t) || t < agora - 86_400_000 || t > limite) continue
 
+    // Gratuito pelo tipo do evento evita uma chamada de preço.
+    const ehFree = (ev.paymentEventType ?? '').toLowerCase() === 'free'
+    const precos = ehFree ? null : await fetchPrecos(id)
+
     out.push({
-      url_evento: ev.newUrl ?? url,
-      nome: ev.name!,
-      data_inicio: toIso(ev.startDate),
-      data_fim: toIso(ev.endDate),
-      organizador_raw: hostName(ev.eventsHost),
+      url_evento: ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`,
+      nome: ev.name,
+      data_inicio: dataIni,
+      data_fim: ev.endDateMultiFormat?.ISO8601 ?? ev.endDate ?? null,
+      organizador_raw: ev.eventsHost?.name ?? null,
       organizador_url: null,
       local_raw: ev.eventsAddress?.name ?? null,
       cidade: cidadeEv,
       uf: ev.eventsAddress?.state ?? uf,
-      preco_min: null, // preço não vem no HTML (API de ingressos à parte)
-      preco_max: null,
-      gratuito: false,
+      preco_min: precos?.min ?? null,
+      preco_max: precos?.max ?? null,
+      gratuito: ehFree || (precos?.gratuito ?? false),
       online: !!ev.onlineInfo,
-      imagem_url: ev.logoUrl ?? null,
+      categoria: ev.eventsCategory?.description ?? null,
+      imagem_url: ev.images?.logoLarge ?? ev.images?.logoUrl ?? null,
       descricao: null,
-      raw: { id: ev.id, slug: ev.slug },
+      raw: {
+        id: ev.id,
+        slug: ev.slug,
+        categoria: ev.eventsCategory?.description ?? null,
+        vertical: ev.eventsCategory?.vertical ?? null,
+      },
     })
   }
   return out

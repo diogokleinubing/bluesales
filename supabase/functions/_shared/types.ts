@@ -14,6 +14,7 @@ export interface RawEvent {
   preco_max?: number | null
   gratuito?: boolean
   online?: boolean
+  categoria?: string | null
   imagem_url?: string | null
   descricao?: string | null
   raw?: unknown // payload bruto da fonte (para auditoria)

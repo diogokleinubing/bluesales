@@ -44,11 +44,18 @@ export function EventosCapturados() {
   const [fonte, setFonte] = useState('todas')
   const [status, setStatus] = useState<StatusFiltro>('ativos')
   const [cidade, setCidade] = useState('todas')
+  const [categoria, setCategoria] = useState('todas')
   const [busy, setBusy] = useState<string | null>(null)
 
   const cidades = useMemo(() => {
     const s = new Set<string>()
     for (const e of data ?? []) if (e.cidade) s.add(`${e.cidade}${e.uf ? `/${e.uf}` : ''}`)
+    return [...s].sort()
+  }, [data])
+
+  const categorias = useMemo(() => {
+    const s = new Set<string>()
+    for (const e of data ?? []) if (e.categoria) s.add(e.categoria)
     return [...s].sort()
   }, [data])
 
@@ -60,13 +67,14 @@ export function EventosCapturados() {
         !(e.local_raw ?? '').toLowerCase().includes(q)) return false
       if (fonte !== 'todas' && e.source_slug !== fonte) return false
       if (cidade !== 'todas' && `${e.cidade}${e.uf ? `/${e.uf}` : ''}` !== cidade) return false
+      if (categoria !== 'todas' && e.categoria !== categoria) return false
       const promovido = !!e.promovido_crm_event_id
       if (status === 'ativos' && (e.ignorado || promovido)) return false
       if (status === 'promovidos' && !promovido) return false
       if (status === 'ignorados' && !e.ignorado) return false
       return true
     })
-  }, [data, search, fonte, cidade, status])
+  }, [data, search, fonte, cidade, categoria, status])
 
   async function onIgnorar(ev: CrawledEventRow, ignorar: boolean) {
     setBusy(ev.id)
@@ -117,6 +125,15 @@ export function EventosCapturados() {
               {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+          {categorias.length > 0 && (
+            <Select value={categoria} onValueChange={setCategoria}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[170px]`}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as categorias</SelectItem>
+                {categorias.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={status} onValueChange={(v) => setStatus(v as StatusFiltro)}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[140px]`}><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -136,6 +153,7 @@ export function EventosCapturados() {
           <TableHead>Data</TableHead>
           <TableHead>Local</TableHead>
           <TableHead>Cidade</TableHead>
+          <TableHead>Categoria</TableHead>
           <TableHead className="text-right">Preço</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="w-32" />
@@ -143,10 +161,10 @@ export function EventosCapturados() {
         <TableBody>
           {isLoading ? (
             Array.from({ length: 10 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
               Nenhum evento capturado ainda. Rode uma coleta em Configuração → Fontes.
             </TableCell></TableRow>
           ) : rows.map((e) => {
@@ -166,6 +184,7 @@ export function EventosCapturados() {
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>
                 <TableCell className="max-w-[180px] truncate text-muted-foreground">{e.local_raw ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : '—'}</TableCell>
+                <TableCell className="max-w-[160px] truncate text-muted-foreground">{e.categoria ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right">{preco(e)}</TableCell>
                 <TableCell>
                   {promovido ? (
