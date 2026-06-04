@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -32,10 +32,16 @@ export function NovaOportunidadeDialog({
   open,
   onOpenChange,
   organizationId,
+  initialTitulo,
+  initialGmv,
+  initialEventId,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   organizationId?: string
+  initialTitulo?: string
+  initialGmv?: number | null
+  initialEventId?: string
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -52,6 +58,16 @@ export function NovaOportunidadeDialog({
   const [gmv, setGmv] = useState('')
   const [saving, setSaving] = useState(false)
   const { consider, dialog: gmvDialog } = useGmvCopy(gmv, setGmv)
+
+  // Reinicializa o formulário ao abrir (com valores pré-preenchidos, se houver).
+  useEffect(() => {
+    if (!open) return
+    setTitulo(initialTitulo ?? '')
+    setOrg(organizationId ?? null)
+    setEvento(initialEventId ?? NONE)
+    setGmv(initialGmv != null ? String(Math.round(initialGmv)) : '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function onOrgChange(id: string) {
     setOrg(id)

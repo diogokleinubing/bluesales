@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2, X } from 'lucide-react'
@@ -29,6 +30,7 @@ import {
   EVENTO_STATUS, LOCAL_TIPOS, type CrmEventRow, type EventoStatus, type LocalTipo,
 } from '../hooks/useCadastros'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
+import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const NONE = '__none__'
@@ -50,6 +52,7 @@ const EMPTY_FORM = {
 
 export function EventosCrm() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const orgId = useCrmOrgId()
   const { data, isLoading } = useCrmEvents()
   const locais = useLocalOptions()
@@ -71,6 +74,9 @@ export function EventosCrm() {
   const [orgPick, setOrgPick] = useState<Lookup | null>(null)
   const [edicoes, setEdicoes] = useState<Edicao[]>([])
   const [newEd, setNewEd] = useState<Edicao>({ data: '', platform_ids: [] })
+
+  // Criar oportunidade a partir de um evento (pré-preenchida)
+  const [oppFrom, setOppFrom] = useState<CrmEventRow | null>(null)
 
   // Diálogos de criação rápida
   const [nlOpen, setNlOpen] = useState(false)
@@ -248,7 +254,27 @@ export function EventosCrm() {
                 <TableCell className="text-muted-foreground">{e.organization_nome ?? '—'}</TableCell>
                 <TableCell className="text-right">{e.gmv_estimado != null ? fmtBRL(e.gmv_estimado) : '—'}</TableCell>
                 <TableCell>{e.status ? <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'}>{e.status}</Badge> : '—'}</TableCell>
-                <TableCell>{e.oportunidade_status ? <Badge variant="outline">{e.oportunidade_status}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell>
+                  {e.oportunidade_status ? (
+                    <Badge
+                      variant="outline"
+                      className="cursor-pointer"
+                      title="Duplo clique para abrir a oportunidade"
+                      onDoubleClick={(ev) => { ev.stopPropagation(); if (e.oportunidade_id) navigate(`/comercial/oportunidades/${e.oportunidade_id}`) }}
+                    >
+                      {e.oportunidade_status}
+                    </Badge>
+                  ) : (
+                    <button
+                      onClick={(ev) => { ev.stopPropagation(); setOppFrom(e) }}
+                      onDoubleClick={(ev) => ev.stopPropagation()}
+                      className="inline-flex size-6 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+                      title="Criar oportunidade deste evento"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>
@@ -410,6 +436,15 @@ export function EventosCrm() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NovaOportunidadeDialog
+        open={!!oppFrom}
+        onOpenChange={(o) => !o && setOppFrom(null)}
+        organizationId={oppFrom?.organization_id ?? undefined}
+        initialTitulo={oppFrom?.nome}
+        initialGmv={oppFrom?.gmv_estimado}
+        initialEventId={oppFrom?.id}
+      />
     </>
   )
 }

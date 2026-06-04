@@ -210,6 +210,7 @@ export interface CrmEventRow extends CrmEvent {
   organization_nome: string | null
   segmento_nome: string | null
   datas: string[]
+  oportunidade_id: string | null
   oportunidade_status: string | null
 }
 
@@ -238,7 +239,7 @@ export function useCrmEvents() {
           .eq('org_id', orgId!),
         supabase
           .from('opportunities')
-          .select('crm_event_id, funnel_stages(nome)')
+          .select('id, crm_event_id, funnel_stages(nome)')
           .eq('org_id', orgId!)
           .not('crm_event_id', 'is', null),
       ])
@@ -250,20 +251,24 @@ export function useCrmEvents() {
         arr.push(ed.data)
         byEvent.set(ed.crm_event_id, arr)
       }
-      const oppByEvent = new Map<string, string>()
+      const oppByEvent = new Map<string, { id: string; stage: string | null }>()
       for (const op of opps.data ?? []) {
-        if (!op.crm_event_id) continue
-        const st = (op.funnel_stages as unknown as { nome: string } | null)?.nome
-        if (st && !oppByEvent.has(op.crm_event_id)) oppByEvent.set(op.crm_event_id, st)
+        if (!op.crm_event_id || oppByEvent.has(op.crm_event_id)) continue
+        const st = (op.funnel_stages as unknown as { nome: string } | null)?.nome ?? null
+        oppByEvent.set(op.crm_event_id, { id: op.id as string, stage: st })
       }
-      return (evs.data ?? []).map((e) => ({
-        ...(e as CrmEvent),
-        local_nome: (e.crm_locals as unknown as { nome: string } | null)?.nome ?? null,
-        organization_nome: (e.organizations as unknown as { nome: string } | null)?.nome ?? null,
-        segmento_nome: (e.segments as unknown as { nome: string } | null)?.nome ?? null,
-        datas: (byEvent.get(e.id) ?? []).sort(),
-        oportunidade_status: oppByEvent.get(e.id) ?? null,
-      }))
+      return (evs.data ?? []).map((e) => {
+        const opp = oppByEvent.get(e.id)
+        return {
+          ...(e as CrmEvent),
+          local_nome: (e.crm_locals as unknown as { nome: string } | null)?.nome ?? null,
+          organization_nome: (e.organizations as unknown as { nome: string } | null)?.nome ?? null,
+          segmento_nome: (e.segments as unknown as { nome: string } | null)?.nome ?? null,
+          datas: (byEvent.get(e.id) ?? []).sort(),
+          oportunidade_id: opp?.id ?? null,
+          oportunidade_status: opp?.stage ?? null,
+        }
+      })
     },
   })
 }
