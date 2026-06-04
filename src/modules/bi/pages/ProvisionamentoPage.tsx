@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Search, AlertTriangle } from 'lucide-react'
+import { Plus, Search, AlertTriangle, ArrowUp, ArrowDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,9 +48,23 @@ import {
   upsertProvisioning,
 } from '../lib/prov-api'
 import type { ProvisioningRow, Status } from '@/lib/database.types'
+import { cn } from '@/lib/utils'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const TOP_OPTIONS = [20, 50, 100, 0] // 0 = Todos
+
+type SortKey = 'nome' | 'gmvBase' | 'ytdBase' | 'ytd' | 'baseYtg' | 'forecast'
+
+function sortVal(it: ProvItem, k: SortKey): number | string {
+  switch (k) {
+    case 'nome': return it.nome
+    case 'gmvBase': return it.gmvBase
+    case 'ytdBase': return it.gmvBase - it.baseYtg
+    case 'ytd': return it.ytd
+    case 'baseYtg': return it.baseYtg
+    case 'forecast': return it.forecast
+  }
+}
 const MESES_LONGOS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -70,6 +84,8 @@ export function ProvisionamentoPage() {
   const baseYear = year - 1
   const [topN, setTopN] = useState(20)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [sortKey, setSortKey] = useState<SortKey>('gmvBase')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [breakdown, setBreakdown] = useState<{
     organizador: string
     year: number
@@ -214,6 +230,52 @@ export function ProvisionamentoPage() {
     return { base, total }
   }, [items])
 
+  // "Demais organizadores" e "Novos" ficam fixos no fim; o resto é ordenável.
+  const sortedItems = useMemo(() => {
+    const pinned = items.filter((i) => i.isOutros || i.isNovo)
+    const normal = items.filter((i) => !i.isOutros && !i.isNovo)
+    normal.sort((a, b) => {
+      const av = sortVal(a, sortKey)
+      const bv = sortVal(b, sortKey)
+      const cmp =
+        typeof av === 'string' || typeof bv === 'string'
+          ? String(av).localeCompare(String(bv), 'pt-BR')
+          : (av as number) - (bv as number)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return [...normal, ...pinned]
+  }, [items, sortKey, sortDir])
+
+  function toggleSort(k: SortKey) {
+    if (k === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(k)
+      setSortDir(k === 'nome' ? 'asc' : 'desc')
+    }
+  }
+
+  function SortHead({
+    k, align = 'left', children,
+  }: {
+    k: SortKey
+    align?: 'left' | 'right'
+    children: React.ReactNode
+  }) {
+    const active = sortKey === k
+    return (
+      <TableHead
+        className={cn('cursor-pointer select-none whitespace-nowrap', align === 'right' && 'text-right')}
+        onClick={() => toggleSort(k)}
+      >
+        <span className={cn('inline-flex items-center gap-1', align === 'right' && 'flex-row-reverse', active && 'text-foreground')}>
+          {children}
+          {active && (sortDir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
+        </span>
+      </TableHead>
+    )
+  }
+
   async function persist(
     itemKey: string,
     patch: { status?: Status; forecast?: number; nome?: string },
@@ -332,19 +394,19 @@ export function ProvisionamentoPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Organizador</TableHead>
-                  <TableHead className="text-right">GMV {baseYear}</TableHead>
-                  <TableHead className="text-right">YTD {baseYear}</TableHead>
-                  <TableHead className="text-right">YTD {targetYear}</TableHead>
-                  <TableHead className="text-right">
+                  <SortHead k="nome">Organizador</SortHead>
+                  <SortHead k="gmvBase" align="right">GMV {baseYear}</SortHead>
+                  <SortHead k="ytdBase" align="right">YTD {baseYear}</SortHead>
+                  <SortHead k="ytd" align="right">YTD {targetYear}</SortHead>
+                  <SortHead k="baseYtg" align="right">
                     <Tooltip>
-                      <TooltipTrigger className="cursor-default">
-                        {baseYear} YTG
+                      <TooltipTrigger asChild>
+                        <span>{baseYear} YTG</span>
                       </TooltipTrigger>
                       <TooltipContent>{ytgTooltip}</TooltipContent>
                     </Tooltip>
-                  </TableHead>
-                  <TableHead className="text-right">Previsão GMV {targetYear}</TableHead>
+                  </SortHead>
+                  <SortHead k="forecast" align="right">Previsão GMV {targetYear}</SortHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -358,7 +420,7 @@ export function ProvisionamentoPage() {
                     </TableRow>
                   ))
                 ) : (
-                  items.map((it) => (
+                  sortedItems.map((it) => (
                     <TableRow key={it.itemKey}>
                       <TableCell className="max-w-64 truncate font-medium">
                         {it.nome}
