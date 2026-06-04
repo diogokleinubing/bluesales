@@ -137,8 +137,43 @@ async function fetchPrecos(
   }
 }
 
+/** Monta o RawEvent a partir do evento da API (reusado por coleta e backfill). */
+function toRawEvent(
+  ev: SymplaEvent,
+  id: string,
+  urlEvento: string,
+  precos: { min: number | null; max: number | null; gratuito: boolean } | null,
+  ehFree: boolean,
+): RawEvent {
+  const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
+  return {
+    url_evento: urlEvento,
+    nome: ev.name!,
+    data_inicio: dataIni,
+    data_fim: ev.endDateMultiFormat?.ISO8601 ?? ev.endDate ?? null,
+    organizador_raw: ev.eventsHost?.name ?? null,
+    organizador_url: null,
+    local_raw: ev.eventsAddress?.name ?? null,
+    cidade: ev.eventsAddress?.city ?? null,
+    uf: ev.eventsAddress?.state ?? null,
+    preco_min: precos?.min ?? null,
+    preco_max: precos?.max ?? null,
+    gratuito: ehFree || (precos?.gratuito ?? false),
+    online: !!ev.onlineInfo,
+    categoria: ev.eventsCategory?.description ?? null,
+    imagem_url: ev.images?.logoLarge ?? ev.images?.logoUrl ?? null,
+    descricao: null,
+    raw: {
+      id: ev.id,
+      slug: ev.slug,
+      categoria: ev.eventsCategory?.description ?? null,
+      vertical: ev.eventsCategory?.vertical ?? null,
+    },
+  }
+}
+
 export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
-  const { cidade, uf, janelaDias } = ctx
+  const { cidade, janelaDias } = ctx
   const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
 
   const urls = await getSitemapUrls()
@@ -175,31 +210,8 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
     // Gratuito pelo tipo do evento evita uma chamada de preço.
     const ehFree = (ev.paymentEventType ?? '').toLowerCase() === 'free'
     const precos = ehFree ? null : await fetchPrecos(id)
-
-    out.push({
-      url_evento: ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`,
-      nome: ev.name,
-      data_inicio: dataIni,
-      data_fim: ev.endDateMultiFormat?.ISO8601 ?? ev.endDate ?? null,
-      organizador_raw: ev.eventsHost?.name ?? null,
-      organizador_url: null,
-      local_raw: ev.eventsAddress?.name ?? null,
-      cidade: cidadeEv,
-      uf: ev.eventsAddress?.state ?? uf,
-      preco_min: precos?.min ?? null,
-      preco_max: precos?.max ?? null,
-      gratuito: ehFree || (precos?.gratuito ?? false),
-      online: !!ev.onlineInfo,
-      categoria: ev.eventsCategory?.description ?? null,
-      imagem_url: ev.images?.logoLarge ?? ev.images?.logoUrl ?? null,
-      descricao: null,
-      raw: {
-        id: ev.id,
-        slug: ev.slug,
-        categoria: ev.eventsCategory?.description ?? null,
-        vertical: ev.eventsCategory?.vertical ?? null,
-      },
-    })
+    const urlEvento = ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`
+    out.push(toRawEvent(ev, id, urlEvento, precos, ehFree))
   }
   return out
 }
