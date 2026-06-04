@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Search, Pencil, Trash2, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +28,7 @@ import {
   fetchEventEditions, replaceEventEditions,
   EVENTO_STATUS, LOCAL_TIPOS, type CrmEventRow, type EventoStatus, type LocalTipo,
 } from '../hooks/useCadastros'
+import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const NONE = '__none__'
@@ -186,28 +186,25 @@ export function EventosCrm() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Eventos</h1>
-          <p className="text-sm text-muted-foreground">{data?.length ?? 0} eventos.</p>
-        </div>
-        <Button onClick={openNew}><Plus className="size-4" /> Novo evento</Button>
-      </div>
-      <Card><CardContent className="flex flex-wrap items-center gap-2 p-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os status</SelectItem>
-            {EVENTO_STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </CardContent></Card>
-      <Card><CardContent className="p-0">
+    <>
+      <ListView
+        title="Eventos"
+        count={data ? String(data.length) : undefined}
+        actions={<Button onClick={openNew}><Plus className="size-4" /> Novo evento</Button>}
+        footer={data ? `${rows.length} de ${data.length}` : undefined}
+        toolbar={
+          <>
+            <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                {EVENTO_STATUS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        }
+      >
         <Table>
           <TableHeader><TableRow>
             <TableHead>Nome</TableHead><TableHead>Datas</TableHead><TableHead>Local</TableHead>
@@ -241,7 +238,7 @@ export function EventosCrm() {
             ))}
           </TableBody>
         </Table>
-      </CardContent></Card>
+      </ListView>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl">
@@ -392,6 +389,6 @@ export function EventosCrm() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

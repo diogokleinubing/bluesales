@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +21,7 @@ import { useGeneroOptions, useOrgOptions } from '../hooks/useCrmLookups'
 import {
   useArtists, saveArtist, deleteArtist, ESCALOES, type ArtistRow, type Escalao,
 } from '../hooks/useCadastros'
+import { ListView, ToolbarSearch } from '../components/ListView'
 
 const NONE = '__none__'
 
@@ -72,21 +72,14 @@ export function Artistas() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Artistas</h1>
-          <p className="text-sm text-muted-foreground">{data?.length ?? 0} artistas.</p>
-        </div>
-        <Button onClick={openNew}><Plus className="size-4" /> Novo artista</Button>
-      </div>
-      <Card><CardContent className="p-3">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-      </CardContent></Card>
-      <Card><CardContent className="p-0">
+    <>
+      <ListView
+        title="Artistas"
+        count={data ? String(data.length) : undefined}
+        actions={<Button onClick={openNew}><Plus className="size-4" /> Novo artista</Button>}
+        footer={data ? `${rows.length} de ${data.length}` : undefined}
+        toolbar={<ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />}
+      >
         <Table>
           <TableHeader><TableRow>
             <TableHead>Nome</TableHead><TableHead>Gênero</TableHead>
@@ -115,7 +108,7 @@ export function Artistas() {
             ))}
           </TableBody>
         </Table>
-      </CardContent></Card>
+      </ListView>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -156,6 +149,6 @@ export function Artistas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

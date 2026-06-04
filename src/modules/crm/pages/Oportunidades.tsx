@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -13,6 +12,7 @@ import {
 import { useOpportunities } from '../hooks/useOpportunities'
 import { useFunnel } from '../hooks/useFunnelStages'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
+import { ListView, TOOLBAR_TRIGGER } from '../components/ListView'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const ALL = '__all__'
@@ -30,24 +30,22 @@ export function Oportunidades() {
   )
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Oportunidades</h1>
-          <p className="text-sm text-muted-foreground">{data?.length ?? 0} oportunidades.</p>
-        </div>
-        <Button onClick={() => setOpen(true)}><Plus className="size-4" /> Nova oportunidade</Button>
-      </div>
-      <Card><CardContent className="p-3">
-        <Select value={stageF} onValueChange={setStageF}>
-          <SelectTrigger className="h-9 w-56" size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos os estágios</SelectItem>
-            {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </CardContent></Card>
-      <Card><CardContent className="p-0">
+    <>
+      <ListView
+        title="Oportunidades"
+        count={data ? String(data.length) : undefined}
+        actions={<Button onClick={() => setOpen(true)}><Plus className="size-4" /> Nova oportunidade</Button>}
+        footer={data ? `${rows.length} de ${data.length}` : undefined}
+        toolbar={
+          <Select value={stageF} onValueChange={setStageF}>
+            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-56`} size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Todos os estágios</SelectItem>
+              {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        }
+      >
         <Table>
           <TableHeader><TableRow>
             <TableHead>Título</TableHead><TableHead>Organização</TableHead><TableHead>Estágio</TableHead>
@@ -81,8 +79,8 @@ export function Oportunidades() {
             ))}
           </TableBody>
         </Table>
-      </CardContent></Card>
+      </ListView>
       <NovaOportunidadeDialog open={open} onOpenChange={setOpen} />
-    </div>
+    </>
   )
 }
