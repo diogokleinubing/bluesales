@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -394,33 +394,52 @@ export function ProvisionamentoPage() {
                         </button>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="relative inline-block">
-                          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                            R$
-                          </span>
-                          <Input
-                            inputMode="numeric"
-                            className="h-8 w-36 pl-8 text-right tabular-nums"
-                            value={grpDigits(
-                              drafts[it.itemKey] ??
-                                (it.forecastManual != null
-                                  ? String(Math.round(it.forecastManual))
-                                  : ''),
-                            )}
-                            placeholder={grpDigits(String(Math.round(it.gmvBase)))}
-                            onChange={(e) =>
-                              setDrafts((d) => ({
-                                ...d,
-                                [it.itemKey]: e.target.value.replace(/\D/g, ''),
-                              }))
-                            }
-                            onBlur={() => commitForecast(it)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter')
-                                (e.target as HTMLInputElement).blur()
-                            }}
-                          />
-                        </div>
+                        {(() => {
+                          const d = drafts[it.itemKey]
+                          const current = d != null && d !== '' ? Number(d) : it.forecast
+                          const belowYtd = it.ytd > 0 && current < it.ytd
+                          return (
+                            <div className="flex items-center justify-end gap-1">
+                              {belowYtd && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertTriangle className="size-4 text-[var(--warning)]" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Previsão abaixo do YTD ({fmtBRL(it.ytd)})
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              <div className="relative inline-block">
+                                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  R$
+                                </span>
+                                <Input
+                                  inputMode="numeric"
+                                  className="h-8 w-36 pl-8 text-right tabular-nums"
+                                  value={grpDigits(
+                                    drafts[it.itemKey] ??
+                                      (it.forecastManual != null
+                                        ? String(Math.round(it.forecastManual))
+                                        : ''),
+                                  )}
+                                  placeholder={grpDigits(String(Math.round(it.gmvBase)))}
+                                  onChange={(e) =>
+                                    setDrafts((dd) => ({
+                                      ...dd,
+                                      [it.itemKey]: e.target.value.replace(/\D/g, ''),
+                                    }))
+                                  }
+                                  onBlur={() => commitForecast(it)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter')
+                                      (e.target as HTMLInputElement).blur()
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>
                         {it.isNovo && (
