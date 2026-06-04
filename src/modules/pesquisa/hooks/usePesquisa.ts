@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCrmOrgId } from '@/modules/crm/hooks/useFunnelStages'
@@ -117,6 +118,115 @@ export function useCrawledEvents(): UseQueryResult<CrawledEventRow[]> {
       })) as CrawledEventRow[]
     },
   })
+}
+
+// ---------------------------------------------------------------------------
+// Listagem paginada + filtros no backend (a tabela tem mais de 1000 linhas)
+// ---------------------------------------------------------------------------
+export type EventStatusFiltro = 'ativos' | 'promovidos' | 'ignorados' | 'todos'
+
+export interface EventFilters {
+  search: string
+  fonte: string // slug | 'todas'
+  cidade: string // nome | 'todas'
+  categoria: string // valor | 'todas'
+  status: EventStatusFiltro
+}
+
+export const EVENTS_PAGE_SIZE = 100
+
+function mapEventRow(e: Record<string, unknown>): CrawledEventRow {
+  return {
+    ...(e as object),
+    source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
+    source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+  } as CrawledEventRow
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<string, string>): any {
+  let qq = q
+  const s = f.search.trim().replace(/[,()*%]/g, ' ').trim()
+  if (s) qq = qq.or(`nome.ilike.*${s}*,local_raw.ilike.*${s}*,organizador_raw.ilike.*${s}*`)
+  if (f.fonte !== 'todas') qq = qq.eq('source_id', sourceIdBySlug[f.fonte] ?? '00000000-0000-0000-0000-000000000000')
+  if (f.cidade !== 'todas') qq = qq.eq('cidade', f.cidade)
+  if (f.categoria !== 'todas') qq = qq.eq('categoria', f.categoria)
+  if (f.status === 'ativos') qq = qq.eq('ignorado', false).is('promovido_crm_event_id', null)
+  else if (f.status === 'promovidos') qq = qq.not('promovido_crm_event_id', 'is', null)
+  else if (f.status === 'ignorados') qq = qq.eq('ignorado', true)
+  return qq
+}
+
+export function useSourceMap(): Record<string, string> {
+  const sources = useCrawlerSources()
+  return useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const s of sources.data ?? []) m[s.slug] = s.id
+    return m
+  }, [sources.data])
+}
+
+export function useCrawledEventsPaged(
+  filters: EventFilters,
+  page: number,
+  pageSize = EVENTS_PAGE_SIZE,
+): UseQueryResult<{ rows: CrawledEventRow[]; total: number }> {
+  const orgId = useCrmOrgId()
+  const sources = useCrawlerSources()
+  const sourceMap = useSourceMap()
+  return useQuery({
+    enabled: !!orgId && !!sources.data,
+    staleTime: 15_000,
+    queryKey: ['pesquisa', 'events-paged', orgId, filters, page, pageSize],
+    queryFn: async (): Promise<{ rows: CrawledEventRow[]; total: number }> => {
+      let q = supabase
+        .from('crawled_events')
+        .select('*, crawler_sources(slug, nome)', { count: 'exact' })
+        .eq('org_id', orgId!)
+      q = applyEventFilters(q, filters, sourceMap)
+      const from = page * pageSize
+      const { data, error, count } = await q
+        .order('primeira_vez_visto', { ascending: false })
+        .range(from, from + pageSize - 1)
+      if (error) throw new Error(error.message)
+      return { rows: (data ?? []).map(mapEventRow), total: count ?? 0 }
+    },
+  })
+}
+
+export function useEventFacets(): UseQueryResult<{ cidades: string[]; categorias: string[] }> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60_000,
+    queryKey: ['pesquisa', 'facets', orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('crawled_event_facets')
+      if (error) throw new Error(error.message)
+      const d = (data ?? {}) as { cidades?: string[]; categorias?: string[] }
+      return { cidades: d.cidades ?? [], categorias: d.categorias ?? [] }
+    },
+  })
+}
+
+/** Busca TODOS os eventos que batem nos filtros (paginando) — p/ exportar. */
+export async function fetchAllCrawledEvents(
+  orgId: string,
+  filters: EventFilters,
+  sourceIdBySlug: Record<string, string>,
+): Promise<CrawledEventRow[]> {
+  const all: CrawledEventRow[] = []
+  for (let from = 0; ; from += 1000) {
+    let q = supabase.from('crawled_events').select('*, crawler_sources(slug, nome)').eq('org_id', orgId)
+    q = applyEventFilters(q, filters, sourceIdBySlug)
+    const { data, error } = await q
+      .order('primeira_vez_visto', { ascending: false })
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    all.push(...(data ?? []).map(mapEventRow))
+    if (!data || data.length < 1000) break
+  }
+  return all
 }
 
 export function useIgnoreRules(): UseQueryResult<IgnoreRuleRow[]> {

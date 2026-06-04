@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
-import { Ban, RotateCcw, ArrowUpRight, Check } from 'lucide-react'
+import {
+  Ban, RotateCcw, ArrowUpRight, Check, Download, RefreshCw, ChevronLeft, ChevronRight,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,15 +15,16 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { fmtBRL, fmtDate } from '@/lib/format'
+import { exportToXlsx } from '@/modules/bi/lib/export'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { CopyUrlButton } from '../components/CopyUrlButton'
 import {
-  useCrawledEvents, useCrawlerSources, usePesquisaOrgId,
-  setEventoIgnorado, promoverEvento, type CrawledEventRow,
+  useCrawlerSources, usePesquisaOrgId, useSourceMap,
+  useCrawledEventsPaged, useEventFacets, fetchAllCrawledEvents,
+  setEventoIgnorado, promoverEvento,
+  EVENTS_PAGE_SIZE, type CrawledEventRow, type EventFilters, type EventStatusFiltro,
 } from '../hooks/usePesquisa'
-
-type StatusFiltro = 'ativos' | 'promovidos' | 'ignorados' | 'todos'
 
 function preco(ev: CrawledEventRow): string {
   if (ev.gratuito) return 'Grátis'
@@ -37,50 +40,46 @@ export function EventosCapturados() {
   const orgId = usePesquisaOrgId()
   const navigate = useNavigate()
   const { profile } = useProfile()
-  const { data, isLoading } = useCrawledEvents()
   const sources = useCrawlerSources()
+  const sourceMap = useSourceMap()
+  const facets = useEventFacets()
 
   const [search, setSearch] = useState('')
+  const [searchAplicada, setSearchAplicada] = useState('')
   const [fonte, setFonte] = useState('todas')
-  const [status, setStatus] = useState<StatusFiltro>('ativos')
+  const [status, setStatus] = useState<EventStatusFiltro>('ativos')
   const [cidade, setCidade] = useState('todas')
   const [categoria, setCategoria] = useState('todas')
+  const [page, setPage] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
-  const cidades = useMemo(() => {
-    const s = new Set<string>()
-    for (const e of data ?? []) if (e.cidade) s.add(`${e.cidade}${e.uf ? `/${e.uf}` : ''}`)
-    return [...s].sort()
-  }, [data])
+  // Debounce da busca (evita 1 query por tecla).
+  useEffect(() => {
+    const t = setTimeout(() => setSearchAplicada(search), 400)
+    return () => clearTimeout(t)
+  }, [search])
 
-  const categorias = useMemo(() => {
-    const s = new Set<string>()
-    for (const e of data ?? []) if (e.categoria) s.add(e.categoria)
-    return [...s].sort()
-  }, [data])
+  const filters: EventFilters = useMemo(
+    () => ({ search: searchAplicada, fonte, cidade, categoria, status }),
+    [searchAplicada, fonte, cidade, categoria, status],
+  )
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (data ?? []).filter((e) => {
-      if (q && !e.nome.toLowerCase().includes(q) &&
-        !(e.organizador_raw ?? '').toLowerCase().includes(q) &&
-        !(e.local_raw ?? '').toLowerCase().includes(q)) return false
-      if (fonte !== 'todas' && e.source_slug !== fonte) return false
-      if (cidade !== 'todas' && `${e.cidade}${e.uf ? `/${e.uf}` : ''}` !== cidade) return false
-      if (categoria !== 'todas' && e.categoria !== categoria) return false
-      const promovido = !!e.promovido_crm_event_id
-      if (status === 'ativos' && (e.ignorado || promovido)) return false
-      if (status === 'promovidos' && !promovido) return false
-      if (status === 'ignorados' && !e.ignorado) return false
-      return true
-    })
-  }, [data, search, fonte, cidade, categoria, status])
+  // Qualquer mudança de filtro volta pra primeira página.
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status])
+
+  const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
+  const rows = data?.rows ?? []
+  const total = data?.total ?? 0
+  const from = total === 0 ? 0 : page * EVENTS_PAGE_SIZE + 1
+  const to = Math.min((page + 1) * EVENTS_PAGE_SIZE, total)
+  const temProx = (page + 1) * EVENTS_PAGE_SIZE < total
 
   async function onIgnorar(ev: CrawledEventRow, ignorar: boolean) {
     setBusy(ev.id)
     try {
       await setEventoIgnorado(ev.id, ignorar)
-      qc.invalidateQueries({ queryKey: ['pesquisa', 'events'] })
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'events-paged'] })
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     } finally { setBusy(null) }
@@ -91,7 +90,7 @@ export function EventosCapturados() {
     setBusy(ev.id)
     try {
       await promoverEvento(orgId, ev, profile?.id ?? null)
-      qc.invalidateQueries({ queryKey: ['pesquisa', 'events'] })
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'events-paged'] })
       toast.success('Evento promovido ao Comercial', {
         action: { label: 'Abrir', onClick: () => navigate('/comercial/eventos') },
         description: ev.nome,
@@ -101,11 +100,66 @@ export function EventosCapturados() {
     } finally { setBusy(null) }
   }
 
+  async function onExport() {
+    if (!orgId) return
+    setExporting(true)
+    try {
+      const all = await fetchAllCrawledEvents(orgId, filters, sourceMap)
+      const linhas = all.map((e) => ({
+        Evento: e.nome,
+        Fonte: e.source_nome ?? e.source_slug ?? '',
+        Data: e.data_inicio ? fmtDate(e.data_inicio) : '',
+        Local: e.local_raw ?? '',
+        Cidade: e.cidade ?? '',
+        UF: e.uf ?? '',
+        Categoria: e.categoria ?? '',
+        Organizador: e.organizador_raw ?? '',
+        'Preço mín': e.preco_min ?? '',
+        'Preço máx': e.preco_max ?? '',
+        Gratuito: e.gratuito ? 'Sim' : 'Não',
+        Vendidos: e.vendidos ?? '',
+        Capacidade: e.capacidade_total ?? '',
+        Status: e.promovido_crm_event_id ? 'Promovido' : e.ignorado ? 'Ignorado' : 'Novo',
+        URL: e.url_evento,
+      }))
+      await exportToXlsx(`eventos-pesquisa-${new Date().toISOString().slice(0, 10)}`, [
+        { name: 'Eventos', rows: linhas },
+      ])
+      toast.success(`${linhas.length} evento(s) exportado(s)`)
+    } catch (e) {
+      toast.error('Erro ao exportar', { description: (e as Error).message })
+    } finally { setExporting(false) }
+  }
+
   return (
     <ListView
       title="Eventos capturados"
-      count={data ? String(data.length) : undefined}
-      footer={data ? `${rows.length} de ${data.length}` : undefined}
+      count={total ? String(total) : undefined}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['pesquisa'] })}>
+            <RefreshCw className={`size-4 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={onExport} disabled={exporting || total === 0}>
+            <Download className="size-4" /> {exporting ? 'Exportando…' : 'Excel'}
+          </Button>
+        </div>
+      }
+      footer={
+        <div className="flex items-center justify-between gap-3">
+          <span>{total ? `${from}–${to} de ${total}` : 'Nenhum evento'}</span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 px-2" disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 px-2" disabled={!temProx}
+              onClick={() => setPage((p) => p + 1)}>
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      }
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar evento, local, organizador…" />
@@ -122,19 +176,19 @@ export function EventosCapturados() {
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[150px]`}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas as cidades</SelectItem>
-              {cidades.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {(facets.data?.cidades ?? []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
-          {categorias.length > 0 && (
+          {(facets.data?.categorias ?? []).length > 0 && (
             <Select value={categoria} onValueChange={setCategoria}>
               <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[170px]`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as categorias</SelectItem>
-                {categorias.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {(facets.data?.categorias ?? []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
-          <Select value={status} onValueChange={(v) => setStatus(v as StatusFiltro)}>
+          <Select value={status} onValueChange={(v) => setStatus(v as EventStatusFiltro)}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[140px]`}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ativos">Ativos</SelectItem>
@@ -159,20 +213,17 @@ export function EventosCapturados() {
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
-            Array.from({ length: 10 }).map((_, i) => (
+            Array.from({ length: 12 }).map((_, i) => (
               <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
             <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-              Nenhum evento capturado ainda. Rode uma coleta em Configuração → Fontes.
+              Nenhum evento encontrado.
             </TableCell></TableRow>
           ) : rows.map((e) => {
             const promovido = !!e.promovido_crm_event_id
             return (
-              <TableRow
-                key={e.id}
-                className={e.ignorado ? 'opacity-50' : ''}
-              >
+              <TableRow key={e.id} className={e.ignorado ? 'opacity-50' : ''}>
                 <TableCell className="max-w-[280px]">
                   <div className="truncate font-medium">{e.nome}</div>
                   {e.organizador_raw && (

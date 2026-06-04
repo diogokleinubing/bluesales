@@ -7,6 +7,7 @@ import {
 import { fmtDate } from '@/lib/format'
 import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
+import { faixaPreco, acumulaPreco } from './OrganizadoresMercado'
 import { useCrawledEvents } from '../hooks/usePesquisa'
 
 interface Agg {
@@ -16,6 +17,8 @@ interface Agg {
   eventos: number
   fontes: Set<string>
   proximo: string | null
+  precoMin: number | null
+  precoMax: number | null
 }
 
 export function LocaisMercado() {
@@ -42,8 +45,9 @@ export function LocaisMercado() {
       const cidade = e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : null
       const key = `${nome.toLowerCase()}|${cidade ?? ''}`
       let a = map.get(key)
-      if (!a) { a = { key, nome, cidade, eventos: 0, fontes: new Set(), proximo: null }; map.set(key, a) }
+      if (!a) { a = { key, nome, cidade, eventos: 0, fontes: new Set(), proximo: null, precoMin: null, precoMax: null }; map.set(key, a) }
       a.eventos++
+      acumulaPreco(a, e)
       if (e.source_nome) a.fontes.add(e.source_nome)
       if (e.data_inicio && e.data_inicio >= hoje && (!a.proximo || e.data_inicio < a.proximo)) {
         a.proximo = e.data_inicio
@@ -69,16 +73,17 @@ export function LocaisMercado() {
           <TableHead>Local</TableHead>
           <TableHead>Cidade</TableHead>
           <TableHead className="text-right">Eventos</TableHead>
+          <TableHead className="text-right">Faixa de preço</TableHead>
           <TableHead>Fontes</TableHead>
           <TableHead>Próximo evento</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
               Nenhum local detectado ainda.
             </TableCell></TableRow>
           ) : rows.map((a) => (
@@ -86,6 +91,7 @@ export function LocaisMercado() {
               <TableCell className="font-medium">{a.nome}</TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">{a.cidade ?? '—'}</TableCell>
               <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
+              <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.precoMin, a.precoMax)}</TableCell>
               <TableCell><div className="flex flex-wrap gap-1">{[...a.fontes].map((f) => <Badge key={f} variant="outline">{f}</Badge>)}</div></TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
             </TableRow>

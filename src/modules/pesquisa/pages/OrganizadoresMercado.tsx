@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { fmtDate } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
 import { useCrawledEvents } from '../hooks/usePesquisa'
@@ -15,6 +15,21 @@ interface Agg {
   cidades: Set<string>
   fontes: Set<string>
   proximo: string | null
+  precoMin: number | null
+  precoMax: number | null
+}
+
+export function faixaPreco(min: number | null, max: number | null): string {
+  if (min == null && max == null) return '—'
+  if (min != null && max != null && min !== max) return `${fmtBRL(min)} – ${fmtBRL(max)}`
+  return fmtBRL(min ?? max)
+}
+
+export function acumulaPreco(a: { precoMin: number | null; precoMax: number | null }, e: { preco_min: number | null; preco_max: number | null }) {
+  const pmin = e.preco_min ?? e.preco_max
+  const pmax = e.preco_max ?? e.preco_min
+  if (pmin != null) a.precoMin = a.precoMin == null ? pmin : Math.min(a.precoMin, pmin)
+  if (pmax != null) a.precoMax = a.precoMax == null ? pmax : Math.max(a.precoMax, pmax)
 }
 
 export function OrganizadoresMercado() {
@@ -34,8 +49,9 @@ export function OrganizadoresMercado() {
       const nome = (e.organizador_raw ?? '').trim()
       if (!nome || e.ignorado) continue
       let a = map.get(nome)
-      if (!a) { a = { nome, eventos: 0, cidades: new Set(), fontes: new Set(), proximo: null }; map.set(nome, a) }
+      if (!a) { a = { nome, eventos: 0, cidades: new Set(), fontes: new Set(), proximo: null, precoMin: null, precoMax: null }; map.set(nome, a) }
       a.eventos++
+      acumulaPreco(a, e)
       if (e.cidade) a.cidades.add(`${e.cidade}${e.uf ? `/${e.uf}` : ''}`)
       if (e.source_nome) a.fontes.add(e.source_nome)
       if (e.data_inicio && e.data_inicio >= hoje && (!a.proximo || e.data_inicio < a.proximo)) {
@@ -62,16 +78,17 @@ export function OrganizadoresMercado() {
           <TableHead>Organizador</TableHead>
           <TableHead className="text-right">Eventos</TableHead>
           <TableHead>Cidades</TableHead>
+          <TableHead className="text-right">Faixa de preço</TableHead>
           <TableHead>Fontes</TableHead>
           <TableHead>Próximo evento</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
               Nenhum organizador detectado ainda.
             </TableCell></TableRow>
           ) : rows.map((a) => (
@@ -79,6 +96,7 @@ export function OrganizadoresMercado() {
               <TableCell className="font-medium">{a.nome}</TableCell>
               <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
               <TableCell className="text-muted-foreground">{[...a.cidades].slice(0, 3).join(', ')}{a.cidades.size > 3 ? ` +${a.cidades.size - 3}` : ''}</TableCell>
+              <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.precoMin, a.precoMax)}</TableCell>
               <TableCell><div className="flex flex-wrap gap-1">{[...a.fontes].map((f) => <Badge key={f} variant="outline">{f}</Badge>)}</div></TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
             </TableRow>
