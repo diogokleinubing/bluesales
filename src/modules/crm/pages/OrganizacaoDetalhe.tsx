@@ -12,9 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
 import { fmtBRL } from '@/lib/format'
 import { StageSelector } from '../components/StageSelector'
-import { ActivityTimeline } from '../components/ActivityTimeline'
-import { ActivityDialog } from '../components/ActivityDialog'
-import { ObjecoesTags } from '../components/ObjecoesTags'
+import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import {
@@ -41,7 +39,6 @@ export function OrganizacaoDetalhe() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: org, isLoading } = useOrganization(id)
-  const [actOpen, setActOpen] = useState(false)
   const [oppOpen, setOppOpen] = useState(false)
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
@@ -72,46 +69,35 @@ export function OrganizacaoDetalhe() {
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="geral" className="mt-4 space-y-4">
-          <OrgVisaoGeral org={org} />
+        <TabsContent value="geral" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,32%)_1fr]">
+            {/* Coluna esquerda — detalhes e contatos */}
+            <div className="space-y-4">
+              <OrgVisaoGeral org={org} />
 
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Atividades</h3>
-                <Button size="sm" variant="secondary" onClick={() => setActOpen(true)}>
-                  <Plus className="size-4" /> Registrar
-                </Button>
-              </div>
-              <ActivityTimeline filter={{ organizationId: org.id }} />
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <h3 className="text-sm font-medium">Contatos</h3>
+                  <OrgContatos orgId={org.id} />
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <h3 className="text-sm font-medium">Contatos</h3>
-              <OrgContatos orgId={org.id} />
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium">Oportunidades</h3>
+                    <Button size="sm" variant="secondary" onClick={() => setOppOpen(true)}>
+                      <Plus className="size-4" /> Nova
+                    </Button>
+                  </div>
+                  <OrgOportunidades organizationId={org.id} />
+                </CardContent>
+              </Card>
+            </div>
 
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Oportunidades</h3>
-                <Button size="sm" variant="secondary" onClick={() => setOppOpen(true)}>
-                  <Plus className="size-4" /> Nova
-                </Button>
-              </div>
-              <OrgOportunidades organizationId={org.id} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="space-y-3 p-4">
-              <h3 className="text-sm font-medium">Objeções</h3>
-              <ObjecoesTags entityType="organization" entityId={org.id} />
-            </CardContent>
-          </Card>
+            {/* Coluna principal — atividades (composer + timeline) */}
+            <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
+          </div>
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4">
@@ -119,7 +105,6 @@ export function OrganizacaoDetalhe() {
         </TabsContent>
       </Tabs>
 
-      <ActivityDialog open={actOpen} onOpenChange={setActOpen} organizationId={org.id} />
       <NovaOportunidadeDialog open={oppOpen} onOpenChange={setOppOpen} organizationId={org.id} />
     </div>
   )
@@ -359,14 +344,13 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
-            <StageSelector slug="relacionamento" value={org.funil_stage_id} onChange={setStage} className="h-8 w-full" />
-          </div>
+        <h3 className="text-sm font-medium">Detalhes</h3>
+        <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
+          <StageSelector slug="relacionamento" value={org.funil_stage_id} onChange={setStage} className="h-8 w-full" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-[1fr_70px] gap-3">
           <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
           <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v)} />
         </div>
@@ -374,11 +358,11 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
           <CurrencyField label="GMV anual" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
           <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
           <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
-          <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
         </div>
+        <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
         <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
       </CardContent>
     </Card>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -10,9 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
 import { StageSelector } from '../components/StageSelector'
-import { ActivityTimeline } from '../components/ActivityTimeline'
-import { ActivityDialog } from '../components/ActivityDialog'
-import { ObjecoesTags } from '../components/ObjecoesTags'
+import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import {
   TextField, SelectField, CurrencyField, TextareaField, FormActions, useDraft, toText, toNumber,
@@ -28,7 +26,6 @@ export function OportunidadeDetalhe() {
   const navigate = useNavigate()
   const { profile } = useProfile()
   const { data: o, isLoading } = useOpportunity(id)
-  const [actOpen, setActOpen] = useState(false)
 
   const orgQ = useQuery({
     enabled: !!o?.organization_id,
@@ -74,7 +71,7 @@ export function OportunidadeDetalhe() {
         </TabsList>
 
         <TabsContent value="geral" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,32%)_1fr]">
             <div className="space-y-4">
               <OppVisaoGeral
                 o={o}
@@ -82,27 +79,6 @@ export function OportunidadeDetalhe() {
                 profiles={profilesQ.data ?? []}
               />
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">Atividades</h3>
-                    <Button size="sm" variant="secondary" onClick={() => setActOpen(true)}>
-                      <Plus className="size-4" /> Registrar
-                    </Button>
-                  </div>
-                  <ActivityTimeline filter={{ opportunityId: o.id }} />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <h3 className="text-sm font-medium">Objeções</h3>
-                  <ObjecoesTags entityType="opportunity" entityId={o.id} />
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-3">
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm">Vínculos</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-sm">
@@ -121,6 +97,8 @@ export function OportunidadeDetalhe() {
                 </CardContent>
               </Card>
             </div>
+
+            <AtividadesPanel entityType="opportunity" entityId={o.id} organizationId={o.organization_id} opportunityId={o.id} />
           </div>
         </TabsContent>
 
@@ -128,8 +106,6 @@ export function OportunidadeDetalhe() {
           <AuditLog entityType="opportunity" entityId={o.id} />
         </TabsContent>
       </Tabs>
-
-      <ActivityDialog open={actOpen} onOpenChange={setActOpen} organizationId={o.organization_id} opportunityId={o.id} />
     </div>
   )
 }

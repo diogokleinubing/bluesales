@@ -1,9 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Ticket } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { getModule, moduleFromPath, type NavItem } from './nav'
-import { ModuleSwitcher } from './ModuleSwitcher'
+import { ModuleDropdown } from './ModuleDropdown'
+import { GlobalSearch } from '@/modules/crm/components/GlobalSearch'
 import { UserMenu } from './UserMenu'
 
 export function Sidebar() {
@@ -25,21 +25,17 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      {/* Marca */}
-      <div className="flex items-center gap-2 px-5 py-4">
-        <div className="flex size-8 items-center justify-center rounded-md bg-primary">
-          <Ticket className="size-5 text-primary-foreground" />
-        </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold">Blueticket</div>
-          <div className="text-xs text-muted-foreground">Plataforma interna</div>
-        </div>
+      {/* Seletor de módulo (dropdown) + ícone do produto */}
+      <div className="px-2.5 pt-3">
+        <ModuleDropdown active={moduleId} />
       </div>
 
-      {/* Seletor de módulo */}
-      <div className="px-3 pb-2">
-        <ModuleSwitcher active={moduleId} />
-      </div>
+      {/* Busca ampla (apenas no Comercial) */}
+      {moduleId === 'comercial' && (
+        <div className="px-2.5 pt-2">
+          <GlobalSearch />
+        </div>
+      )}
 
       {/* Menu contextual do módulo ativo */}
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
