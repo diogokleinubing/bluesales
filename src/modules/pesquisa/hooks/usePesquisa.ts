@@ -39,6 +39,8 @@ export interface CrawledEventRow {
   online: boolean
   segmento: string | null
   categoria: string | null
+  capacidade_total: number | null
+  vendidos: number | null
   imagem_url: string | null
   ignorado: boolean
   ignorado_motivo: string | null
