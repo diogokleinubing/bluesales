@@ -15,11 +15,16 @@ export function DeleteEntityButton({
   description,
   onDelete,
   onDeleted,
+  variant = 'button',
+  label = 'Excluir',
 }: {
   title: string
   description: string
   onDelete: () => Promise<void>
   onDeleted: () => void
+  /** 'button' = botão outline; 'menu' = item de lista (largura total). */
+  variant?: 'button' | 'menu'
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -39,9 +44,18 @@ export function DeleteEntityButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
-        <Trash2 className="size-4" /> Excluir
-      </Button>
+      {variant === 'menu' ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10"
+        >
+          <Trash2 className="size-4" /> {label}
+        </button>
+      ) : (
+        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
+          <Trash2 className="size-4" /> {label}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <DialogContent>
           <DialogHeader>

@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { fmtBRL } from '@/lib/format'
 import { StageSelector } from '../components/StageSelector'
@@ -39,63 +41,37 @@ export function OrganizacaoDetalhe() {
   const navigate = useNavigate()
   const { data: org, isLoading } = useOrganization(id)
   const [oppOpen, setOppOpen] = useState(false)
+  const [histOpen, setHistOpen] = useState(false)
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
   if (!org) return <p className="text-muted-foreground">Organização não encontrada.</p>
 
   return (
     <div className="-mx-6 -mt-6 flex min-h-[calc(100%+3rem)] flex-col bg-background">
-      {/* Cabeçalho */}
-      <div className="border-b border-border px-6 py-3">
+      {/* Breadcrumb (linha 100% acima do nome) */}
+      <div className="border-b border-border px-6 py-2">
         <button
           onClick={() => navigate('/comercial/organizacoes')}
-          className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" /> Organizações
         </button>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{org.nome}</h1>
-            {org.classificacao && <ClasseBadge classe={org.classificacao} />}
-          </div>
-          <DeleteEntityButton
-            title="Excluir organização?"
-            description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
-            onDelete={() => deleteOrganization(org.id)}
-            onDeleted={() => navigate('/comercial/organizacoes')}
-          />
-        </div>
+      </div>
+
+      {/* Título */}
+      <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+        <h1 className="text-xl font-semibold tracking-tight">{org.nome}</h1>
+        {org.classificacao && <ClasseBadge classe={org.classificacao} />}
       </div>
 
       {/* Corpo: principal | divisória | detalhes */}
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
-        {/* Coluna principal — atividades com abas */}
+        {/* Coluna principal — atividades */}
         <div className="min-w-0 px-6 py-4">
-          <Tabs defaultValue="atividade">
-            <TabsList className="h-auto gap-4 border-b border-border bg-transparent p-0">
-              <TabsTrigger
-                value="atividade"
-                className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Atividade
-              </TabsTrigger>
-              <TabsTrigger
-                value="historico"
-                className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                Histórico
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="atividade" className="mt-4">
-              <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
-            </TabsContent>
-            <TabsContent value="historico" className="mt-4">
-              <AuditLog entityType="organization" entityId={org.id} />
-            </TabsContent>
-          </Tabs>
+          <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
         </div>
 
-        {/* Coluna direita — detalhes e contatos (delimitada por linha) */}
+        {/* Coluna direita — detalhes, contatos e opções */}
         <aside className="space-y-5 border-border px-6 py-4 lg:border-l">
           <OrgVisaoGeral org={org} />
 
@@ -113,10 +89,39 @@ export function OrganizacaoDetalhe() {
             </div>
             <OrgOportunidades organizationId={org.id} />
           </section>
+
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Opções</h3>
+            <div className="space-y-1">
+              <button
+                onClick={() => setHistOpen(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <History className="size-4" /> Histórico
+              </button>
+              <DeleteEntityButton
+                title="Excluir organização?"
+                description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
+                onDelete={() => deleteOrganization(org.id)}
+                onDeleted={() => navigate('/comercial/organizacoes')}
+                variant="menu"
+                label="Remover"
+              />
+            </div>
+          </section>
         </aside>
       </div>
 
       <NovaOportunidadeDialog open={oppOpen} onOpenChange={setOppOpen} organizationId={org.id} />
+
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Histórico</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <AuditLog entityType="organization" entityId={org.id} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -369,10 +374,10 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+        <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
         <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
       </div>
-      <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
+      <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
     </section>
   )
