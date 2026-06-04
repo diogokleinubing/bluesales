@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -63,47 +62,53 @@ export function OrganizacaoDetalhe() {
         />
       </div>
 
-      <Tabs defaultValue="geral">
-        <TabsList>
-          <TabsTrigger value="geral">Visão geral</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+        {/* Coluna principal — atividades com abas */}
+        <div className="min-w-0">
+          <Tabs defaultValue="atividade">
+            <TabsList className="h-auto gap-4 border-b border-border bg-transparent p-0">
+              <TabsTrigger
+                value="atividade"
+                className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                Atividade
+              </TabsTrigger>
+              <TabsTrigger
+                value="historico"
+                className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                Histórico
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="atividade" className="mt-4">
+              <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
+            </TabsContent>
+            <TabsContent value="historico" className="mt-4">
+              <AuditLog entityType="organization" entityId={org.id} />
+            </TabsContent>
+          </Tabs>
+        </div>
 
-        <TabsContent value="geral" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,32%)_1fr]">
-            {/* Coluna esquerda — detalhes e contatos */}
-            <div className="space-y-4">
-              <OrgVisaoGeral org={org} />
+        {/* Coluna direita — detalhes e contatos (flat, sem boxes) */}
+        <aside className="space-y-6">
+          <OrgVisaoGeral org={org} />
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <h3 className="text-sm font-medium">Contatos</h3>
-                  <OrgContatos orgId={org.id} />
-                </CardContent>
-              </Card>
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Contatos</h3>
+            <OrgContatos orgId={org.id} />
+          </section>
 
-              <Card>
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">Oportunidades</h3>
-                    <Button size="sm" variant="secondary" onClick={() => setOppOpen(true)}>
-                      <Plus className="size-4" /> Nova
-                    </Button>
-                  </div>
-                  <OrgOportunidades organizationId={org.id} />
-                </CardContent>
-              </Card>
+          <section className="border-t border-border pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-medium">Oportunidades</h3>
+              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setOppOpen(true)}>
+                <Plus className="size-4" /> Nova
+              </Button>
             </div>
-
-            {/* Coluna principal — atividades (composer + timeline) */}
-            <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="historico" className="mt-4">
-          <AuditLog entityType="organization" entityId={org.id} />
-        </TabsContent>
-      </Tabs>
+            <OrgOportunidades organizationId={org.id} />
+          </section>
+        </aside>
+      </div>
 
       <NovaOportunidadeDialog open={oppOpen} onOpenChange={setOppOpen} organizationId={org.id} />
     </div>
@@ -342,29 +347,27 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-        <h3 className="text-sm font-medium">Detalhes</h3>
-        <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
-          <StageSelector slug="relacionamento" value={org.funil_stage_id} onChange={setStage} className="h-8 w-full" />
-        </div>
-        <div className="grid grid-cols-[1fr_70px] gap-3">
-          <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
-          <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <CurrencyField label="GMV anual" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
-          <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
-          <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
-        </div>
-        <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
-        <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />
-      </CardContent>
-    </Card>
+    <section className="space-y-3">
+      <h3 className="text-sm font-medium">Detalhes</h3>
+      <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
+        <StageSelector slug="relacionamento" value={org.funil_stage_id} onChange={setStage} className="h-8 w-full" />
+      </div>
+      <div className="grid grid-cols-[1fr_70px] gap-3">
+        <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
+        <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <CurrencyField label="GMV anual" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
+        <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+        <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
+      </div>
+      <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
+      {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
+    </section>
   )
 }
