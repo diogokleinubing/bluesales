@@ -95,45 +95,19 @@ export function Contatos() {
             <TableHead>Estágio</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Telefone</TableHead>
+            <TableHead className="text-center">LinkedIn</TableHead>
+            <TableHead className="text-center">Instagram</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Nenhum contato.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhum contato.</TableCell></TableRow>
             ) : rows.map((p) => (
               <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/comercial/contatos/${p.id}`)}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <span>{p.nome}</span>
-                    {p.linkedin && (
-                      <a
-                        href={linkedinUrl(p.linkedin)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-primary"
-                        title="LinkedIn"
-                      >
-                        <LinkedinIcon className="size-4" />
-                      </a>
-                    )}
-                    {p.instagram && (
-                      <a
-                        href={instagramUrl(p.instagram)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-primary"
-                        title="Instagram"
-                      >
-                        <InstagramIcon className="size-4" />
-                      </a>
-                    )}
-                  </div>
-                </TableCell>
+                <TableCell className="font-medium">{p.nome}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {p.orgs.length ? p.orgs.map((o, i) => (
@@ -158,6 +132,38 @@ export function Contatos() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{p.email ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{p.telefone ?? '—'}</TableCell>
+                <TableCell className="text-center">
+                  {p.linkedin ? (
+                    <a
+                      href={linkedinUrl(p.linkedin)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex text-muted-foreground hover:text-primary"
+                      title="Abrir LinkedIn"
+                    >
+                      <LinkedinIcon className="size-4" />
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  {p.instagram ? (
+                    <a
+                      href={instagramUrl(p.instagram)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex text-muted-foreground hover:text-primary"
+                      title="Abrir Instagram"
+                    >
+                      <InstagramIcon className="size-4" />
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

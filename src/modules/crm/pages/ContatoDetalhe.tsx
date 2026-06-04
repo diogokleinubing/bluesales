@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,6 @@ import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useContact, updateContact, deleteContact, type Person } from '../hooks/useContacts'
 import { usePersonOptions } from '../hooks/useCrmLookups'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { fmtDate } from '@/lib/format'
 
 export function ContatoDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -107,6 +106,8 @@ function ContatoOrgs({ personId }: { personId: string }) {
   const orgId = useCrmOrgId()
   const [sel, setSel] = useState('')
   const [papel, setPapel] = useState('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editPapel, setEditPapel] = useState('')
   const orgs = useQuery({
     enabled: !!orgId,
     queryKey: ['crm', 'org-options-all', orgId],
@@ -120,13 +121,16 @@ function ContatoOrgs({ personId }: { personId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from('org_persons')
-        .select('id, papel, ativo, data_inicio, data_fim, organization_id, organizations(nome)')
+        .select('id, papel, ativo, organization_id, organizations(nome)')
         .eq('person_id', personId)
         .order('ativo', { ascending: false })
       return data ?? []
     },
   })
-  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'contato-orgs', personId] })
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['crm', 'contato-orgs', personId] })
+    qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
+  }
 
   async function vincular() {
     if (!orgId || !sel) return
@@ -138,22 +142,75 @@ function ContatoOrgs({ personId }: { personId: string }) {
     setSel(''); setPapel(''); refresh()
   }
 
+  async function salvarPapel(id: string) {
+    const { error } = await supabase.from('org_persons').update({ papel: editPapel.trim() || null }).eq('id', id)
+    if (error) return toast.error('Erro', { description: error.message })
+    setEditId(null); refresh()
+  }
+
+  async function remover(id: string) {
+    const { error } = await supabase.from('org_persons').delete().eq('id', id)
+    if (error) return toast.error('Erro', { description: error.message })
+    refresh()
+  }
+
   if (q.isLoading) return <Skeleton className="h-24 w-full" />
   return (
     <div className="space-y-3">
       {(q.data ?? []).map((r) => {
         const o = r.organizations as unknown as { nome: string } | null
+        const editing = editId === r.id
         return (
-          <div key={r.id} className="flex items-center justify-between rounded-md border border-border p-3">
-            <Link to={`/comercial/organizacoes/${r.organization_id}`} className="hover:underline">
-              <div className="flex items-center gap-2 font-medium">
+          <div key={r.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
+            <div className="min-w-0 flex-1">
+              <Link
+                to={`/comercial/organizacoes/${r.organization_id}`}
+                className="inline-flex items-center gap-2 font-medium hover:underline"
+              >
                 {o?.nome}
                 {!r.ativo && <Badge variant="outline">anterior</Badge>}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {[r.papel, r.data_inicio && fmtDate(new Date(r.data_inicio)), r.data_fim && `até ${fmtDate(new Date(r.data_fim))}`].filter(Boolean).join(' · ') || '—'}
-              </div>
-            </Link>
+              </Link>
+              {editing ? (
+                <Input
+                  className="mt-1 h-8 max-w-56"
+                  placeholder="Papel"
+                  value={editPapel}
+                  autoFocus
+                  onChange={(e) => setEditPapel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') salvarPapel(r.id)
+                    if (e.key === 'Escape') setEditId(null)
+                  }}
+                />
+              ) : (
+                <div className="text-xs text-muted-foreground">{r.papel || '—'}</div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {editing ? (
+                <>
+                  <button onClick={() => salvarPapel(r.id)} className="text-muted-foreground hover:text-foreground" title="Salvar">
+                    <Check className="size-4" />
+                  </button>
+                  <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground" title="Cancelar">
+                    <X className="size-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setEditId(r.id); setEditPapel(r.papel ?? '') }}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Editar papel"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button onClick={() => remover(r.id)} className="text-muted-foreground hover:text-destructive" title="Remover relação">
+                    <Trash2 className="size-4" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )
       })}
