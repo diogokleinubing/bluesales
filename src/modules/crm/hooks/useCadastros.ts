@@ -148,6 +148,8 @@ export interface CrmEvent {
   status: EventoStatus | null
   observacoes: string | null
   bi_event_codigo: string | null
+  site: string | null
+  instagram: string | null
   created_at: string
 }
 
@@ -217,6 +219,8 @@ export async function saveCrmEvent(
     status: e.status ?? null,
     observacoes: e.observacoes ?? null,
     bi_event_codigo: e.bi_event_codigo ?? null,
+    site: e.site ?? null,
+    instagram: e.instagram ?? null,
   }
   if (id) {
     const { error } = await supabase.from('crm_events').update(payload).eq('id', id)

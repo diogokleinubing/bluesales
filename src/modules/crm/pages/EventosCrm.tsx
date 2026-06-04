@@ -45,7 +45,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
 
 const EMPTY_FORM = {
   nome: '', capacidade_estimada: '', gmv_estimado: '', segmento_id: NONE,
-  status: '' as string, observacoes: '', bi_event_codigo: '',
+  status: '' as string, observacoes: '', bi_event_codigo: '', site: '', instagram: '',
 }
 
 export function EventosCrm() {
@@ -101,6 +101,8 @@ export function EventosCrm() {
       status: e.status ?? '',
       observacoes: e.observacoes ?? '',
       bi_event_codigo: e.bi_event_codigo ?? '',
+      site: e.site ?? '',
+      instagram: e.instagram ?? '',
     })
     setLocalPick(e.local_id ? { id: e.local_id, nome: e.local_nome ?? '—' } : null)
     setOrgPick(e.organization_id ? { id: e.organization_id, nome: e.organization_nome ?? '—' } : null)
@@ -141,6 +143,8 @@ export function EventosCrm() {
         status: (f.status || null) as EventoStatus | null,
         observacoes: f.observacoes.trim() || null,
         bi_event_codigo: f.bi_event_codigo.trim() || null,
+        site: f.site.trim() || null,
+        instagram: f.instagram.trim() || null,
       }, editId ?? undefined)
       await replaceEventEditions(
         orgId, id,
@@ -280,6 +284,10 @@ export function EventosCrm() {
               <div className="space-y-1"><Label>Capacidade estimada</Label>
                 <Input type="number" value={f.capacidade_estimada} onChange={(e) => setF({ ...f, capacidade_estimada: e.target.value })} /></div>
               <CurrencyField label="GMV estimado" value={f.gmv_estimado} onChange={(v) => setF({ ...f, gmv_estimado: v })} />
+              <div className="space-y-1"><Label>Site</Label>
+                <Input value={f.site} placeholder="https://…" onChange={(e) => setF({ ...f, site: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Instagram</Label>
+                <Input value={f.instagram} placeholder="@perfil" onChange={(e) => setF({ ...f, instagram: e.target.value })} /></div>
               <div className="col-span-2 space-y-1"><Label>Código BI</Label>
                 <Input value={f.bi_event_codigo} onChange={(e) => setF({ ...f, bi_event_codigo: e.target.value })} /></div>
               <div className="col-span-2 space-y-1"><Label>Observações</Label>
