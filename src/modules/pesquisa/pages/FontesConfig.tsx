@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Play, Pencil, Loader2 } from 'lucide-react'
+import { Play, Pencil, Loader2, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -50,11 +50,11 @@ export function FontesConfig() {
   const [janela, setJanela] = useState('90')
   const [cidadesTxt, setCidadesTxt] = useState('')
 
-  async function executar(slug?: string) {
-    setRunning(slug ?? '__all__')
+  async function executar(slug?: string, reprocessar = false) {
+    setRunning((reprocessar ? 'rp:' : '') + (slug ?? '__all__'))
     try {
-      await runCrawler(slug)
-      toast.success('Coleta iniciada', {
+      await runCrawler(slug, { reprocessar })
+      toast.success(reprocessar ? 'Reprocessamento iniciado' : 'Coleta iniciada', {
         description: 'Roda em segundo plano. Acompanhe em Execuções.',
       })
       // Dá um tempo e atualiza as listas (a coleta termina em segundo plano).
@@ -136,6 +136,10 @@ export function FontesConfig() {
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Executar agora"
                         disabled={running !== null} onClick={() => executar(s.slug)}>
                         {running === s.slug ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Reprocessar (atualiza os já coletados)"
+                        disabled={running !== null} onClick={() => executar(s.slug, true)}>
+                        {running === `rp:${s.slug}` ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Editar cidades/janela"
                         onClick={() => openEdit(s)}>

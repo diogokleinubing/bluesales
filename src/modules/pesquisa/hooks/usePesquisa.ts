@@ -380,10 +380,14 @@ export async function toggleIgnoreRule(id: string, ativo: boolean): Promise<void
 }
 
 /** Dispara a coleta manualmente (Edge Function crawler-run). */
-export async function runCrawler(sourceSlug?: string): Promise<unknown> {
-  const { data, error } = await supabase.functions.invoke('crawler-run', {
-    body: sourceSlug ? { source_slug: sourceSlug } : {},
-  })
+export async function runCrawler(
+  sourceSlug?: string,
+  opts?: { reprocessar?: boolean },
+): Promise<unknown> {
+  const body: Record<string, unknown> = {}
+  if (sourceSlug) body.source_slug = sourceSlug
+  if (opts?.reprocessar) body.reprocessar = true
+  const { data, error } = await supabase.functions.invoke('crawler-run', { body })
   if (error) throw new Error(error.message)
   return data
 }
