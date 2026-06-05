@@ -13,6 +13,7 @@ export interface RawEvent {
   pais?: string | null
   preco_min?: number | null
   preco_max?: number | null
+  taxa_pct?: number | null
   gratuito?: boolean
   online?: boolean
   categoria?: string | null

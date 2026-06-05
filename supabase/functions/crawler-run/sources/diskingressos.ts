@@ -5,11 +5,43 @@
 
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
+import { avgTaxaPct } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.diskingressos.com.br'
 const SEARCH = `${HOST}/home/_search`
+const DETALHE = 'https://genesisapi.diskingressos.com.br/event'
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+/** Detalhe (genesisapi): preço (faixa) + taxa média do evento. */
+async function fetchDetalhe(
+  slug: string,
+): Promise<{ min: number | null; max: number | null; gratuito: boolean; taxa: number | null } | null> {
+  try {
+    const res = await fetch(`${DETALHE}/${slug}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!res.ok) return null
+    const j = await res.json() as { prices?: Record<string, unknown> }
+    const items: { price: number; tax: number }[] = []
+    for (const [k, v] of Object.entries(j.prices ?? {})) {
+      if (k === 'minPrice' || !Array.isArray(v)) continue
+      for (const t of v as { price?: string; tax?: string }[]) {
+        items.push({ price: Number(t.price), tax: Number(t.tax) })
+      }
+    }
+    if (!items.length) return null
+    const precos = items.map((i) => i.price).filter((p) => Number.isFinite(p))
+    const pos = precos.filter((p) => p > 0)
+    const taxa = avgTaxaPct(items)
+    if (!pos.length) return { min: 0, max: 0, gratuito: true, taxa }
+    return { min: Math.min(...pos), max: Math.max(...pos), gratuito: false, taxa }
+  } catch (e) {
+    console.error('[disk] detalhe falhou', slug, String(e))
+    return null
+  }
+}
 
 interface DiskSource {
   uid?: string
@@ -88,35 +120,45 @@ export const diskIngressosScraper: Scraper = async () => {
   console.log(`[disk] busca from=${from} total=${total} retornou=${hits.length}`)
 
   const known = await getKnown(db)
+  const agora = Date.now()
+  const novos = hits.map((h) => h._source).filter((s): s is DiskSource => !!s?.eventname && !known.has(urlDe(s)))
+
+  // Detalhe (preço/taxa) em paralelo, só para eventos ativos.
   const out: RawEvent[] = []
-  for (const h of hits) {
-    const s = h._source
-    if (!s?.eventname) continue
-    const u = urlDe(s)
-    if (known.has(u)) continue
-    const categoria = Array.isArray(s.classification) && s.classification.length
-      ? s.classification.map((c) => c.trim()).filter(Boolean).join(', ')
-      : null
-    out.push({
-      url_evento: u,
-      nome: s.eventname,
-      data_inicio: s.data ?? (s.date ? `${s.date}T00:00:00` : null),
-      data_fim: null,
-      organizador_raw: null,
-      organizador_url: null,
-      local_raw: s.local?.trim() || null,
-      cidade: s.city?.trim() || null,
-      uf: s.state ? s.state.trim().toUpperCase() : null,
-      pais: 'Brasil',
-      preco_min: null,
-      preco_max: null,
-      gratuito: false,
-      online: false,
-      categoria,
-      imagem_url: s.image ? `${HOST}${s.image}` : null,
-      descricao: null,
-      raw: { uid: s.uid, groupid: s.groupid, id: s.id, producerid: s.producerid },
-    })
+  const BATCH = 8
+  for (let i = 0; i < novos.length; i += BATCH) {
+    const slice = novos.slice(i, i + BATCH)
+    const mapped = await Promise.all(slice.map(async (s) => {
+      const categoria = Array.isArray(s.classification) && s.classification.length
+        ? s.classification.map((c) => c.trim()).filter(Boolean).join(', ')
+        : null
+      const dataIni = s.data ?? (s.date ? `${s.date}T00:00:00` : null)
+      const t = dataIni ? Date.parse(dataIni) : NaN
+      const ehPassado = !isNaN(t) && t < agora - 86_400_000
+      const det = ehPassado ? null : await fetchDetalhe(String(s.slug ?? s.id))
+      return {
+        url_evento: urlDe(s),
+        nome: s.eventname!,
+        data_inicio: dataIni,
+        data_fim: null,
+        organizador_raw: null,
+        organizador_url: null,
+        local_raw: s.local?.trim() || null,
+        cidade: s.city?.trim() || null,
+        uf: s.state ? s.state.trim().toUpperCase() : null,
+        pais: 'Brasil',
+        preco_min: det?.min ?? null,
+        preco_max: det?.max ?? null,
+        taxa_pct: det?.taxa ?? null,
+        gratuito: det?.gratuito ?? false,
+        online: false,
+        categoria,
+        imagem_url: s.image ? `${HOST}${s.image}` : null,
+        descricao: null,
+        raw: { uid: s.uid, groupid: s.groupid, id: s.id, producerid: s.producerid },
+      } as RawEvent
+    }))
+    out.push(...mapped)
   }
 
   const novoOffset = hits.length < size || from + size >= total ? 0 : from + size

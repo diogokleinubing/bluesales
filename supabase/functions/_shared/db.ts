@@ -47,6 +47,7 @@ export async function upsertCrawledEvent(
     pais: ev.pais ?? null,
     preco_min: ev.preco_min ?? null,
     preco_max: ev.preco_max ?? null,
+    taxa_pct: ev.taxa_pct ?? null,
     gratuito: ev.gratuito ?? false,
     online: ev.online ?? false,
     categoria: ev.categoria ?? null,

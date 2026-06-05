@@ -119,6 +119,7 @@ export function EventosCapturados() {
         Organizador: e.organizador_raw ?? '',
         'Preço mín': e.preco_min ?? '',
         'Preço máx': e.preco_max ?? '',
+        'Taxa %': e.taxa_pct ?? '',
         Gratuito: e.gratuito ? 'Sim' : 'Não',
         Vendidos: e.vendidos ?? '',
         Capacidade: e.capacidade_total ?? '',
@@ -220,15 +221,16 @@ export function EventosCapturados() {
           <TableHead>Cidade</TableHead>
           <TableHead>Categoria</TableHead>
           <TableHead className="text-right">Preço</TableHead>
+          <TableHead className="text-right">Taxa</TableHead>
           <TableHead className="w-32" />
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 12 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
               Nenhum evento encontrado.
             </TableCell></TableRow>
           ) : rows.map((e) => {
@@ -247,6 +249,7 @@ export function EventosCapturados() {
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : '—'}</TableCell>
                 <TableCell className="max-w-[160px] truncate text-muted-foreground">{e.categoria ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right">{preco(e)}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{e.taxa_pct != null ? `${e.taxa_pct}%` : '—'}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
                     <CopyUrlButton url={e.url_evento} />

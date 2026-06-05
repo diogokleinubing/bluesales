@@ -37,6 +37,7 @@ export interface CrawledEventRow {
   pais: string | null
   preco_min: number | null
   preco_max: number | null
+  taxa_pct: number | null
   gratuito: boolean
   online: boolean
   segmento: string | null

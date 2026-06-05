@@ -112,6 +112,7 @@ interface SymplaEvent {
   oldUrl?: string
   newUrl?: string
   slug?: string
+  serviceFee?: number
   eventsAddress?: { name?: string; city?: string; state?: string; country?: string }
   eventsHost?: { name?: string }
   eventsCategory?: { description?: string; vertical?: string }
@@ -189,6 +190,7 @@ function toRawEvent(
     pais: normPais(ev.eventsAddress?.country),
     preco_min: precos?.min ?? null,
     preco_max: precos?.max ?? null,
+    taxa_pct: typeof ev.serviceFee === 'number' ? ev.serviceFee : null,
     gratuito: ehFree || (precos?.gratuito ?? false),
     online: !!ev.onlineInfo,
     categoria: ev.eventsCategory?.description ?? null,

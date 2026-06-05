@@ -10,6 +10,15 @@ export function norm(text: string | null | undefined): string {
     .trim()
 }
 
+/** % médio de taxa a partir de pares (preço, taxa). Null se não houver dados. */
+export function avgTaxaPct(items: { price: number; tax: number }[]): number | null {
+  const pcts = items
+    .filter((i) => Number.isFinite(i.price) && i.price > 0 && Number.isFinite(i.tax) && i.tax >= 0)
+    .map((i) => (i.tax / i.price) * 100)
+  if (!pcts.length) return null
+  return Math.round((pcts.reduce((a, b) => a + b, 0) / pcts.length) * 100) / 100
+}
+
 const PAISES_BRASIL = new Set(['bra', 'br', 'brasil', 'brazil'])
 
 /** Normaliza país: variações de Brasil -> 'Brasil'; demais mantêm o original. */

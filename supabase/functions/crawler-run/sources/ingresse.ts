@@ -8,7 +8,7 @@
 
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
-import { normPais } from '../../_shared/classify.ts'
+import { normPais, avgTaxaPct } from '../../_shared/classify.ts'
 
 const SEARCH = 'https://api-site.ingresse.com/events/search'
 const EMBED = 'https://api-embedstore.ingresse.com/api/v1/event'
@@ -18,10 +18,10 @@ const UA =
 // apikey pública do embed store da Ingresse — vem de um secret (nunca do git).
 const EMBED_KEY = Deno.env.get('INGRESSE_EMBED_APIKEY') ?? ''
 
-/** Faixa de preço (min–max) dos lotes de um evento (API embed store). */
-async function fetchPrecos(
-  id: number,
-): Promise<{ min: number | null; max: number | null; gratuito: boolean } | null> {
+interface Precos { min: number | null; max: number | null; gratuito: boolean; taxa: number | null }
+
+/** Faixa de preço (min–max) + taxa média dos lotes (API embed store). */
+async function fetchPrecos(id: number): Promise<Precos | null> {
   if (!EMBED_KEY) return null
   try {
     const res = await fetch(`${EMBED}/${id}/session/0/tickets?apikey=${EMBED_KEY}`, {
@@ -30,20 +30,23 @@ async function fetchPrecos(
     })
     if (!res.ok) return null
     const j = await res.json() as {
-      detail?: { responseData?: { type?: { price?: number; hidden?: boolean }[] }[] }
+      detail?: { responseData?: { type?: { price?: number; tax?: number; hidden?: boolean }[] }[] }
     }
     const precos: number[] = []
+    const taxas: { price: number; tax: number }[] = []
     for (const lot of j.detail?.responseData ?? []) {
       for (const t of lot.type ?? []) {
         if (t.hidden) continue
         const p = Number(t.price)
         if (Number.isFinite(p)) precos.push(p)
+        if (Number.isFinite(p) && Number.isFinite(Number(t.tax))) taxas.push({ price: p, tax: Number(t.tax) })
       }
     }
     if (!precos.length) return null
+    const taxa = avgTaxaPct(taxas)
     const pos = precos.filter((p) => p > 0)
-    if (!pos.length) return { min: 0, max: 0, gratuito: true }
-    return { min: Math.min(...pos), max: Math.max(...pos), gratuito: false }
+    if (!pos.length) return { min: 0, max: 0, gratuito: true, taxa }
+    return { min: Math.min(...pos), max: Math.max(...pos), gratuito: false, taxa }
   } catch (e) {
     console.error('[ingresse] precos falhou', id, String(e))
     return null
@@ -129,7 +132,7 @@ export const ingresseScraper: Scraper = async () => {
   const agora = Date.now()
   const novos = events.filter((ev) => ev.title && !known.has(urlDe(ev)))
 
-  function toRaw(ev: IngEvent, precos: { min: number | null; max: number | null; gratuito: boolean } | null): RawEvent {
+  function toRaw(ev: IngEvent, precos: Precos | null): RawEvent {
     return {
       url_evento: urlDe(ev),
       nome: ev.title!,
@@ -143,6 +146,7 @@ export const ingresseScraper: Scraper = async () => {
       pais: normPais(ev.place?.country),
       preco_min: precos?.min ?? null,
       preco_max: precos?.max ?? null,
+      taxa_pct: precos?.taxa ?? null,
       gratuito: precos?.gratuito ?? false,
       online: false,
       categoria: null,

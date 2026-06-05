@@ -9,7 +9,7 @@
 // vendidos já vêm na própria resposta.
 
 import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
-import { norm, normPais } from '../../_shared/classify.ts'
+import { norm, normPais, avgTaxaPct } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const API = 'https://bff-sales-api-cdn.bileto.sympla.com.br/api/v1/events'
@@ -153,6 +153,19 @@ function mapBileto(ev: BiletoEvent): RawEvent | null {
   const tags = ev.tags && typeof ev.tags === 'object'
     ? Object.values(ev.tags as Record<string, string>).join(', ')
     : null
+
+  // Taxa: convenience_fee / price por sku (ambos em centavos -> % igual).
+  const taxaItems: { price: number; tax: number }[] = []
+  for (const it of pres.items ?? []) {
+    for (const sec of it.sectors ?? []) {
+      for (const sku of sec.skus ?? []) {
+        const p = Number(sku.price?.value)
+        const f = Number(sku.convenience_fee?.value)
+        if (Number.isFinite(p) && Number.isFinite(f)) taxaItems.push({ price: p, tax: f })
+      }
+    }
+  }
+  const taxa = avgTaxaPct(taxaItems)
   return {
     url_evento: `https://bileto.sympla.com.br/event/${ev.id}`,
     nome: ev.name,
@@ -166,6 +179,7 @@ function mapBileto(ev: BiletoEvent): RawEvent | null {
     pais: normPais(venue.locale?.country?.name),
     preco_min: min,
     preco_max: max,
+    taxa_pct: taxa,
     gratuito: min === 0,
     online: false,
     categoria: tags,
