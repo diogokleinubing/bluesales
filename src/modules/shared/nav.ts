@@ -164,3 +164,22 @@ export function moduleFromPath(pathname: string): ModuleId {
 export function getModule(id: ModuleId): ModuleDef {
   return MODULES.find((m) => m.id === id) ?? MODULES[0]
 }
+
+/** IDs de módulo válidos (para sanear o valor vindo do perfil). */
+export const MODULE_IDS: ModuleId[] = MODULES.map((m) => m.id)
+
+/**
+ * Um módulo é acessível se não houver restrição (allowed = null/vazio = todos)
+ * ou se ele estiver na lista permitida.
+ */
+export function isModuleAllowed(
+  id: ModuleId,
+  allowed: ModuleId[] | null,
+): boolean {
+  return !allowed || allowed.length === 0 || allowed.includes(id)
+}
+
+/** Módulos visíveis dado o conjunto permitido (null/vazio = todos). */
+export function visibleModules(allowed: ModuleId[] | null): ModuleDef[] {
+  return MODULES.filter((m) => isModuleAllowed(m.id, allowed))
+}

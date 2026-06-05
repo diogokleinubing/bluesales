@@ -100,7 +100,7 @@ async function getSource() {
   return { id: data.id, cfg: (data.config ?? {}) as Record<string, unknown> }
 }
 
-const ESTADOS_POR_RUN = 2 // varre poucos estados por execução (gira o cursor)
+const ESTADOS_POR_RUN = 5 // varre alguns estados por execução (gira o cursor)
 
 export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
   try {
@@ -112,17 +112,21 @@ export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
 
     // Fase 1: descobre eventos novos varrendo alguns estados (/<UF>/as/<pg>).
     const ufsRun = Array.from({ length: ESTADOS_POR_RUN }, (_, k) => UFS[(cursor + k) % UFS.length])
+    console.log(`[bdigital] DIAG reprocessar=${!!ctx.reprocessar} known=${known.size} ufs=${ufsRun.join(',')}`)
     const candidatos: Candidato[] = []
     for (const uf of ufsRun) {
       for (let pg = 1; pg <= MAX_PG_UF; pg++) {
         let html: string
+        let status = 0
         try {
           const res = await fetch(`${HOST}/${uf}/as/${pg}`, { headers: HEADERS, signal: AbortSignal.timeout(10000) })
-          if (!res.ok) break
+          status = res.status
+          if (!res.ok) { console.log(`[bdigital] DIAG ${uf} pg=${pg} HTTP ${status} -> para`); break }
           html = await res.text()
-        } catch { break }
+        } catch (e) { console.log(`[bdigital] DIAG ${uf} pg=${pg} fetch falhou: ${String(e)}`); break }
         const $ = load(html)
         const cards = $('.box-li-evento')
+        if (pg === 1) console.log(`[bdigital] DIAG ${uf} pg=1 HTTP ${status} htmlLen=${html.length} cards=${cards.length}`)
         if (cards.length === 0) break
         cards.each((_i: number, el: unknown) => {
           const card = $(el as never)
@@ -151,6 +155,9 @@ export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
     if (src) await db.from('crawler_sources').update({ config: { ...cfg, uf_cursor: novoCursor } }).eq('id', src.id)
     const aProcessar = candidatos.slice(0, MAX_NOVOS) // teto de detalhes por execução
     console.log(`[bdigital] estados=${ufsRun.join(',')} cursor ${cursor}->${novoCursor} candidatos=${candidatos.length} processando=${aProcessar.length}`)
+    ctx.notas?.push(
+      `Estados varridos: ${ufsRun.join(', ')} (cursor ${cursor}→${novoCursor}) · candidatos novos: ${candidatos.length} · detalhados: ${aProcessar.length}`,
+    )
 
     // Fase 2: detalhe (preço/taxa/data/organizador) em paralelo.
     const out: RawEvent[] = []

@@ -7,13 +7,8 @@ export function faixaPreco(min: number | null, max: number | null): string {
   return fmtBRL(min ?? max)
 }
 
-/** Acumula a faixa de preço de um evento num agregado (mutável). */
-export function acumulaPreco(
-  a: { precoMin: number | null; precoMax: number | null },
-  e: { preco_min: number | null; preco_max: number | null },
-) {
-  const pmin = e.preco_min ?? e.preco_max
-  const pmax = e.preco_max ?? e.preco_min
-  if (pmin != null) a.precoMin = a.precoMin == null ? pmin : Math.min(a.precoMin, pmin)
-  if (pmax != null) a.precoMax = a.precoMax == null ? pmax : Math.max(a.precoMax, pmax)
+/** Formata uma taxa percentual (ex.: 12.5 -> "12,5%"). */
+export function fmtTaxa(taxa: number | null): string {
+  if (taxa == null) return '—'
+  return `${taxa.toFixed(1).replace('.', ',')}%`
 }

@@ -6,13 +6,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import { MODULES, getModule, type ModuleId } from './nav'
+import { visibleModules, getModule, type ModuleId } from './nav'
 import { lastRouteOfModule } from './navigation'
+import { useAuth } from '@/lib/auth'
 
 /** Seletor de módulo em formato dropdown, com o ícone do produto à esquerda. */
 export function ModuleDropdown({ active }: { active: ModuleId }) {
   const navigate = useNavigate()
+  const { allowedModules } = useAuth()
   const mod = getModule(active)
+  const mods = visibleModules(allowedModules)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -26,7 +29,7 @@ export function ModuleDropdown({ active }: { active: ModuleId }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] min-w-52">
-        {MODULES.map((m) => (
+        {mods.map((m) => (
           <DropdownMenuItem key={m.id} onClick={() => navigate(lastRouteOfModule(m.id))} className="gap-2">
             <m.icon className="size-4" />
             <span className="flex-1">{m.label}</span>

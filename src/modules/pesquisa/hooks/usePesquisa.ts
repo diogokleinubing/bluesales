@@ -2,8 +2,9 @@ import { useMemo } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCrmOrgId } from '@/modules/crm/hooks/useFunnelStages'
+import { faixaPreco, fmtTaxa } from '../lib/preco'
 
-export { useCrmOrgId as usePesquisaOrgId } from '@/modules/crm/hooks/useFunnelStages'
+export { useCrmOrgId, useCrmOrgId as usePesquisaOrgId } from '@/modules/crm/hooks/useFunnelStages'
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -76,6 +77,7 @@ export interface CrawlerRunRow {
   eventos_ignorados: number
   erros: number
   erro_msg: string | null
+  observacao: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +120,125 @@ export function useCrawledEvents(): UseQueryResult<CrawledEventRow[]> {
         source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
         source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
       })) as CrawledEventRow[]
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Agregação de Organizadores / Locais (RPC sobre TODA a base, sem limite)
+// ---------------------------------------------------------------------------
+export interface OrganizerAgg {
+  chave: string
+  nome: string
+  eventos: number
+  preco_min: number | null
+  preco_max: number | null
+  taxa_media: number | null
+  cidades: string[]
+  fontes: string[]
+  cidade_nome: string | null
+  uf: string | null
+  proximo: string | null
+}
+
+export interface LocalAgg {
+  chave: string
+  nome: string
+  cidade: string | null
+  cidade_nome: string | null
+  uf: string | null
+  eventos: number
+  preco_min: number | null
+  preco_max: number | null
+  taxa_media: number | null
+  fontes: string[]
+  proximo: string | null
+}
+
+export function useCrawledOrganizers(): UseQueryResult<OrganizerAgg[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'organizers', orgId],
+    queryFn: async (): Promise<OrganizerAgg[]> => {
+      const { data, error } = await supabase.rpc('crawled_organizers')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as OrganizerAgg[]
+    },
+  })
+}
+
+export function useCrawledLocals(): UseQueryResult<LocalAgg[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'locals', orgId],
+    queryFn: async (): Promise<LocalAgg[]> => {
+      const { data, error } = await supabase.rpc('crawled_locals')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as LocalAgg[]
+    },
+  })
+}
+
+/** Eventos (não ignorados) de um organizador específico — para o dialog. */
+export function useEventosDoOrganizador(nome: string | null): UseQueryResult<CrawledEventRow[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId && !!nome,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'org-eventos', orgId, nome],
+    queryFn: async (): Promise<CrawledEventRow[]> => {
+      const { data, error } = await supabase
+        .from('crawled_events')
+        .select('*, crawler_sources(slug, nome)')
+        .eq('org_id', orgId!)
+        .eq('ignorado', false)
+        .ilike('organizador_raw', nome!)
+        .order('data_inicio', { ascending: true })
+        .limit(1000)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((e: Record<string, unknown>) => ({
+        ...(e as object),
+        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
+        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+      })) as CrawledEventRow[]
+    },
+  })
+}
+
+/** Eventos (não ignorados) de um local específico (nome + cidade combinada). */
+export function useEventosDoLocal(
+  nome: string | null,
+  cidade: string | null,
+): UseQueryResult<CrawledEventRow[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId && !!nome,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'local-eventos', orgId, nome, cidade],
+    queryFn: async (): Promise<CrawledEventRow[]> => {
+      const { data, error } = await supabase
+        .from('crawled_events')
+        .select('*, crawler_sources(slug, nome)')
+        .eq('org_id', orgId!)
+        .eq('ignorado', false)
+        .ilike('local_raw', nome!)
+        .order('data_inicio', { ascending: true })
+        .limit(1000)
+      if (error) throw new Error(error.message)
+      const rows = (data ?? []).map((e: Record<string, unknown>) => ({
+        ...(e as object),
+        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
+        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+      })) as CrawledEventRow[]
+      // Refina pela cidade combinada (mesma chave usada no agregado).
+      return rows.filter((e) => {
+        const c = e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : null
+        return c === cidade
+      })
     },
   })
 }
@@ -389,6 +510,132 @@ export async function promoverEvento(
   if (linkErr) throw new Error(linkErr.message)
 
   return crmId
+}
+
+// ---------------------------------------------------------------------------
+// Promoção de Organizadores e Locais para o CRM
+// ---------------------------------------------------------------------------
+
+/** Dados agregados de um organizador/local para promover ao CRM. */
+export interface PromoverAggInput {
+  /** Chave normalizada (dedupe) — ex.: nome em minúsculas (+ cidade). */
+  chave: string
+  nome: string
+  cidade?: string | null
+  uf?: string | null
+  precoMin: number | null
+  precoMax: number | null
+  taxaMediaPct: number | null
+  eventos: number
+  cidades: string[]
+  fontes: string[]
+}
+
+export interface PromocaoRef {
+  chave: string
+  organization_id: string | null
+  local_id: string | null
+}
+
+/** Monta as observações com faixa de ingressos e taxa média (pedido do produto). */
+function obsPromocao(input: PromoverAggInput): string {
+  return [
+    'Promovido da Pesquisa.',
+    `Faixa de ingressos: ${faixaPreco(input.precoMin, input.precoMax)}`,
+    `Taxa média: ${fmtTaxa(input.taxaMediaPct)}`,
+    `Eventos capturados: ${input.eventos}`,
+    input.cidades.length ? `Cidades: ${input.cidades.join(', ')}` : null,
+    input.fontes.length ? `Fontes: ${input.fontes.join(', ')}` : null,
+  ].filter(Boolean).join('\n')
+}
+
+/** Promove um organizador da Pesquisa para uma Organização do CRM. */
+export async function promoverOrganizador(
+  orgId: string,
+  input: PromoverAggInput,
+  profileId: string | null,
+): Promise<string> {
+  const { data: existente } = await supabase
+    .from('crawled_promotions')
+    .select('organization_id')
+    .eq('org_id', orgId).eq('tipo', 'organizador').eq('chave', input.chave)
+    .maybeSingle()
+  if (existente?.organization_id) return existente.organization_id as string
+
+  const { data: created, error } = await supabase
+    .from('organizations')
+    .insert({
+      org_id: orgId,
+      nome: input.nome,
+      cidade: input.cidade ?? null,
+      uf: input.uf ?? null,
+      origem_lead: 'Pesquisa',
+      observacoes: obsPromocao(input),
+    })
+    .select('id').single()
+  if (error) throw new Error(error.message)
+  const organizationId = created.id as string
+
+  const { error: linkErr } = await supabase.from('crawled_promotions').upsert(
+    { org_id: orgId, tipo: 'organizador', chave: input.chave, rotulo: input.nome, organization_id: organizationId, promovido_por: profileId },
+    { onConflict: 'org_id,tipo,chave' },
+  )
+  if (linkErr) throw new Error(linkErr.message)
+  return organizationId
+}
+
+/** Promove um local da Pesquisa para um Local (crm_locals) do CRM. */
+export async function promoverLocal(
+  orgId: string,
+  input: PromoverAggInput,
+  profileId: string | null,
+): Promise<string> {
+  const { data: existente } = await supabase
+    .from('crawled_promotions')
+    .select('local_id')
+    .eq('org_id', orgId).eq('tipo', 'local').eq('chave', input.chave)
+    .maybeSingle()
+  if (existente?.local_id) return existente.local_id as string
+
+  const { data: created, error } = await supabase
+    .from('crm_locals')
+    .insert({
+      org_id: orgId,
+      nome: input.nome,
+      cidade: input.cidade ?? null,
+      uf: input.uf ?? null,
+      observacoes: obsPromocao(input),
+    })
+    .select('id').single()
+  if (error) throw new Error(error.message)
+  const localId = created.id as string
+
+  const { error: linkErr } = await supabase.from('crawled_promotions').upsert(
+    { org_id: orgId, tipo: 'local', chave: input.chave, rotulo: input.nome, local_id: localId, promovido_por: profileId },
+    { onConflict: 'org_id,tipo,chave' },
+  )
+  if (linkErr) throw new Error(linkErr.message)
+  return localId
+}
+
+/** Mapa chave→promoção para um tipo (organizador|local), p/ marcar já promovidos. */
+export function usePromocoes(tipo: 'organizador' | 'local'): UseQueryResult<Map<string, PromocaoRef>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 15_000,
+    queryKey: ['pesquisa', 'promocoes', tipo, orgId],
+    queryFn: async (): Promise<Map<string, PromocaoRef>> => {
+      const { data, error } = await supabase
+        .from('crawled_promotions')
+        .select('chave, organization_id, local_id')
+        .eq('org_id', orgId!).eq('tipo', tipo)
+      if (error) throw new Error(error.message)
+      const m = new Map<string, PromocaoRef>()
+      for (const r of data ?? []) m.set(r.chave as string, r as PromocaoRef)
+      return m
+    },
+  })
 }
 
 /** Liga/desliga uma fonte (Gestor). */

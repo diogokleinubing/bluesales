@@ -81,6 +81,54 @@ async function authorize(
   return { ok: !!profile?.is_gestor, disparadoPor: 'manual' }
 }
 
+/**
+ * Monta a observação legível da execução: cidades varridas, reprocessar, o
+ * movimento dos campos de paginação (offset/cursor) lendo o config depois da
+ * run e comparando com o snapshot de antes, e as notas que o scraper deu push.
+ */
+async function montarObservacao(
+  db: ReturnType<typeof adminClient>,
+  source: SourceRow,
+  cidadesCfg: { cidade: string; uf: string }[],
+  reprocessar: boolean,
+  cfgAntes: Record<string, unknown>,
+  notas: string[],
+): Promise<string | null> {
+  const linhas: string[] = []
+
+  if (cidadesCfg.length) {
+    const cs = cidadesCfg.map((c) => (c.uf ? `${c.cidade}/${c.uf}` : c.cidade)).filter(Boolean)
+    if (cs.length) linhas.push(`Cidades: ${cs.join(', ')}`)
+  }
+  if (reprocessar) linhas.push('Reprocessar: sim (ignora skip-forever)')
+
+  // Diff dos campos de paginação no config (offset/cursor/etc.).
+  let cfgDepois: Record<string, unknown> = cfgAntes
+  try {
+    const { data } = await db.from('crawler_sources').select('config').eq('id', source.id).maybeSingle()
+    cfgDepois = (data?.config ?? {}) as Record<string, unknown>
+  } catch { /* mantém cfgAntes */ }
+  const IGNORAR = new Set(['cidades', 'janela_dias'])
+  const chaves = new Set([...Object.keys(cfgAntes), ...Object.keys(cfgDepois)])
+  for (const k of [...chaves].sort()) {
+    if (IGNORAR.has(k)) continue
+    const a = cfgAntes[k]
+    const d = cfgDepois[k]
+    if (typeof a === 'object' || typeof d === 'object') continue // só escalares
+    if (a === d) linhas.push(`${k}: ${fmtVal(d)}`)
+    else linhas.push(`${k}: ${fmtVal(a)} → ${fmtVal(d)}`)
+  }
+
+  for (const n of notas) if (n) linhas.push(n)
+
+  return linhas.length ? linhas.join('\n') : null
+}
+
+function fmtVal(v: unknown): string {
+  if (v === undefined || v === null) return '—'
+  return String(v)
+}
+
 async function runSource(
   db: ReturnType<typeof adminClient>,
   source: SourceRow,
@@ -93,6 +141,9 @@ async function runSource(
   // Sem cidades cadastradas: roda uma única vez sem filtro de cidade.
   const cidades = cidadesCfg.length ? cidadesCfg : [{ cidade: '', uf: '' }]
   const janelaDias = source.config?.janela_dias ?? 90
+  // Snapshot do config antes da run (para diff de offset/cursor na observação).
+  const cfgAntes = { ...(source.config ?? {}) } as Record<string, unknown>
+  const notas: string[] = []
 
   const { data: run } = await db
     .from('crawler_runs')
@@ -115,7 +166,7 @@ async function runSource(
   }
 
   for (const c of scraper ? cidades : []) {
-    const ctx: ScrapeContext = { cidade: c.cidade, uf: c.uf, janelaDias, reprocessar }
+    const ctx: ScrapeContext = { cidade: c.cidade, uf: c.uf, janelaDias, reprocessar, notas }
     const { data: job } = await db
       .from('crawler_jobs')
       .insert({
@@ -170,6 +221,9 @@ async function runSource(
     }).eq('id', jobId)
   }
 
+  // Observação: cidades, reprocessar, diff de config (offset/cursor) e notas.
+  const observacao = await montarObservacao(db, source, cidadesCfg, reprocessar, cfgAntes, notas)
+
   await db.from('crawler_runs').update({
     status: erros > 0 && vistos === 0 ? 'error' : 'done',
     eventos_vistos: vistos,
@@ -177,6 +231,7 @@ async function runSource(
     eventos_ignorados: ignorados,
     erros,
     erro_msg: erroMsg,
+    observacao,
     finalizado_em: new Date().toISOString(),
   }).eq('id', runId)
 

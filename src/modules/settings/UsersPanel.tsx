@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Info, KeyRound, ShieldOff, Copy, MoreHorizontal } from 'lucide-react'
+import {
+  Info,
+  KeyRound,
+  ShieldOff,
+  Copy,
+  MoreHorizontal,
+  LayoutGrid,
+} from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -16,8 +23,11 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -34,9 +44,11 @@ import {
   fetchProfiles,
   setAdmin,
   setGestor,
+  setUserModules,
   resetUserPassword,
   disableUserMfa,
 } from './admin-api'
+import { MODULES } from '@/modules/shared/nav'
 import type { ProfileRow } from '@/lib/database.types'
 import { fmtDate } from '@/lib/format'
 
@@ -122,6 +134,7 @@ export function UsersPanel() {
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-center">Admin</TableHead>
                 <TableHead className="text-center">Gestor</TableHead>
+                <TableHead>Módulos</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -129,14 +142,14 @@ export function UsersPanel() {
               {query.isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                     Nenhum usuário.
                   </TableCell>
                 </TableRow>
@@ -173,6 +186,9 @@ export function UsersPanel() {
                           checked={u.is_gestor}
                           onCheckedChange={(v) => toggleGestor(u.id, v)}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <ModulesCell user={u} />
                       </TableCell>
                       <TableCell className="text-right">
                         {isSelf ? (
@@ -216,6 +232,72 @@ export function UsersPanel() {
 
       <TempPasswordDialog info={tempInfo} onClose={() => setTempInfo(null)} />
     </div>
+  )
+}
+
+/**
+ * Seletor dos módulos visíveis de um usuário. Sem restrição (todos marcados ou
+ * nenhum) é salvo como NULL = "Todos". Marcar um subconjunto restringe a visão.
+ */
+function ModulesCell({ user }: { user: ProfileRow }) {
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const allIds = MODULES.map((m) => m.id as string)
+  const restricted =
+    !!user.modules && user.modules.length > 0 && user.modules.length < allIds.length
+  const selected = restricted ? user.modules! : allIds
+  const label = restricted
+    ? MODULES.filter((m) => selected.includes(m.id))
+        .map((m) => m.label)
+        .join(', ')
+    : 'Todos'
+
+  async function toggle(id: string, checked: boolean) {
+    const next = checked
+      ? [...new Set([...selected, id])]
+      : selected.filter((m) => m !== id)
+    setBusy(true)
+    try {
+      // Vazio ou todos = sem restrição (NULL).
+      await setUserModules(user.id, next.length === allIds.length ? null : next)
+      await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
+    } catch (e) {
+      toast.error('Erro ao salvar módulos', { description: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          className="h-8 max-w-[180px] gap-1.5 font-normal"
+        >
+          <LayoutGrid className="size-3.5 shrink-0" />
+          <span className="truncate">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuLabel>Módulos visíveis</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {MODULES.map((m) => (
+          <DropdownMenuCheckboxItem
+            key={m.id}
+            checked={selected.includes(m.id)}
+            onSelect={(e) => e.preventDefault()}
+            onCheckedChange={(c) => toggle(m.id, !!c)}
+            className="gap-2"
+          >
+            <m.icon className="size-4" />
+            {m.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

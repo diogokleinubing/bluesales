@@ -30,6 +30,12 @@ export interface ScrapeContext {
   janelaDias: number
   /** Quando true, reprocessa eventos já coletados (ignora o skip-forever). */
   reprocessar?: boolean
+  /**
+   * Coletor de notas legíveis sobre a execução (estados varridos, candidatos,
+   * etc.). O scraper pode dar push aqui; o orquestrador salva em
+   * crawler_runs.observacao.
+   */
+  notas?: string[]
 }
 
 // Assinatura de um scraper de fonte.

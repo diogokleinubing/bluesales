@@ -1,55 +1,39 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { ArrowUpRight, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { fmtDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
+import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
-import { faixaPreco, acumulaPreco } from '../lib/preco'
-import { useCrawledEvents } from '../hooks/usePesquisa'
-
-interface Agg {
-  nome: string
-  eventos: number
-  cidades: Set<string>
-  fontes: Set<string>
-  proximo: string | null
-  precoMin: number | null
-  precoMax: number | null
-}
+import { faixaPreco, fmtTaxa } from '../lib/preco'
+import {
+  useCrawledOrganizers, useEventosDoOrganizador, usePromocoes,
+  promoverOrganizador, useCrmOrgId,
+  type OrganizerAgg, type PromoverAggInput,
+} from '../hooks/usePesquisa'
 
 export function OrganizadoresMercado() {
-  const { data, isLoading } = useCrawledEvents()
+  const { data, isLoading } = useCrawledOrganizers()
+  const promos = usePromocoes('organizador').data
+  const orgId = useCrmOrgId()
+  const { profile } = useProfile()
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [valorMin, setValorMin] = useState('')
   const [sel, setSel] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
 
-  const eventosDoSel = useMemo(
-    () => (sel ? (data ?? []).filter((e) => (e.organizador_raw ?? '').trim() === sel && !e.ignorado) : []),
-    [data, sel],
-  )
+  const { data: eventosDoSel } = useEventosDoOrganizador(sel)
 
-  const aggregated = useMemo(() => {
-    const map = new Map<string, Agg>()
-    const hoje = new Date().toISOString()
-    for (const e of data ?? []) {
-      const nome = (e.organizador_raw ?? '').trim()
-      if (!nome || e.ignorado) continue
-      let a = map.get(nome)
-      if (!a) { a = { nome, eventos: 0, cidades: new Set(), fontes: new Set(), proximo: null, precoMin: null, precoMax: null }; map.set(nome, a) }
-      a.eventos++
-      acumulaPreco(a, e)
-      if (e.cidade) a.cidades.add(`${e.cidade}${e.uf ? `/${e.uf}` : ''}`)
-      if (e.source_nome) a.fontes.add(e.source_nome)
-      if (e.data_inicio && e.data_inicio >= hoje && (!a.proximo || e.data_inicio < a.proximo)) {
-        a.proximo = e.data_inicio
-      }
-    }
-    return [...map.values()].sort((x, y) => y.eventos - x.eventos)
-  }, [data])
+  const aggregated = data ?? []
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -57,10 +41,38 @@ export function OrganizadoresMercado() {
     const temMin = valorMin.trim() !== '' && Number.isFinite(min)
     return aggregated.filter((a) => {
       if (q && !a.nome.toLowerCase().includes(q)) return false
-      if (temMin && (a.precoMax == null || a.precoMax < min)) return false
+      if (temMin && (a.preco_max == null || a.preco_max < min)) return false
       return true
     })
   }, [aggregated, search, valorMin])
+
+  async function onPromover(a: OrganizerAgg) {
+    if (!orgId) return
+    setBusy(a.chave)
+    try {
+      const input: PromoverAggInput = {
+        chave: a.chave,
+        nome: a.nome,
+        // Organizador pode atuar em várias cidades: só preenche se for uma só.
+        cidade: a.cidades.length === 1 ? a.cidade_nome : null,
+        uf: a.cidades.length === 1 ? a.uf : null,
+        precoMin: a.preco_min,
+        precoMax: a.preco_max,
+        taxaMediaPct: a.taxa_media,
+        eventos: a.eventos,
+        cidades: a.cidades,
+        fontes: a.fontes,
+      }
+      await promoverOrganizador(orgId, input, profile?.id ?? null)
+      await qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes', 'organizador'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+      toast.success('Organizador promovido ao Comercial', { description: a.nome })
+    } catch (e) {
+      toast.error('Erro ao promover', { description: (e as Error).message })
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <ListView
@@ -81,28 +93,50 @@ export function OrganizadoresMercado() {
           <TableHead className="text-right">Eventos</TableHead>
           <TableHead>Cidades</TableHead>
           <TableHead className="text-right">Faixa de preço</TableHead>
+          <TableHead className="text-right">Taxa média</TableHead>
           <TableHead>Fontes</TableHead>
           <TableHead>Próximo evento</TableHead>
+          <TableHead className="w-10"></TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
               Nenhum organizador detectado ainda.
             </TableCell></TableRow>
-          ) : rows.map((a) => (
-            <TableRow key={a.nome} className="cursor-pointer" onClick={() => setSel(a.nome)}>
-              <TableCell className="font-medium">{a.nome}</TableCell>
-              <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
-              <TableCell className="text-muted-foreground">{[...a.cidades].slice(0, 3).join(', ')}{a.cidades.size > 3 ? ` +${a.cidades.size - 3}` : ''}</TableCell>
-              <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.precoMin, a.precoMax)}</TableCell>
-              <TableCell><div className="flex flex-wrap gap-1">{[...a.fontes].map((f) => <Badge key={f} variant="outline">{f}</Badge>)}</div></TableCell>
-              <TableCell className="whitespace-nowrap text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
-            </TableRow>
-          ))}
+          ) : rows.map((a) => {
+            const promo = promos?.get(a.chave)
+            return (
+              <TableRow key={a.chave} className="cursor-pointer" onClick={() => setSel(a.nome)}>
+                <TableCell className="font-medium">{a.nome}</TableCell>
+                <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
+                <TableCell className="text-muted-foreground">{a.cidades.slice(0, 3).join(', ')}{a.cidades.length > 3 ? ` +${a.cidades.length - 3}` : ''}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{fmtTaxa(a.taxa_media)}</TableCell>
+                <TableCell><div className="flex flex-wrap gap-1">{a.fontes.map((f) => <Badge key={f} variant="outline">{f}</Badge>)}</div></TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  {promo ? (
+                    <Badge variant="secondary" className="gap-1 whitespace-nowrap font-normal">
+                      <Check className="size-3" /> No Comercial
+                    </Badge>
+                  ) : (
+                    <Button
+                      size="sm" variant="ghost" className="h-7 px-2"
+                      disabled={busy === a.chave || !orgId}
+                      title="Promover ao Comercial"
+                      onClick={() => onPromover(a)}
+                    >
+                      <ArrowUpRight className="size-4" />
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
 
@@ -110,8 +144,8 @@ export function OrganizadoresMercado() {
         open={!!sel}
         onOpenChange={(o) => !o && setSel(null)}
         titulo={sel ?? ''}
-        subtitulo={`${eventosDoSel.length} evento(s) capturado(s)`}
-        eventos={eventosDoSel}
+        subtitulo={`${(eventosDoSel ?? []).length} evento(s) capturado(s)`}
+        eventos={eventosDoSel ?? []}
       />
     </ListView>
   )

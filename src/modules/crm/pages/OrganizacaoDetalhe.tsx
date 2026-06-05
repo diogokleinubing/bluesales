@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,10 +17,14 @@ import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import {
-  TextField, SelectField, CurrencyField, FormActions, useDraft, toText, toNumber,
+  TextField, SelectField, CurrencyField, TextareaField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { ClasseBadge } from '../components/ClasseBadge'
+import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplete'
+import {
+  useOrgLocais, useLocais, linkLocalToOrg, unlinkOrgLocal,
+} from '../hooks/useCadastros'
 import {
   useOrganization,
   updateOrganization,
@@ -33,7 +37,7 @@ import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { PersonAutocomplete, type PersonPick } from '../components/PersonAutocomplete'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
-const ORIGENS = ['Indicação', 'Prospecção ativa', 'Inbound', 'Evento', 'Outro']
+const ORIGENS = ['Indicação', 'Prospecção ativa', 'Inbound', 'Evento', 'Pesquisa', 'Outro']
 const SOCIEDADES = ['Sócio Único', 'Grupo de Sócios']
 const ESTRUTURAS = ['Pequena', 'Média', 'Grande']
 
@@ -89,6 +93,11 @@ export function OrganizacaoDetalhe() {
               </Button>
             </div>
             <OrgOportunidades organizationId={org.id} />
+          </section>
+
+          <section className="border-t border-border pt-4">
+            <h3 className="mb-2 text-sm font-medium">Locais</h3>
+            <OrgLocais organizationId={org.id} />
           </section>
 
           <section className="border-t border-border pt-4">
@@ -305,6 +314,84 @@ function OrgContatos({ orgId }: { orgId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+function OrgLocais({ organizationId }: { organizationId: string }) {
+  const qc = useQueryClient()
+  const tenantOrgId = useCrmOrgId()
+  const { data: vinculos, isLoading } = useOrgLocais(organizationId)
+  const { data: locais } = useLocais()
+  const [pick, setPick] = useState<Lookup | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const jaVinculados = new Set((vinculos ?? []).map((v) => v.local_id))
+  const options: Lookup[] = (locais ?? [])
+    .filter((l) => !jaVinculados.has(l.id))
+    .map((l) => ({ id: l.id, nome: l.cidade ? `${l.nome} — ${l.cidade}${l.uf ? `/${l.uf}` : ''}` : l.nome }))
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'org-locais', organizationId] })
+
+  async function vincular() {
+    if (!pick || !tenantOrgId) return
+    setSaving(true)
+    try {
+      await linkLocalToOrg(tenantOrgId, organizationId, pick.id)
+      setPick(null)
+      refresh()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remover(linkId: string) {
+    try {
+      await unlinkOrgLocal(linkId)
+      refresh()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-24 w-full" />
+
+  return (
+    <div className="space-y-3">
+      {(vinculos ?? []).length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhum local vinculado.</p>
+      )}
+      {(vinculos ?? []).map((v) => (
+        <div key={v.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 font-medium">
+              <MapPin className="size-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{v.nome}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {[v.cidade ? `${v.cidade}${v.uf ? `/${v.uf}` : ''}` : null, v.tipo].filter(Boolean).join(' · ') || '—'}
+            </div>
+          </div>
+          <button onClick={() => remover(v.id)} className="shrink-0 text-muted-foreground hover:text-destructive" title="Remover vínculo">
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <EntityAutocomplete
+          className="w-56"
+          value={pick}
+          onPick={setPick}
+          options={options}
+          placeholder="Buscar local…"
+        />
+        <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
+          <Plus className="size-4" /> Vincular
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 function OrgVisaoGeral({ org }: { org: Organization }) {
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
@@ -319,6 +406,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
       origem_lead: org.origem_lead ?? '',
       sociedade: org.sociedade ?? '',
       estrutura: org.estrutura ?? '',
+      observacoes: org.observacoes ?? '',
     }),
     [org],
   )
@@ -342,6 +430,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         origem_lead: toText(draft.origem_lead),
         sociedade: toText(draft.sociedade),
         estrutura: toText(draft.estrutura),
+        observacoes: toText(draft.observacoes),
       })
       invalidate()
     } catch (e) {
@@ -382,6 +471,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
       </div>
       <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+      <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
     </section>
   )

@@ -18,6 +18,7 @@ export interface Organization {
   status_comercial: string | null
   funil_stage_id: string | null
   bi_organizador: string | null
+  observacoes: string | null
   created_at: string
   updated_at: string
 }

@@ -9,6 +9,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { isTrustedDevice } from '@/lib/trusted-device'
+import { MODULE_IDS, type ModuleId } from '@/modules/shared/nav'
 
 /** Nível de garantia de autenticação (MFA). aal2 = 2FA verificado. */
 type Aal = 'aal1' | 'aal2' | null
@@ -19,6 +20,11 @@ interface AuthContextValue {
   loading: boolean
   isAdmin: boolean
   isGestor: boolean
+  /**
+   * Módulos que o usuário pode ver. `null` = todos (sem restrição).
+   * Admin sempre recebe `null` (vê tudo).
+   */
+  allowedModules: ModuleId[] | null
   /** Usuário já tem um fator TOTP verificado cadastrado? */
   hasMfa: boolean
   /** A sessão atual já passou pelo 2FA (aal2)? */
@@ -46,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isGestor, setIsGestor] = useState(false)
+  const [modules, setModules] = useState<string[] | null>(null)
   const [mustChangePassword, setMustChangePassword] = useState(false)
   const [hasMfa, setHasMfa] = useState(false)
   const [aal, setAal] = useState<Aal>(null)
@@ -63,16 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!uid) {
       setIsAdmin(false)
       setIsGestor(false)
+      setModules(null)
       setMustChangePassword(false)
       return
     }
     const { data } = await supabase
       .from('profiles')
-      .select('is_admin, is_gestor, must_change_password')
+      .select('is_admin, is_gestor, must_change_password, modules')
       .eq('id', uid)
       .maybeSingle()
     setIsAdmin(!!data?.is_admin)
     setIsGestor(!!data?.is_gestor)
+    setModules((data?.modules as string[] | null) ?? null)
     setMustChangePassword(!!data?.must_change_password)
   }, [])
 
@@ -98,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setIsAdmin(false)
         setIsGestor(false)
+        setModules(null)
         setMustChangePassword(false)
         setHasMfa(false)
         setAal(null)
@@ -115,6 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     !!session && hasMfa && aal === 'aal1' && !trusted
   const needsPasswordChange = !!session && mustChangePassword
 
+  // Admin vê tudo (null). Senão, sanea a lista do perfil contra os IDs válidos;
+  // lista vazia/sem itens válidos vira null = sem restrição (vê todos).
+  const allowedModules = useMemo<ModuleId[] | null>(() => {
+    if (isAdmin) return null
+    const valid = (modules ?? []).filter((m): m is ModuleId =>
+      (MODULE_IDS as string[]).includes(m),
+    )
+    return valid.length ? valid : null
+  }, [isAdmin, modules])
+
   const refreshProfile = useCallback(
     () => loadProfile(session?.user?.id),
     [loadProfile, session?.user?.id],
@@ -127,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isAdmin,
       isGestor,
+      allowedModules,
       hasMfa,
       mfaSatisfied,
       needsMfaEnroll,
@@ -150,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isAdmin,
       isGestor,
+      allowedModules,
       hasMfa,
       mfaSatisfied,
       needsMfaEnroll,

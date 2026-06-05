@@ -72,6 +72,7 @@ export interface ProfileRow {
   is_admin: boolean
   is_gestor: boolean
   must_change_password: boolean
+  modules: string[] | null
   created_at: string
 }
 

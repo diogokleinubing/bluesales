@@ -345,3 +345,56 @@ export async function deleteCrmEvent(id: string) {
   const { error } = await supabase.from('crm_events').delete().eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+// ---------------------------------------------------------------------------
+// Vínculo Locais ↔ Organização (organization_locals)
+// ---------------------------------------------------------------------------
+export interface OrgLocalRow {
+  id: string // id do vínculo (organization_locals)
+  local_id: string
+  nome: string
+  cidade: string | null
+  uf: string | null
+  tipo: string | null
+}
+
+/** Locais vinculados a uma organização. */
+export function useOrgLocais(organizationId: string | undefined) {
+  return useQuery({
+    enabled: !!organizationId,
+    staleTime: 30 * 1000,
+    queryKey: ['crm', 'org-locais', organizationId],
+    queryFn: async (): Promise<OrgLocalRow[]> => {
+      const { data, error } = await supabase
+        .from('organization_locals')
+        .select('id, local_id, crm_locals(nome, cidade, uf, tipo)')
+        .eq('organization_id', organizationId!)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((r) => {
+        const l = r.crm_locals as unknown as { nome: string; cidade: string | null; uf: string | null; tipo: string | null } | null
+        return {
+          id: r.id as string,
+          local_id: r.local_id as string,
+          nome: l?.nome ?? '?',
+          cidade: l?.cidade ?? null,
+          uf: l?.uf ?? null,
+          tipo: l?.tipo ?? null,
+        }
+      }).sort((a, b) => a.nome.localeCompare(b.nome))
+    },
+  })
+}
+
+/** Vincula um local existente a uma organização. */
+export async function linkLocalToOrg(orgId: string, organizationId: string, localId: string) {
+  const { error } = await supabase
+    .from('organization_locals')
+    .insert({ org_id: orgId, organization_id: organizationId, local_id: localId })
+  if (error) throw new Error(error.message)
+}
+
+/** Remove o vínculo local↔organização. */
+export async function unlinkOrgLocal(linkId: string) {
+  const { error } = await supabase.from('organization_locals').delete().eq('id', linkId)
+  if (error) throw new Error(error.message)
+}

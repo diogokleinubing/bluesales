@@ -30,6 +30,22 @@ export async function setGestor(id: string, isGestor: boolean): Promise<void> {
 }
 
 /**
+ * Define os módulos visíveis de um usuário.
+ * `null` (ou lista vazia) = sem restrição (vê todos os módulos).
+ */
+export async function setUserModules(
+  id: string,
+  modules: string[] | null,
+): Promise<void> {
+  const value = modules && modules.length ? modules : null
+  const { error } = await supabase
+    .from('profiles')
+    .update({ modules: value })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/**
  * Reseta a senha de outro usuário (via Edge Function admin-actions).
  * Retorna a senha temporária; o usuário será forçado a trocá-la no login.
  */
