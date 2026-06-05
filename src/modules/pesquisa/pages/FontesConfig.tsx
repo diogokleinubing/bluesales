@@ -19,7 +19,7 @@ import {
 import { fmtDate, fmtInt } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
-  useCrawlerSources, useSourceCounts, setSourceAtivo, saveSourceConfig, runCrawler,
+  useCrawlerSources, useSourceCounts, setSourceAtivo, saveSourceConfig, resetSourceScan, runCrawler,
   type CrawlerSource,
 } from '../hooks/usePesquisa'
 import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
@@ -118,6 +118,16 @@ export function FontesConfig() {
     setEdit(s)
     setJanela(String(s.config?.janela_dias ?? 90))
     setCidadesTxt(cidadesToText(s))
+  }
+
+  async function reiniciarVarredura() {
+    if (!edit) return
+    try {
+      await resetSourceScan(edit)
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
+      toast.success('Varredura reiniciada', { description: 'Próxima coleta começa do início.' })
+      setEdit(null)
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   async function salvar() {
@@ -245,6 +255,15 @@ export function FontesConfig() {
               <Label>Cidades (uma por linha: <code>Cidade;UF</code>)</Label>
               <Textarea rows={8} value={cidadesTxt} onChange={(e) => setCidadesTxt(e.target.value)}
                 placeholder={'Florianópolis;SC\nSão Paulo;SP'} />
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Reiniciar varredura</p>
+                  <p className="text-xs text-muted-foreground">Volta o offset/cursor ao início. Não apaga nada — recoleta do começo (pula os que já existem).</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={reiniciarVarredura}>Reiniciar</Button>
+              </div>
             </div>
           </div>
           <DialogFooter>

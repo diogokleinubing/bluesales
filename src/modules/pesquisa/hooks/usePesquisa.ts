@@ -397,6 +397,17 @@ export async function setSourceAtivo(id: string, ativo: boolean): Promise<void> 
   if (error) throw new Error(error.message)
 }
 
+/** Reinicia a varredura de uma fonte do começo (zera offset/cursor). */
+export async function resetSourceScan(source: CrawlerSource): Promise<void> {
+  const cfg = (source.config ?? {}) as Record<string, unknown>
+  const novo: Record<string, unknown> = {
+    ...cfg, offset: 0, sitemap_offset: 0, uf_cursor: 0, cursor: null,
+  }
+  if (cfg.id_topo != null) novo.id_baixo = cfg.id_topo // Bileto volta ao topo
+  const { error } = await supabase.from('crawler_sources').update({ config: novo }).eq('id', source.id)
+  if (error) throw new Error(error.message)
+}
+
 /** Atualiza config (cidades / janela) de uma fonte (Gestor). */
 export async function saveSourceConfig(
   id: string,
