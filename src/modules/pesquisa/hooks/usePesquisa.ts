@@ -408,12 +408,13 @@ export async function resetSourceScan(source: CrawlerSource): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-/** Atualiza config (cidades / janela) de uma fonte (Gestor). */
+/** Mescla campos no config de uma fonte (preserva offset/cursor/scan etc.). */
 export async function saveSourceConfig(
-  id: string,
-  config: CrawlerSource['config'],
+  source: CrawlerSource,
+  patch: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabase.from('crawler_sources').update({ config }).eq('id', id)
+  const novo = { ...(source.config ?? {}), ...patch }
+  const { error } = await supabase.from('crawler_sources').update({ config: novo }).eq('id', source.id)
   if (error) throw new Error(error.message)
 }
 

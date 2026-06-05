@@ -51,7 +51,6 @@ export function FontesConfig() {
   const [running, setRunning] = useState<string | null>(null)
   const [report, setReport] = useState<CrawlerSource | null>(null)
   const [edit, setEdit] = useState<CrawlerSource | null>(null)
-  const [janela, setJanela] = useState('90')
   const [cidadesTxt, setCidadesTxt] = useState('')
 
   // Lote: roda N ciclos em sequência com intervalo (loop no front, interrompível).
@@ -116,7 +115,6 @@ export function FontesConfig() {
 
   function openEdit(s: CrawlerSource) {
     setEdit(s)
-    setJanela(String(s.config?.janela_dias ?? 90))
     setCidadesTxt(cidadesToText(s))
   }
 
@@ -133,10 +131,7 @@ export function FontesConfig() {
   async function salvar() {
     if (!edit) return
     try {
-      await saveSourceConfig(edit.id, {
-        janela_dias: Number(janela) || 90,
-        cidades: parseCidades(cidadesTxt),
-      })
+      await saveSourceConfig(edit, { cidades: parseCidades(cidadesTxt) })
       qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
       setEdit(null)
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
@@ -180,9 +175,7 @@ export function FontesConfig() {
           <TableHeader><TableRow>
             <TableHead>Fonte</TableHead>
             <TableHead>Método</TableHead>
-            <TableHead>Cidades</TableHead>
-            <TableHead>Janela</TableHead>
-            <TableHead>Última execução</TableHead>
+            <TableHead>Cidades</TableHead>            <TableHead>Última execução</TableHead>
             <TableHead className="text-right">Eventos</TableHead>
             <TableHead>Ativa</TableHead>
             {editable && <TableHead className="w-28" />}
@@ -190,15 +183,13 @@ export function FontesConfig() {
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : (data ?? []).map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="font-medium">{s.nome}</TableCell>
                 <TableCell><Badge variant="outline">{METODO_LABEL[s.metodo] ?? s.metodo}</Badge></TableCell>
-                <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>
-                <TableCell className="text-muted-foreground">{s.config?.janela_dias ?? 90} dias</TableCell>
-                <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
+                <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>                <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtInt(counts.data?.[s.id] ?? 0)}</TableCell>
                 <TableCell>
                   <Switch checked={s.ativo} disabled={!editable} onCheckedChange={() => toggle(s)} />
@@ -247,10 +238,6 @@ export function FontesConfig() {
         <DialogContent>
           <DialogHeader><DialogTitle>{edit?.nome} — coleta</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Janela (dias à frente)</Label>
-              <Input type="number" value={janela} onChange={(e) => setJanela(e.target.value)} />
-            </div>
             <div className="space-y-1">
               <Label>Cidades (uma por linha: <code>Cidade;UF</code>)</Label>
               <Textarea rows={8} value={cidadesTxt} onChange={(e) => setCidadesTxt(e.target.value)}
