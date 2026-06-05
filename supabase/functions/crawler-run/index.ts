@@ -24,6 +24,7 @@ import type { RawEvent, Scraper, ScrapeContext } from '../_shared/types.ts'
 import { symplaScraper } from './sources/sympla.ts'
 import { biletoScraper } from './sources/bileto.ts'
 import { ingresseScraper } from './sources/ingresse.ts'
+import { diskIngressosScraper } from './sources/diskingressos.ts'
 import { guichewebScraper } from './sources/guicheweb.ts'
 import { bilheteriaDigitalScraper } from './sources/bilheteriadigital.ts'
 
@@ -31,6 +32,7 @@ const SCRAPERS: Record<string, Scraper> = {
   sympla: symplaScraper,
   bileto: biletoScraper,
   ingresse: ingresseScraper,
+  diskingressos: diskIngressosScraper,
   guicheweb: guichewebScraper,
   bilheteriadigital: bilheteriaDigitalScraper,
 }
