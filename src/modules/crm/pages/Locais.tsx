@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Pencil, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,8 @@ import {
 } from '../hooks/useCadastros'
 import { usePlatforms } from '../hooks/useConfigCadastros'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
+import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
 const NONE = '__none__'
@@ -44,6 +46,7 @@ export function Locais() {
   const [search, setSearch] = useState('')
   const [platFilter, setPlatFilter] = useState<string>(ALL)
   const [gmvMin, setGmvMin] = useState('')
+  const [oppFrom, setOppFrom] = useState<LocalRow | null>(null)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [nome, setNome] = useState('')
@@ -101,10 +104,6 @@ export function Locais() {
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
-  async function remover(l: LocalRow) {
-    try { await deleteLocal(l.id); qc.invalidateQueries({ queryKey: ['crm', 'locais'] }) }
-    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
-  }
 
   const availPlatforms = (platforms.data ?? []).filter((p) => !plats.some((x) => x.platform_id === p.id))
 
@@ -188,12 +187,19 @@ export function Locais() {
                       {l.oppStatus ?? 'Em aberto'}
                       {l.oppAtivas > 1 && <span className="text-muted-foreground">+{l.oppAtivas - 1}</span>}
                     </Badge>
-                  ) : <span className="text-muted-foreground">—</span>}
+                  ) : (
+                    <button
+                      onClick={(ev) => { ev.stopPropagation(); setOppFrom(l) }}
+                      className="inline-flex size-6 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+                      title="Criar oportunidade deste local"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => openEdit(l)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>
-                    <button onClick={() => remover(l)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                  <div className="flex justify-end">
+                    <button onClick={() => openEdit(l)} className="text-muted-foreground hover:text-foreground" title="Editar"><Pencil className="size-4" /></button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -275,12 +281,34 @@ export function Locais() {
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar} disabled={!nome.trim()}>Salvar</Button>
+          <DialogFooter className="sm:justify-between">
+            {editId ? (
+              <DeleteEntityButton
+                title="Remover local?"
+                description={`"${nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
+                onDelete={() => deleteLocal(editId)}
+                onDeleted={() => {
+                  qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
+                  qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'locais'] })
+                  setOpen(false)
+                }}
+                label="Remover"
+              />
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button onClick={salvar} disabled={!nome.trim()}>Salvar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NovaOportunidadeDialog
+        open={!!oppFrom}
+        onOpenChange={(o) => !o && setOppFrom(null)}
+        initialTitulo={oppFrom?.nome}
+        initialLocalId={oppFrom?.id}
+      />
     </>
   )
 }

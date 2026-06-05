@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,7 @@ import {
 } from '../hooks/useCadastros'
 import { ListView, ToolbarSearch } from '../components/ListView'
 import { ClasseBadge } from '../components/ClasseBadge'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
 
 const NONE = '__none__'
 
@@ -79,10 +80,6 @@ export function Artistas() {
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
-  async function remover(a: ArtistRow) {
-    try { await deleteArtist(a.id); qc.invalidateQueries({ queryKey: ['crm', 'artists'] }) }
-    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
-  }
 
   return (
     <>
@@ -115,9 +112,8 @@ export function Artistas() {
                 <TableCell className="text-muted-foreground">{a.organization_nome ?? '—'}</TableCell>
                 <TableCell>{a.platform_nome ? <Badge variant="outline">{a.platform_nome}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => openEdit(a)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>
-                    <button onClick={() => remover(a)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                  <div className="flex justify-end">
+                    <button onClick={() => openEdit(a)} className="text-muted-foreground hover:text-foreground" title="Editar"><Pencil className="size-4" /></button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -181,9 +177,20 @@ export function Artistas() {
             <div className="space-y-1"><Label>Observações</Label>
               <Textarea value={obs} onChange={(e) => setObs(e.target.value)} /></div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar} disabled={!nome.trim()}>Salvar</Button>
+          <DialogFooter className="sm:justify-between">
+            {edit ? (
+              <DeleteEntityButton
+                title="Remover artista?"
+                description={`"${edit.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
+                onDelete={() => deleteArtist(edit.id)}
+                onDeleted={() => { qc.invalidateQueries({ queryKey: ['crm', 'artists'] }); setOpen(false) }}
+                label="Remover"
+              />
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button onClick={salvar} disabled={!nome.trim()}>Salvar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

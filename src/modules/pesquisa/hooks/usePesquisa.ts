@@ -179,14 +179,22 @@ export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<
   })
 }
 
-export function useCrawledLocals(): UseQueryResult<LocalAgg[]> {
+export interface LocalAggFilters {
+  search: string
+  valorMin: number | null
+}
+
+export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<LocalAgg[]> {
   const orgId = useCrmOrgId()
   return useQuery({
     enabled: !!orgId,
     staleTime: 30_000,
-    queryKey: ['pesquisa', 'locals', orgId],
+    queryKey: ['pesquisa', 'locals', orgId, filters],
     queryFn: async (): Promise<LocalAgg[]> => {
-      const { data, error } = await supabase.rpc('crawled_locals')
+      const { data, error } = await supabase.rpc('crawled_locals', {
+        p_search: filters.search.trim() || null,
+        p_valor_min: filters.valorMin,
+      })
       if (error) throw new Error(error.message)
       return (data ?? []) as LocalAgg[]
     },
@@ -309,8 +317,15 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
     const nomes = f.artistasNomes
       .map((n) => n.replace(/[,()*%]/g, ' ').trim())
       .filter((n) => n.length >= 2)
-    if (nomes.length === 0) qq = qq.eq('id', '00000000-0000-0000-0000-000000000000')
-    else qq = qq.or(nomes.map((n) => `nome.ilike.*${n}*`).join(','))
+    if (nomes.length === 0) {
+      qq = qq.eq('id', '00000000-0000-0000-0000-000000000000')
+    } else {
+      qq = qq.or(nomes.map((n) => `nome.ilike.*${n}*`).join(','))
+      // Exclui shows de tributo/cover (não são o artista de fato).
+      for (const ex of ['tributo', 'tribute', 'cover']) {
+        qq = qq.not('nome', 'ilike', `%${ex}%`)
+      }
+    }
   }
   return qq
 }
@@ -364,6 +379,7 @@ export function useArtistNamesByClasse(classes: string[]): UseQueryResult<string
         .from('artists')
         .select('nome')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .in('classificacao', classes)
       if (error) throw new Error(error.message)
       return (data ?? []).map((a) => String(a.nome)).filter(Boolean)

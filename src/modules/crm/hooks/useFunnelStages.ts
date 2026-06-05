@@ -90,9 +90,9 @@ export async function reorderStages(ids: string[]) {
 /** Quantos registros usam este estágio (para bloquear exclusão). */
 export async function stageUsage(stageId: string): Promise<number> {
   const [orgs, persons, opps] = await Promise.all([
-    supabase.from('organizations').select('id', { count: 'exact', head: true }).eq('funil_stage_id', stageId),
-    supabase.from('persons').select('id', { count: 'exact', head: true }).eq('funil_stage_id', stageId),
-    supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('stage_id', stageId),
+    supabase.from('organizations').select('id', { count: 'exact', head: true }).eq('funil_stage_id', stageId).is('deleted_at', null),
+    supabase.from('persons').select('id', { count: 'exact', head: true }).eq('funil_stage_id', stageId).is('deleted_at', null),
+    supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('stage_id', stageId).is('deleted_at', null),
   ])
   return (orgs.count ?? 0) + (persons.count ?? 0) + (opps.count ?? 0)
 }

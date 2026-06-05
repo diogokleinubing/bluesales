@@ -20,7 +20,7 @@ import {
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { useProfile } from '../hooks/useProfile'
 import { canEdit } from '../lib/permissions'
-import { useEventGmvOptions, useOrgGmvOptions } from '../hooks/useCrmLookups'
+import { useEventGmvOptions, useOrgGmvOptions, useLocalOptions } from '../hooks/useCrmLookups'
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { useOpportunity, updateOpportunity, deleteOpportunity, setOpportunityOutcome, type Opportunity } from '../hooks/useOpportunities'
 import { fmtBRL, fmtBRL0 } from '@/lib/format'
@@ -156,7 +156,7 @@ export function OportunidadeDetalhe() {
               {canEdit(profile, o.owner_id) && (
                 <DeleteEntityButton
                   title="Excluir oportunidade?"
-                  description={`Esta ação remove "${o.titulo}". As atividades e tarefas são preservadas (apenas desvinculadas). Não pode ser desfeita.`}
+                  description={`"${o.titulo}" sairá das listagens. As atividades e tarefas são preservadas. Pode ser desfeito em Comercial → Logs.`}
                   onDelete={() => deleteOpportunity(o.id)}
                   onDeleted={() => navigate('/comercial/oportunidades')}
                   variant="menu"
@@ -191,12 +191,14 @@ function OppVisaoGeral({
   const [saving, setSaving] = useState(false)
   const eventOptions = useEventGmvOptions()
   const orgOptions = useOrgGmvOptions()
+  const localOptions = useLocalOptions()
   const [propagate, setPropagate] = useState<{ kind: 'event' | 'org'; id: string; nome: string; gmv: number } | null>(null)
   const initial = useMemo(
     () => ({
       titulo: o.titulo ?? '',
       gmv_estimado: o.gmv_estimado != null ? String(Math.round(o.gmv_estimado)) : '',
       crm_event_id: o.crm_event_id ?? '',
+      local_id: o.local_id ?? '',
       owner_id: o.owner_id,
       observacoes: o.observacoes ?? '',
     }),
@@ -210,6 +212,7 @@ function OppVisaoGeral({
     qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
     qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
     qc.invalidateQueries({ queryKey: ['crm', 'events'] })
+    qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
   }
 
   function onEventChange(id: string) {
@@ -229,6 +232,7 @@ function OppVisaoGeral({
         titulo: draft.titulo.trim() || o.titulo,
         gmv_estimado: newGmv,
         crm_event_id: draft.crm_event_id || null,
+        local_id: draft.local_id || null,
         owner_id: draft.owner_id,
         observacoes: toText(draft.observacoes),
       })
@@ -300,6 +304,12 @@ function OppVisaoGeral({
         value={draft.crm_event_id}
         options={(eventOptions.data ?? []).map((e) => ({ value: e.id, label: e.nome }))}
         onChange={onEventChange}
+      />
+      <SelectField
+        label="Local"
+        value={draft.local_id}
+        options={(localOptions.data ?? []).map((l) => ({ value: l.id, label: l.nome }))}
+        onChange={(v) => set('local_id', v)}
       />
       <CurrencyField label="GMV estimado" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
       {isGestor && (

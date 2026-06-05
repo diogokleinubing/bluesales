@@ -35,11 +35,11 @@ export function useGlobalSearch(term: string) {
     queryFn: async (): Promise<SearchHit[]> => {
       const like = `%${q}%`
       const [orgs, persons, opps, events, locais] = await Promise.all([
-        supabase.from('organizations').select('id, nome').eq('org_id', orgId!).ilike('nome', like).order('nome').limit(6),
-        supabase.from('persons').select('id, nome').eq('org_id', orgId!).ilike('nome', like).order('nome').limit(6),
-        supabase.from('opportunities').select('id, titulo').eq('org_id', orgId!).ilike('titulo', like).limit(6),
-        supabase.from('crm_events').select('id, nome').eq('org_id', orgId!).ilike('nome', like).order('nome').limit(6),
-        supabase.from('crm_locals').select('id, nome').eq('org_id', orgId!).ilike('nome', like).order('nome').limit(6),
+        supabase.from('organizations').select('id, nome').eq('org_id', orgId!).is('deleted_at', null).ilike('nome', like).order('nome').limit(6),
+        supabase.from('persons').select('id, nome').eq('org_id', orgId!).is('deleted_at', null).ilike('nome', like).order('nome').limit(6),
+        supabase.from('opportunities').select('id, titulo').eq('org_id', orgId!).is('deleted_at', null).ilike('titulo', like).limit(6),
+        supabase.from('crm_events').select('id, nome').eq('org_id', orgId!).is('deleted_at', null).ilike('nome', like).order('nome').limit(6),
+        supabase.from('crm_locals').select('id, nome').eq('org_id', orgId!).is('deleted_at', null).ilike('nome', like).order('nome').limit(6),
       ])
       const hits: SearchHit[] = []
       for (const o of orgs.data ?? []) hits.push({ kind: 'organization', id: o.id, nome: o.nome, to: `/comercial/organizacoes/${o.id}` })

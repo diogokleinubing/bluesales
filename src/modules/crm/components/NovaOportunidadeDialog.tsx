@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/lib/auth'
 import { useCrmOrgId, useFunnel } from '../hooks/useFunnelStages'
-import { useOrgGmvOptions, useEventGmvOptions } from '../hooks/useCrmLookups'
+import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions } from '../hooks/useCrmLookups'
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { createOpportunity } from '../hooks/useOpportunities'
 
@@ -35,6 +35,7 @@ export function NovaOportunidadeDialog({
   initialTitulo,
   initialGmv,
   initialEventId,
+  initialLocalId,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -42,6 +43,7 @@ export function NovaOportunidadeDialog({
   initialTitulo?: string
   initialGmv?: number | null
   initialEventId?: string
+  initialLocalId?: string
 }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -49,12 +51,14 @@ export function NovaOportunidadeDialog({
   const { user } = useAuth()
   const orgOptions = useOrgGmvOptions()
   const eventOptions = useEventGmvOptions()
+  const localOptions = useLocalOptions()
   const { stages } = useFunnel('oportunidade')
   const ativos = stages.filter((s) => s.ativo)
 
   const [titulo, setTitulo] = useState('')
   const [org, setOrg] = useState<string | null>(organizationId ?? null)
   const [evento, setEvento] = useState<string>(NONE)
+  const [local, setLocal] = useState<string>(NONE)
   const [gmv, setGmv] = useState('')
   const [saving, setSaving] = useState(false)
   const { consider, dialog: gmvDialog } = useGmvCopy(gmv, setGmv)
@@ -65,6 +69,7 @@ export function NovaOportunidadeDialog({
     setTitulo(initialTitulo ?? '')
     setOrg(organizationId ?? null)
     setEvento(initialEventId ?? NONE)
+    setLocal(initialLocalId ?? NONE)
     setGmv(initialGmv != null ? String(Math.round(initialGmv)) : '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -94,12 +99,14 @@ export function NovaOportunidadeDialog({
         stage_id: ativos[0].id,
         gmv_estimado: gmv ? Number(gmv) : null,
         crm_event_id: evento === NONE ? null : evento,
+        local_id: local === NONE ? null : local,
       })
       qc.invalidateQueries({ queryKey: ['crm', 'opportunities'] })
       qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'opps'] })
       qc.invalidateQueries({ queryKey: ['crm', 'events'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
       onOpenChange(false)
-      setTitulo(''); setGmv(''); setEvento(NONE)
+      setTitulo(''); setGmv(''); setEvento(NONE); setLocal(NONE)
       navigate(`/comercial/oportunidades/${id}`)
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -143,6 +150,20 @@ export function NovaOportunidadeDialog({
                 <SelectItem value={NONE}>—</SelectItem>
                 {(eventOptions.data ?? []).map((e) => (
                   <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Local (opcional)</Label>
+            <Select value={local} onValueChange={setLocal}>
+              <SelectTrigger className="h-9" size="sm">
+                <SelectValue placeholder="Selecione…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>—</SelectItem>
+                {(localOptions.data ?? []).map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

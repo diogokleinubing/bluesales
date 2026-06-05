@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { softDelete } from '@/lib/softDelete'
 import { useCrmOrgId } from './useFunnelStages'
 
 export interface Person {
@@ -40,6 +41,7 @@ export function useContacts() {
           .from('persons')
           .select('*, funnel_stages(nome, cor)')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .order('nome'),
         supabase
           .from('org_persons')
@@ -81,6 +83,7 @@ export function useContactSearch(term: string) {
         .from('persons')
         .select('id, nome, cargo')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .ilike('nome', `%${q}%`)
         .order('nome')
         .limit(8)
@@ -126,12 +129,5 @@ export async function updateContact(id: string, patch: Partial<Person>) {
 }
 
 export async function deleteContact(id: string) {
-  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
-  await supabase
-    .from('entity_objections')
-    .delete()
-    .eq('entity_type', 'person')
-    .eq('entity_id', id)
-  const { error } = await supabase.from('persons').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('persons', id)
 }

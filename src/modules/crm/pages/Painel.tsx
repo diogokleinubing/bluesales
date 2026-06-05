@@ -35,17 +35,20 @@ function Resumo() {
           .from('activities')
           .select('id', { count: 'exact', head: true })
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .gte('data_hora', startToday.toISOString())
           .lt('data_hora', endToday.toISOString()),
         supabase
           .from('opportunities')
           .select('id, titulo, created_at')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .is('resultado', null),
         supabase
           .from('activities')
           .select('opportunity_id, data_hora')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .not('opportunity_id', 'is', null),
       ])
       const last = new Map<string, string>()

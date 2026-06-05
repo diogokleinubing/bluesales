@@ -111,7 +111,7 @@ export function OrganizacaoDetalhe() {
               </button>
               <DeleteEntityButton
                 title="Excluir organização?"
-                description={`Esta ação remove "${org.nome}" e todos os dados vinculados (oportunidades, atividades, tarefas e contatos vinculados). Não pode ser desfeita.`}
+                description={`"${org.nome}" sairá das listagens. Os dados vinculados (oportunidades, atividades, contatos) são preservados. Pode ser desfeito em Comercial → Logs.`}
                 onDelete={() => deleteOrganization(org.id)}
                 onDeleted={() => navigate('/comercial/organizacoes')}
                 variant="menu"

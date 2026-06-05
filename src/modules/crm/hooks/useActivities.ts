@@ -60,6 +60,7 @@ export function useActivities(filter: ActivityFilter = {}) {
           'id, tipo, data_hora, titulo, resumo, transcricao, transcricao_file_url, author_id, organization_id, opportunity_id, created_at, organizations(nome), activity_participants(person_id, persons(nome))',
         )
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('data_hora', { ascending: false })
         .limit(500)
       if (filter.organizationId) q = q.eq('organization_id', filter.organizationId)

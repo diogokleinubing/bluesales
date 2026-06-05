@@ -37,6 +37,7 @@ export const ACTION_LABEL: Record<string, string> = {
   create: 'Criação',
   update: 'Edição',
   delete: 'Remoção',
+  restore: 'Restauração',
   stage_change: 'Mudança de estágio',
   link: 'Vínculo',
   unlink: 'Desvínculo',

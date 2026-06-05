@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { softDelete } from '@/lib/softDelete'
 import { useCrmOrgId } from './useFunnelStages'
 
 export interface Opportunity {
@@ -8,6 +9,7 @@ export interface Opportunity {
   titulo: string
   organization_id: string
   crm_event_id: string | null
+  local_id: string | null
   artist_id: string | null
   stage_id: string
   owner_id: string
@@ -60,6 +62,7 @@ export function useOpportunities(organizationId?: string) {
         .from('opportunities')
         .select('*')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
       if (organizationId) q = q.eq('organization_id', organizationId)
       const { data, error } = await q
@@ -122,12 +125,5 @@ export async function setOpportunityOutcome(id: string, resultado: 'Ganho' | 'Pe
 }
 
 export async function deleteOpportunity(id: string) {
-  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
-  await supabase
-    .from('entity_objections')
-    .delete()
-    .eq('entity_type', 'opportunity')
-    .eq('entity_id', id)
-  const { error } = await supabase.from('opportunities').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('opportunities', id)
 }

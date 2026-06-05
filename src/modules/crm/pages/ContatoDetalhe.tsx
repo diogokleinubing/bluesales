@@ -84,7 +84,7 @@ export function ContatoDetalhe() {
               </button>
               <DeleteEntityButton
                 title="Excluir contato?"
-                description={`Esta ação remove "${p.nome}" e seus vínculos com organizações e conexões. Não pode ser desfeita.`}
+                description={`"${p.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
                 onDelete={() => deleteContact(p.id)}
                 onDeleted={() => navigate('/comercial/contatos')}
                 variant="menu"
@@ -118,7 +118,7 @@ function ContatoOrgs({ personId }: { personId: string }) {
     enabled: !!orgId,
     queryKey: ['crm', 'org-options-all', orgId],
     queryFn: async () => {
-      const { data } = await supabase.from('organizations').select('id, nome').eq('org_id', orgId!).order('nome')
+      const { data } = await supabase.from('organizations').select('id, nome').eq('org_id', orgId!).is('deleted_at', null).order('nome')
       return data ?? []
     },
   })

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { softDelete } from '@/lib/softDelete'
 import { useCrmOrgId } from './useFunnelStages'
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,7 @@ export function useArtists() {
         .from('artists')
         .select('*, generos(nome), organizations(nome), platforms(nome)')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []).map((a) => ({
@@ -69,8 +71,7 @@ export async function saveArtist(orgId: string, a: Partial<Artist> & { nome: str
 }
 
 export async function deleteArtist(id: string) {
-  const { error } = await supabase.from('artists').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('artists', id)
 }
 
 // ---------------------------------------------------------------------------
@@ -120,15 +121,15 @@ export function useLocais() {
     queryKey: ['crm', 'locais', orgId],
     queryFn: async (): Promise<LocalRow[]> => {
       const [locs, lps, evs, opps] = await Promise.all([
-        supabase.from('crm_locals').select('*').eq('org_id', orgId!).order('nome'),
+        supabase.from('crm_locals').select('*').eq('org_id', orgId!).is('deleted_at', null).order('nome'),
         supabase
           .from('local_platforms')
           .select('local_id, platform_id, tipo_relacao, platforms(nome)')
           .eq('org_id', orgId!),
-        // Oportunidade → crm_event → local: conta oportunidades em aberto por
-        // local e soma o GMV estimado dos eventos do local.
-        supabase.from('crm_events').select('id, local_id, gmv_estimado').eq('org_id', orgId!).not('local_id', 'is', null),
-        supabase.from('opportunities').select('crm_event_id, funnel_stages(nome, cor)').eq('org_id', orgId!).is('resultado', null).not('crm_event_id', 'is', null),
+        // GMV estimado somado dos eventos do local; oportunidades ligadas
+        // DIRETAMENTE ao local (não via evento).
+        supabase.from('crm_events').select('local_id, gmv_estimado').eq('org_id', orgId!).is('deleted_at', null).not('local_id', 'is', null),
+        supabase.from('opportunities').select('local_id, funnel_stages(nome, cor)').eq('org_id', orgId!).is('deleted_at', null).is('resultado', null).not('local_id', 'is', null),
       ])
       if (locs.error) throw new Error(locs.error.message)
 
@@ -143,18 +144,16 @@ export function useLocais() {
         byLocal.set(lp.local_id, arr)
       }
 
-      const eventToLocal = new Map<string, string>()
       const gmvPorLocal = new Map<string, number>()
       for (const e of evs.data ?? []) {
         const localId = e.local_id as string
-        eventToLocal.set(e.id as string, localId)
         const g = e.gmv_estimado as number | null
         if (g != null) gmvPorLocal.set(localId, (gmvPorLocal.get(localId) ?? 0) + g)
       }
       const oppPorLocal = new Map<string, number>()
       const oppStatusPorLocal = new Map<string, { nome: string | null; cor: string | null }>()
       for (const o of opps.data ?? []) {
-        const localId = eventToLocal.get(o.crm_event_id as string)
+        const localId = o.local_id as string
         if (!localId) continue
         oppPorLocal.set(localId, (oppPorLocal.get(localId) ?? 0) + 1)
         if (!oppStatusPorLocal.has(localId)) {
@@ -227,8 +226,7 @@ export async function saveLocal(
 }
 
 export async function deleteLocal(id: string) {
-  const { error } = await supabase.from('crm_locals').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('crm_locals', id)
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +281,7 @@ export function useCrmEvents() {
           .from('crm_events')
           .select('*, crm_locals(nome), organizations(nome), segments(nome)')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .order('nome'),
         supabase
           .from('crm_event_editions')
@@ -292,6 +291,7 @@ export function useCrmEvents() {
           .from('opportunities')
           .select('id, crm_event_id, funnel_stages(nome, cor)')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .not('crm_event_id', 'is', null),
       ])
       if (evs.error) throw new Error(evs.error.message)
@@ -386,8 +386,7 @@ export async function replaceEventEditions(
 }
 
 export async function deleteCrmEvent(id: string) {
-  const { error } = await supabase.from('crm_events').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('crm_events', id)
 }
 
 // ---------------------------------------------------------------------------

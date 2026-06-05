@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Pencil, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,7 @@ import {
   EVENTO_STATUS, LOCAL_TIPOS, type CrmEventRow, type EventoStatus, type LocalTipo,
 } from '../hooks/useCadastros'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
@@ -174,10 +175,6 @@ export function EventosCrm() {
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
-  async function remover(e: CrmEventRow) {
-    try { await deleteCrmEvent(e.id); qc.invalidateQueries({ queryKey: ['crm', 'events'] }) }
-    catch (err) { toast.error('Erro', { description: (err as Error).message }) }
-  }
 
   async function criarLocal() {
     if (!orgId || !nl.nome.trim()) return
@@ -281,9 +278,8 @@ export function EventosCrm() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-4" /></button>
-                    <button onClick={() => remover(e)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
+                  <div className="flex justify-end">
+                    <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-foreground" title="Editar"><Pencil className="size-4" /></button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -394,9 +390,20 @@ export function EventosCrm() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar} disabled={!f.nome.trim()}>Salvar</Button>
+          <DialogFooter className="sm:justify-between">
+            {editId ? (
+              <DeleteEntityButton
+                title="Remover evento?"
+                description={`"${f.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
+                onDelete={() => deleteCrmEvent(editId)}
+                onDeleted={() => { qc.invalidateQueries({ queryKey: ['crm', 'events'] }); setOpen(false) }}
+                label="Remover"
+              />
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button onClick={salvar} disabled={!f.nome.trim()}>Salvar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

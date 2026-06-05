@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { softDelete } from '@/lib/softDelete'
 import { useCrmOrgId } from './useFunnelStages'
 
 export const STATUS_COMERCIAL = ['Ativo', 'Eventual', 'Inativo'] as const
@@ -43,17 +44,20 @@ export function useOrganizations() {
           .from('organizations')
           .select('*')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .order('nome'),
         supabase.from('funnel_stages').select('id, nome, cor'),
         supabase
           .from('activities')
           .select('organization_id, data_hora')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .not('organization_id', 'is', null),
         supabase
           .from('opportunities')
           .select('organization_id, stage_id, created_at')
           .eq('org_id', orgId!)
+          .is('deleted_at', null)
           .is('resultado', null)
           .order('created_at', { ascending: false }),
       ])
@@ -131,12 +135,5 @@ export async function updateOrganization(
 }
 
 export async function deleteOrganization(id: string) {
-  // Objeções são polimórficas (sem FK), então limpamos antes do cascade.
-  await supabase
-    .from('entity_objections')
-    .delete()
-    .eq('entity_type', 'organization')
-    .eq('entity_id', id)
-  const { error } = await supabase.from('organizations').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await softDelete('organizations', id)
 }

@@ -25,6 +25,7 @@ export function useOrgsKanban() {
         .from('organizations')
         .select('id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []).map((o) => ({
@@ -52,6 +53,7 @@ export function useOppsKanban() {
         .from('opportunities')
         .select('id, titulo, gmv_estimado, stage_id, data_prevista_fechamento, organizations(nome)')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .is('resultado', null)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)

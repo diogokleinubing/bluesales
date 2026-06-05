@@ -23,6 +23,7 @@ export function useOrgGmvOptions() {
         .from('organizations')
         .select('id, nome, gmv_anual')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []).map((o) => ({ id: o.id, nome: o.nome, gmv: o.gmv_anual }))
@@ -42,6 +43,7 @@ export function useEventGmvOptions() {
         .from('crm_events')
         .select('id, nome, gmv_estimado')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []).map((e) => ({ id: e.id, nome: e.nome, gmv: e.gmv_estimado }))
@@ -60,6 +62,7 @@ export function useOrgOptions() {
         .from('organizations')
         .select('id, nome')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []) as Lookup[]
@@ -78,6 +81,7 @@ export function usePersonOptions() {
         .from('persons')
         .select('id, nome')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []) as Lookup[]
@@ -96,6 +100,7 @@ export function useOppOptions(organizationId: string | null | undefined) {
         .from('opportunities')
         .select('id, titulo')
         .eq('organization_id', organizationId!)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
       return (data ?? []).map((o) => ({ id: o.id, nome: o.titulo }))
@@ -150,6 +155,7 @@ export function useLocalOptions() {
         .from('crm_locals')
         .select('id, nome')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []) as Lookup[]
@@ -168,6 +174,7 @@ export function useArtistOptions() {
         .from('artists')
         .select('id, nome')
         .eq('org_id', orgId!)
+        .is('deleted_at', null)
         .order('nome')
       if (error) throw new Error(error.message)
       return (data ?? []) as Lookup[]

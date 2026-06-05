@@ -221,21 +221,45 @@ function TrocarSenhaDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { hasMfa, mfaSatisfied, refreshMfa } = useAuth()
   const [senha, setSenha] = useState('')
   const [confirma, setConfirma] = useState('')
+  const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Com MFA ativo, o Supabase exige sessão AAL2 para trocar a senha.
+  const precisa2fa = hasMfa && !mfaSatisfied
+
+  /** Eleva a sessão para AAL2 verificando o código do app autenticador. */
+  async function elevarAal2(c: string) {
+    const { data: factors } = await supabase.auth.mfa.listFactors()
+    const totp = (factors?.totp ?? []).find((f) => f.status === 'verified')
+    if (!totp) throw new Error('Nenhum fator 2FA verificado encontrado.')
+    const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: totp.id })
+    if (chErr) throw new Error(chErr.message)
+    const { error: vErr } = await supabase.auth.mfa.verify({ factorId: totp.id, challengeId: ch.id, code: c })
+    if (vErr) throw new Error('Código 2FA inválido.')
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (senha.length < 8) return toast.error('A senha deve ter ao menos 8 caracteres.')
     if (senha !== confirma) return toast.error('As senhas não conferem.')
+    if (precisa2fa && code.trim().length < 6) {
+      return toast.error('Informe o código de 6 dígitos do app autenticador.')
+    }
     setBusy(true)
     try {
+      if (precisa2fa) {
+        await elevarAal2(code.trim())
+        await refreshMfa()
+      }
       const { error } = await supabase.auth.updateUser({ password: senha })
       if (error) throw new Error(error.message)
       toast.success('Senha alterada com sucesso.')
       setSenha('')
       setConfirma('')
+      setCode('')
       onOpenChange(false)
     } catch (err) {
       toast.error('Erro ao alterar senha', { description: (err as Error).message })
@@ -248,7 +272,7 @@ function TrocarSenhaDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) { setSenha(''); setConfirma('') }
+        if (!o) { setSenha(''); setConfirma(''); setCode('') }
         onOpenChange(o)
       }}
     >
@@ -268,6 +292,15 @@ function TrocarSenhaDialog({
             <Input id="menu-confirma-senha" type="password" autoComplete="new-password"
               value={confirma} onChange={(e) => setConfirma(e.target.value)} />
           </div>
+          {precisa2fa && (
+            <div className="space-y-1.5">
+              <Label htmlFor="menu-2fa">Código do app autenticador (2FA)</Label>
+              <Input id="menu-2fa" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                placeholder="000000" value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+              <p className="text-xs text-muted-foreground">Necessário para confirmar a troca de senha com 2FA ativo.</p>
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={busy}>{busy ? 'Salvando…' : 'Salvar nova senha'}</Button>
