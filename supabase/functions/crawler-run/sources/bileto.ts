@@ -9,7 +9,7 @@
 // vendidos já vêm na própria resposta.
 
 import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
-import { norm } from '../../_shared/classify.ts'
+import { norm, normPais } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const API = 'https://bff-sales-api-cdn.bileto.sympla.com.br/api/v1/events'
@@ -163,6 +163,7 @@ function mapBileto(ev: BiletoEvent): RawEvent | null {
     local_raw: venue.name ?? null,
     cidade: venue.locale?.city?.name ?? null,
     uf: ufDe(venue.locale?.state?.name),
+    pais: normPais(venue.locale?.country?.name),
     preco_min: min,
     preco_max: max,
     gratuito: min === 0,

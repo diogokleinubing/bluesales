@@ -10,6 +10,7 @@ export interface RawEvent {
   local_raw?: string | null
   cidade?: string | null
   uf?: string | null
+  pais?: string | null
   preco_min?: number | null
   preco_max?: number | null
   gratuito?: boolean

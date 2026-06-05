@@ -44,6 +44,7 @@ export async function upsertCrawledEvent(
     local_raw: ev.local_raw ?? null,
     cidade: ev.cidade ?? null,
     uf: ev.uf ?? null,
+    pais: ev.pais ?? null,
     preco_min: ev.preco_min ?? null,
     preco_max: ev.preco_max ?? null,
     gratuito: ev.gratuito ?? false,

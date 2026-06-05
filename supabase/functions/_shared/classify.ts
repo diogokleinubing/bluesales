@@ -10,6 +10,15 @@ export function norm(text: string | null | undefined): string {
     .trim()
 }
 
+const PAISES_BRASIL = new Set(['bra', 'br', 'brasil', 'brazil'])
+
+/** Normaliza país: variações de Brasil -> 'Brasil'; demais mantêm o original. */
+export function normPais(raw: string | null | undefined): string | null {
+  if (!raw || !raw.trim()) return null
+  if (PAISES_BRASIL.has(norm(raw))) return 'Brasil'
+  return raw.trim()
+}
+
 export type IgnoreTipo = 'nome_evento' | 'local' | 'organizador'
 
 export interface IgnoreRule {

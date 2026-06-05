@@ -24,6 +24,7 @@ import {
   useCrawledEventsPaged, useEventFacets, fetchAllCrawledEvents,
   setEventoIgnorado, promoverEvento,
   EVENTS_PAGE_SIZE, type CrawledEventRow, type EventFilters, type EventStatusFiltro,
+  type PaisFiltro,
 } from '../hooks/usePesquisa'
 
 function preco(ev: CrawledEventRow): string {
@@ -50,6 +51,7 @@ export function EventosCapturados() {
   const [status, setStatus] = useState<EventStatusFiltro>('ativos')
   const [cidade, setCidade] = useState('todas')
   const [categoria, setCategoria] = useState('todas')
+  const [pais, setPais] = useState<PaisFiltro>('todos')
   const [page, setPage] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -61,12 +63,12 @@ export function EventosCapturados() {
   }, [search])
 
   const filters: EventFilters = useMemo(
-    () => ({ search: searchAplicada, fonte, cidade, categoria, status }),
-    [searchAplicada, fonte, cidade, categoria, status],
+    () => ({ search: searchAplicada, fonte, cidade, categoria, status, pais }),
+    [searchAplicada, fonte, cidade, categoria, status, pais],
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais])
 
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
   const rows = data?.rows ?? []
@@ -112,6 +114,7 @@ export function EventosCapturados() {
         Local: e.local_raw ?? '',
         Cidade: e.cidade ?? '',
         UF: e.uf ?? '',
+        País: e.pais ?? '',
         Categoria: e.categoria ?? '',
         Organizador: e.organizador_raw ?? '',
         'Preço mín': e.preco_min ?? '',
@@ -188,6 +191,14 @@ export function EventosCapturados() {
               </SelectContent>
             </Select>
           )}
+          <Select value={pais} onValueChange={(v) => setPais(v as PaisFiltro)}>
+            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[130px]`}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os países</SelectItem>
+              <SelectItem value="brasil">Brasil</SelectItem>
+              <SelectItem value="exterior">Exterior</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={status} onValueChange={(v) => setStatus(v as EventStatusFiltro)}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[140px]`}><SelectValue /></SelectTrigger>
             <SelectContent>

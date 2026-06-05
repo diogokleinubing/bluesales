@@ -34,6 +34,7 @@ export interface CrawledEventRow {
   local_raw: string | null
   cidade: string | null
   uf: string | null
+  pais: string | null
   preco_min: number | null
   preco_max: number | null
   gratuito: boolean
@@ -125,12 +126,15 @@ export function useCrawledEvents(): UseQueryResult<CrawledEventRow[]> {
 // ---------------------------------------------------------------------------
 export type EventStatusFiltro = 'ativos' | 'promovidos' | 'ignorados' | 'todos'
 
+export type PaisFiltro = 'todos' | 'brasil' | 'exterior'
+
 export interface EventFilters {
   search: string
   fonte: string // slug | 'todas'
   cidade: string // nome | 'todas'
   categoria: string // valor | 'todas'
   status: EventStatusFiltro
+  pais: PaisFiltro
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -154,6 +158,8 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
   if (f.status === 'ativos') qq = qq.eq('ignorado', false).is('promovido_crm_event_id', null)
   else if (f.status === 'promovidos') qq = qq.not('promovido_crm_event_id', 'is', null)
   else if (f.status === 'ignorados') qq = qq.eq('ignorado', true)
+  if (f.pais === 'brasil') qq = qq.eq('pais', 'Brasil')
+  else if (f.pais === 'exterior') qq = qq.not('pais', 'is', null).neq('pais', 'Brasil')
   return qq
 }
 

@@ -8,6 +8,7 @@
 
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
+import { normPais } from '../../_shared/classify.ts'
 
 const SEARCH = 'https://api-site.ingresse.com/events/search'
 const EMBED = 'https://api-embedstore.ingresse.com/api/v1/event'
@@ -55,7 +56,7 @@ interface IngEvent {
   title?: string
   poster?: { large?: string; medium?: string; small?: string }
   session?: { dateTime?: string }
-  place?: { name?: string; city?: string; state?: string }
+  place?: { name?: string; city?: string; state?: string; country?: string }
 }
 
 let knownCache: Set<string> | null = null
@@ -139,6 +140,7 @@ export const ingresseScraper: Scraper = async () => {
       local_raw: ev.place?.name ?? null,
       cidade: ev.place?.city ?? null,
       uf: ev.place?.state ?? null,
+      pais: normPais(ev.place?.country),
       preco_min: precos?.min ?? null,
       preco_max: precos?.max ?? null,
       gratuito: precos?.gratuito ?? false,

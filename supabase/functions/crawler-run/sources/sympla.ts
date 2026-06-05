@@ -10,7 +10,7 @@
 // Limitação: cobre eventos cujo slug cita a cidade (teto por execução, logado).
 
 import type { RawEvent, Scraper, ScrapeContext } from '../../_shared/types.ts'
-import { norm } from '../../_shared/classify.ts'
+import { norm, normPais } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const SITEMAP = 'https://www.sympla.com.br/sitemap-eventos.xml'
@@ -112,7 +112,7 @@ interface SymplaEvent {
   oldUrl?: string
   newUrl?: string
   slug?: string
-  eventsAddress?: { name?: string; city?: string; state?: string }
+  eventsAddress?: { name?: string; city?: string; state?: string; country?: string }
   eventsHost?: { name?: string }
   eventsCategory?: { description?: string; vertical?: string }
   images?: { logoLarge?: string; logoUrl?: string }
@@ -186,6 +186,7 @@ function toRawEvent(
     local_raw: ev.eventsAddress?.name ?? null,
     cidade: ev.eventsAddress?.city ?? null,
     uf: ev.eventsAddress?.state ?? null,
+    pais: normPais(ev.eventsAddress?.country),
     preco_min: precos?.min ?? null,
     preco_max: precos?.max ?? null,
     gratuito: ehFree || (precos?.gratuito ?? false),
