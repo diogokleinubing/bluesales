@@ -8,6 +8,7 @@
 import { load } from 'https://esm.sh/cheerio@1.0.0'
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
+import { avgTaxaPct } from '../../_shared/classify.ts'
 
 const HOST = 'https://ingressodigital.com'
 const MAX_PG = 6
@@ -45,26 +46,54 @@ interface Candidato {
   img: string | null
 }
 
-/** Página do evento: local (nome do espaço) + faixa de preço. */
-async function fetchDetalhe(url: string): Promise<{ local: string | null; min: number | null; max: number | null }> {
-  try {
-    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(12000) })
-    if (!res.ok) return { local: null, min: null, max: null }
-    const $ = load(await res.text())
-    const local = $('.dados-loca-detalhes p').first().text().replace(/\s+/g, ' ').trim() || null
-    const precoTxt = $('.valores-ing').first().text()
-    const nums = [...precoTxt.matchAll(/R\$\s*([\d.]+,\d{2})/g)]
+interface Detalhe { local: string | null; min: number | null; max: number | null; taxa: number | null }
+
+/**
+ * Detalhe: página do evento (local + preço fallback) e página de compra
+ * (preço base em valor<n> + taxa em taxa_adm<n>), buscadas em paralelo.
+ */
+async function fetchDetalhe(url: string): Promise<Detalhe> {
+  const comprarUrl = url.replace('/evento/', '/comprar/')
+  const get = (u: string) =>
+    fetch(u, { headers: HEADERS, signal: AbortSignal.timeout(12000) })
+      .then((r) => (r.ok ? r.text() : null))
+      .catch(() => null)
+  const [evHtml, cpHtml] = await Promise.all([get(url), get(comprarUrl)])
+
+  let local: string | null = null
+  if (evHtml) {
+    const $ = load(evHtml)
+    local = $('.dados-loca-detalhes p').first().text().replace(/\s+/g, ' ').trim() || null
+  }
+
+  let min: number | null = null
+  let max: number | null = null
+  let taxa: number | null = null
+  if (cpHtml) {
+    const $ = load(cpHtml)
+    const valByKey: Record<string, number> = {}
+    const taxByKey: Record<string, number> = {}
+    $('input[name]').each((_i: number, el: unknown) => {
+      const name = $(el as never).attr('name') || ''
+      const v = Number($(el as never).attr('value'))
+      let m: RegExpMatchArray | null
+      if ((m = name.match(/^valor(\d+)$/))) { if (Number.isFinite(v)) valByKey[m[1]] = v } else if ((m = name.match(/^taxa_adm(\d+)$/))) { if (Number.isFinite(v)) taxByKey[m[1]] = v }
+    })
+    const precos = Object.values(valByKey).filter((p) => p > 0)
+    if (precos.length) { min = Math.min(...precos); max = Math.max(...precos) }
+    taxa = avgTaxaPct(Object.keys(valByKey).map((k) => ({ price: valByKey[k], tax: taxByKey[k] ?? NaN })))
+  }
+
+  // Fallback de preço pela página do evento se a de compra não veio.
+  if (min == null && evHtml) {
+    const $ = load(evHtml)
+    const nums = [...$('.valores-ing').first().text().matchAll(/R\$\s*([\d.]+,\d{2})/g)]
       .map((m) => Number(m[1].replace(/\./g, '').replace(',', '.')))
       .filter((n) => Number.isFinite(n))
-    return {
-      local,
-      min: nums.length ? Math.min(...nums) : null,
-      max: nums.length ? Math.max(...nums) : null,
-    }
-  } catch (e) {
-    console.error('[idigital] detalhe falhou', url, String(e))
-    return { local: null, min: null, max: null }
+    if (nums.length) { min = Math.min(...nums); max = Math.max(...nums) }
   }
+
+  return { local, min, max, taxa }
 }
 
 async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>> {
@@ -153,7 +182,7 @@ export const ingressoDigitalScraper: Scraper = async () => {
         pais: 'Brasil',
         preco_min: det.min,
         preco_max: det.max,
-        taxa_pct: null,
+        taxa_pct: det.taxa,
         gratuito: det.min === 0,
         online: false,
         categoria: c.categoria,
