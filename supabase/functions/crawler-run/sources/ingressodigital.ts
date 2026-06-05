@@ -162,11 +162,12 @@ export const ingressoDigitalScraper: Scraper = async (ctx) => {
     console.log(`[idigital] pg=${pg} cards=${cards.length} novos=${novos}`)
   }
 
-  // Fase 2: detalhe (local + preço) em paralelo.
+  // Fase 2: detalhe (local + preço) em paralelo (teto p/ não estourar CPU).
+  const aProcessar = candidatos.slice(0, 30)
   const out: RawEvent[] = []
   const BATCH = 6
-  for (let i = 0; i < candidatos.length; i += BATCH) {
-    const slice = candidatos.slice(i, i + BATCH)
+  for (let i = 0; i < aProcessar.length; i += BATCH) {
+    const slice = aProcessar.slice(i, i + BATCH)
     const mapped = await Promise.all(slice.map(async (c) => {
       const det = await fetchDetalhe(c.url)
       return {

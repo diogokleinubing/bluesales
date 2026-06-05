@@ -13,7 +13,7 @@ import { avgTaxaPct } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.bilheteriadigital.com'
 const MAX_PG_UF = 10 // teto de páginas por estado
-const MAX_NOVOS = 60 // teto de detalhes por execução (restante na próxima)
+const MAX_NOVOS = 35 // teto de detalhes por execução (cheerio em HTML grande gasta CPU)
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
@@ -100,7 +100,7 @@ async function getSource() {
   return { id: data.id, cfg: (data.config ?? {}) as Record<string, unknown> }
 }
 
-const ESTADOS_POR_RUN = 3 // varre poucos estados por execução (gira o cursor)
+const ESTADOS_POR_RUN = 2 // varre poucos estados por execução (gira o cursor)
 
 export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
   try {

@@ -214,8 +214,8 @@ Deno.serve(async (req) => {
     .eq('ativo', true)
   const ignoreRules = (rules ?? []) as IgnoreRule[]
 
-  // Marca como erro runs antigas presas em "running" (timeout anterior).
-  const limiteAtras = new Date(Date.now() - 4 * 60 * 1000).toISOString()
+  // Marca como erro runs antigas presas em "running" (timeout/CPU excedido).
+  const limiteAtras = new Date(Date.now() - 2 * 60 * 1000).toISOString()
   await db.from('crawler_runs')
     .update({ status: 'error', erro_msg: 'interrompida (timeout)', finalizado_em: new Date().toISOString() })
     .eq('org_id', org.id).eq('status', 'running').lt('iniciado_em', limiteAtras)
