@@ -38,7 +38,7 @@ export function RelatorioFonteDialog({
 
   return (
     <Dialog open={!!source} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl sm:max-w-2xl overflow-hidden">
         <DialogHeader>
           <DialogTitle>{source?.nome ?? 'Relatório'}</DialogTitle>
         </DialogHeader>
@@ -52,7 +52,7 @@ export function RelatorioFonteDialog({
         {isLoading || !data ? (
           <Skeleton className="h-72 w-full" />
         ) : (
-          <Tabs defaultValue="estado">
+          <Tabs defaultValue="estado" className="w-full min-w-0">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="estado">Estado</TabsTrigger>
               <TabsTrigger value="cidade">Cidade</TabsTrigger>
