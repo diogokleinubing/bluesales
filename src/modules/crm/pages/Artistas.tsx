@@ -21,9 +21,11 @@ import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { useGeneroOptions, useOrgOptions } from '../hooks/useCrmLookups'
 import { usePlatforms } from '../hooks/useConfigCadastros'
 import {
-  useArtists, saveArtist, deleteArtist, ESCALOES, type ArtistRow, type Escalao,
+  useArtists, saveArtist, deleteArtist, ESCALOES, ARTIST_CLASSES,
+  type ArtistRow, type Escalao, type ArtistClasse,
 } from '../hooks/useCadastros'
 import { ListView, ToolbarSearch } from '../components/ListView'
+import { ClasseBadge } from '../components/ClasseBadge'
 
 const NONE = '__none__'
 
@@ -40,6 +42,7 @@ export function Artistas() {
   const [nome, setNome] = useState('')
   const [generoId, setGeneroId] = useState(NONE)
   const [escalao, setEscalao] = useState<string>(NONE)
+  const [classe, setClasse] = useState<string>(NONE)
   const [orgSel, setOrgSel] = useState(NONE)
   const [platSel, setPlatSel] = useState(NONE)
   const [obs, setObs] = useState('')
@@ -50,12 +53,12 @@ export function Artistas() {
   }, [data, search])
 
   function openNew() {
-    setEdit(null); setNome(''); setGeneroId(NONE); setEscalao(NONE); setOrgSel(NONE)
+    setEdit(null); setNome(''); setGeneroId(NONE); setEscalao(NONE); setClasse(NONE); setOrgSel(NONE)
     setPlatSel(NONE); setObs(''); setOpen(true)
   }
   function openEdit(a: ArtistRow) {
     setEdit(a); setNome(a.nome); setGeneroId(a.genero_id ?? NONE)
-    setEscalao(a.escalao ?? NONE); setOrgSel(a.organization_id ?? NONE)
+    setEscalao(a.escalao ?? NONE); setClasse(a.classificacao ?? NONE); setOrgSel(a.organization_id ?? NONE)
     setPlatSel(a.platform_id ?? NONE); setObs(a.observacoes ?? ''); setOpen(true)
   }
 
@@ -66,6 +69,7 @@ export function Artistas() {
         nome: nome.trim(),
         genero_id: generoId === NONE ? null : generoId,
         escalao: escalao === NONE ? null : (escalao as Escalao),
+        classificacao: classe === NONE ? null : (classe as ArtistClasse),
         organization_id: orgSel === NONE ? null : orgSel,
         platform_id: platSel === NONE ? null : platSel,
         observacoes: obs.trim() || null,
@@ -91,20 +95,21 @@ export function Artistas() {
       >
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Nome</TableHead><TableHead>Gênero</TableHead>
+            <TableHead>Nome</TableHead><TableHead>Classe</TableHead><TableHead>Gênero</TableHead>
             <TableHead>Escalão</TableHead><TableHead>Organização</TableHead>
             <TableHead>Plataforma</TableHead><TableHead className="w-20" />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhum artista.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhum artista.</TableCell></TableRow>
             ) : rows.map((a) => (
               <TableRow key={a.id} className="cursor-pointer" onDoubleClick={() => openEdit(a)}>
                 <TableCell className="font-medium">{a.nome}</TableCell>
+                <TableCell><ClasseBadge classe={a.classificacao} /></TableCell>
                 <TableCell>{a.genero_nome ?? '—'}</TableCell>
                 <TableCell>{a.escalao ? <Badge variant="outline">{a.escalao}</Badge> : '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{a.organization_nome ?? '—'}</TableCell>
@@ -142,6 +147,16 @@ export function Artistas() {
                   <SelectContent>
                     <SelectItem value={NONE}>—</SelectItem>
                     {ESCALOES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                  </SelectContent>
+                </Select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Classificação</Label>
+                <Select value={classe} onValueChange={setClasse}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>—</SelectItem>
+                    {ARTIST_CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select></div>
             </div>

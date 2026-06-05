@@ -70,6 +70,9 @@ const EventosCrm = lazy(() =>
 const Locais = lazy(() =>
   import('@/modules/crm/pages/Locais').then((m) => ({ default: m.Locais })),
 )
+const Logs = lazy(() =>
+  import('@/modules/crm/pages/Logs').then((m) => ({ default: m.Logs })),
+)
 const FunisConfig = lazy(() =>
   import('@/modules/crm/pages/config/Funis').then((m) => ({ default: m.FunisConfig })),
 )
@@ -176,6 +179,14 @@ export const router = createBrowserRouter([
       { path: 'comercial/artistas', element: <Artistas /> },
       { path: 'comercial/eventos', element: <EventosCrm /> },
       { path: 'comercial/locais', element: <Locais /> },
+      {
+        path: 'comercial/logs',
+        element: (
+          <RoleRoute role="gestor">
+            <Logs />
+          </RoleRoute>
+        ),
+      },
       { path: 'comercial/configuracao/funis', element: <FunisConfig /> },
       { path: 'comercial/configuracao/plataformas', element: <PlataformasConfig /> },
       { path: 'comercial/configuracao/objecoes', element: <ObjecoesConfig /> },

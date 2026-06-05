@@ -89,6 +89,12 @@ export const MODULES: ModuleDef[] = [
         ],
       },
       {
+        title: 'Auditoria',
+        items: [
+          { to: '/comercial/logs', label: 'Logs', icon: ScrollText, requires: 'gestor' },
+        ],
+      },
+      {
         title: 'Configuração',
         items: [
           { to: '/comercial/configuracao/funis', label: 'Funis', icon: RouteIcon },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowUpRight, Check } from 'lucide-react'
@@ -8,6 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { fmtDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
@@ -15,36 +18,40 @@ import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/componen
 import { EventosDialog } from '../components/EventosDialog'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 import {
-  useCrawledOrganizers, useEventosDoOrganizador, usePromocoes,
+  useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrawlerSources,
   promoverOrganizador, useCrmOrgId,
-  type OrganizerAgg, type PromoverAggInput,
+  type OrganizerAgg, type OrganizerFilters, type PromoverAggInput,
 } from '../hooks/usePesquisa'
 
 export function OrganizadoresMercado() {
-  const { data, isLoading } = useCrawledOrganizers()
   const promos = usePromocoes('organizador').data
+  const sources = useCrawlerSources()
   const orgId = useCrmOrgId()
   const { profile } = useProfile()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [valorMin, setValorMin] = useState('')
+  const [fonte, setFonte] = useState('todas')
+  const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
   const [sel, setSel] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
+  // Debounce de busca/valor (evita uma query por tecla).
+  useEffect(() => {
+    const t = setTimeout(() => setAplicado({ search, valorMin }), 400)
+    return () => clearTimeout(t)
+  }, [search, valorMin])
+
+  const filters: OrganizerFilters = useMemo(() => ({
+    search: aplicado.search,
+    valorMin: aplicado.valorMin.trim() !== '' && Number.isFinite(Number(aplicado.valorMin))
+      ? Number(aplicado.valorMin) : null,
+    fonte,
+  }), [aplicado, fonte])
+
+  const { data, isLoading } = useCrawledOrganizers(filters)
+  const rows = data ?? []
   const { data: eventosDoSel } = useEventosDoOrganizador(sel)
-
-  const aggregated = data ?? []
-
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const min = Number(valorMin)
-    const temMin = valorMin.trim() !== '' && Number.isFinite(min)
-    return aggregated.filter((a) => {
-      if (q && !a.nome.toLowerCase().includes(q)) return false
-      if (temMin && (a.preco_max == null || a.preco_max < min)) return false
-      return true
-    })
-  }, [aggregated, search, valorMin])
 
   async function onPromover(a: OrganizerAgg) {
     if (!orgId) return
@@ -53,7 +60,6 @@ export function OrganizadoresMercado() {
       const input: PromoverAggInput = {
         chave: a.chave,
         nome: a.nome,
-        // Organizador pode atuar em várias cidades: só preenche se for uma só.
         cidade: a.cidades.length === 1 ? a.cidade_nome : null,
         uf: a.cidades.length === 1 ? a.uf : null,
         precoMin: a.preco_min,
@@ -77,11 +83,18 @@ export function OrganizadoresMercado() {
   return (
     <ListView
       title="Organizadores"
-      count={aggregated.length ? String(aggregated.length) : undefined}
-      footer={aggregated.length ? `${rows.length} de ${aggregated.length}` : undefined}
+      count={rows.length ? String(rows.length) : undefined}
+      footer={rows.length ? `${rows.length} organizador(es)` : undefined}
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />
+          <Select value={fonte} onValueChange={setFonte}>
+            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[160px]`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas as plataformas</SelectItem>
+              {(sources.data ?? []).map((s) => <SelectItem key={s.id} value={s.slug}>{s.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
             placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
         </div>
@@ -105,7 +118,7 @@ export function OrganizadoresMercado() {
             ))
           ) : rows.length === 0 ? (
             <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-              Nenhum organizador detectado ainda.
+              Nenhum organizador encontrado.
             </TableCell></TableRow>
           ) : rows.map((a) => {
             const promo = promos?.get(a.chave)

@@ -155,14 +155,24 @@ export interface LocalAgg {
   proximo: string | null
 }
 
-export function useCrawledOrganizers(): UseQueryResult<OrganizerAgg[]> {
+export interface OrganizerFilters {
+  search: string
+  valorMin: number | null
+  fonte: string // slug | 'todas'
+}
+
+export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<OrganizerAgg[]> {
   const orgId = useCrmOrgId()
   return useQuery({
     enabled: !!orgId,
     staleTime: 30_000,
-    queryKey: ['pesquisa', 'organizers', orgId],
+    queryKey: ['pesquisa', 'organizers', orgId, filters],
     queryFn: async (): Promise<OrganizerAgg[]> => {
-      const { data, error } = await supabase.rpc('crawled_organizers')
+      const { data, error } = await supabase.rpc('crawled_organizers', {
+        p_search: filters.search.trim() || null,
+        p_valor_min: filters.valorMin,
+        p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
+      })
       if (error) throw new Error(error.message)
       return (data ?? []) as OrganizerAgg[]
     },
@@ -261,6 +271,11 @@ export interface EventFilters {
   uf?: string
   local?: string
   organizador?: string
+  /**
+   * Nomes de artistas (de classes selecionadas) para casar no nome do evento.
+   * undefined = filtro inativo; [] = ativo sem nenhum nome (não retorna nada).
+   */
+  artistasNomes?: string[]
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -289,6 +304,14 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
   if (f.uf) qq = qq.eq('uf', f.uf)
   if (f.local) qq = qq.eq('local_raw', f.local)
   if (f.organizador) qq = qq.eq('organizador_raw', f.organizador)
+  // Filtro por nome de artista: evento cujo nome contenha algum dos nomes.
+  if (f.artistasNomes !== undefined) {
+    const nomes = f.artistasNomes
+      .map((n) => n.replace(/[,()*%]/g, ' ').trim())
+      .filter((n) => n.length >= 2)
+    if (nomes.length === 0) qq = qq.eq('id', '00000000-0000-0000-0000-000000000000')
+    else qq = qq.or(nomes.map((n) => `nome.ilike.*${n}*`).join(','))
+  }
   return qq
 }
 
@@ -325,6 +348,25 @@ export function useCrawledEventsPaged(
         .range(from, from + pageSize - 1)
       if (error) throw new Error(error.message)
       return { rows: (data ?? []).map(mapEventRow), total: count ?? 0 }
+    },
+  })
+}
+
+/** Nomes de artistas do CRM com as classificações selecionadas (A+/A/B/C). */
+export function useArtistNamesByClasse(classes: string[]): UseQueryResult<string[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId && classes.length > 0,
+    staleTime: 60_000,
+    queryKey: ['pesquisa', 'artist-names', orgId, [...classes].sort()],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from('artists')
+        .select('nome')
+        .eq('org_id', orgId!)
+        .in('classificacao', classes)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((a) => String(a.nome)).filter(Boolean)
     },
   })
 }

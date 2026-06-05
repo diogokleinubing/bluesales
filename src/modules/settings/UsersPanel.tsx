@@ -8,11 +8,15 @@ import {
   Copy,
   MoreHorizontal,
   LayoutGrid,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -45,6 +49,7 @@ import {
   setAdmin,
   setGestor,
   setUserModules,
+  setUserNome,
   resetUserPassword,
   disableUserMfa,
 } from './admin-api'
@@ -131,6 +136,7 @@ export function UsersPanel() {
             <TableHeader>
               <TableRow>
                 <TableHead>Email</TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-center">Admin</TableHead>
                 <TableHead className="text-center">Gestor</TableHead>
@@ -142,14 +148,14 @@ export function UsersPanel() {
               {query.isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={7}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     Nenhum usuário.
                   </TableCell>
                 </TableRow>
@@ -170,6 +176,9 @@ export function UsersPanel() {
                             troca pendente
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <NomeCell user={u} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {fmtDate(u.created_at)}
@@ -232,6 +241,62 @@ export function UsersPanel() {
 
       <TempPasswordDialog info={tempInfo} onClose={() => setTempInfo(null)} />
     </div>
+  )
+}
+
+/** Edição inline do nome de um usuário (admin). */
+function NomeCell({ user }: { user: ProfileRow }) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [valor, setValor] = useState(user.nome ?? '')
+  const [busy, setBusy] = useState(false)
+
+  async function salvar() {
+    setBusy(true)
+    try {
+      await setUserNome(user.id, valor)
+      await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
+      setEditing(false)
+    } catch (e) {
+      toast.error('Erro ao salvar nome', { description: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          className="h-8 max-w-44"
+          value={valor}
+          autoFocus
+          disabled={busy}
+          onChange={(e) => setValor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') salvar()
+            if (e.key === 'Escape') { setValor(user.nome ?? ''); setEditing(false) }
+          }}
+        />
+        <button onClick={salvar} className="text-muted-foreground hover:text-foreground" title="Salvar">
+          <Check className="size-4" />
+        </button>
+        <button onClick={() => { setValor(user.nome ?? ''); setEditing(false) }} className="text-muted-foreground hover:text-foreground" title="Cancelar">
+          <X className="size-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="group inline-flex items-center gap-1.5 text-left hover:text-foreground"
+      title="Editar nome"
+    >
+      <span className={user.nome ? '' : 'text-muted-foreground'}>{user.nome || '—'}</span>
+      <Pencil className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
   )
 }
 

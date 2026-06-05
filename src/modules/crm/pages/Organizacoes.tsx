@@ -24,7 +24,7 @@ import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { ListView, ToolbarSearch, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
 import { cn } from '@/lib/utils'
-import { fmtDate } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
 const ALL = '__all__'
@@ -41,6 +41,7 @@ export function Organizacoes() {
   const [search, setSearch] = useState(biOrganizador)
   const [classe, setClasse] = useState<string>(ALL)
   const [statusF, setStatusF] = useState<string>(ALL)
+  const [gmvMin, setGmvMin] = useState('')
   const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
@@ -51,13 +52,16 @@ export function Organizacoes() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const min = Number(gmvMin)
+    const temMin = gmvMin.trim() !== '' && Number.isFinite(min)
     return (data ?? []).filter(
       (o) =>
         (!q || o.nome.toLowerCase().includes(q)) &&
         (classe === ALL || o.classificacao === classe) &&
-        (statusF === ALL || o.status_comercial === statusF),
+        (statusF === ALL || o.status_comercial === statusF) &&
+        (!temMin || (o.gmv_anual != null && o.gmv_anual >= min)),
     )
-  }, [data, search, classe, statusF])
+  }, [data, search, classe, statusF, gmvMin])
 
   async function criar() {
     if (!orgId || !novoNome.trim()) return
@@ -99,6 +103,8 @@ export function Organizacoes() {
                   {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
+                placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
             </>
           ) : (
             <div className="flex items-center gap-1">
@@ -136,16 +142,17 @@ export function Organizacoes() {
               <TableHead>Estrutura</TableHead>
               <TableHead>Estágio</TableHead>
               <TableHead>Status comercial</TableHead>
+              <TableHead className="text-right">GMV anual</TableHead>
               <TableHead>Última atividade</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhuma organização — adicione a primeira.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhuma organização — adicione a primeira.</TableCell></TableRow>
             ) : rows.map((o) => (
               <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/comercial/organizacoes/${o.id}`)}>
                 <TableCell className="font-medium">{o.nome}</TableCell>
@@ -171,6 +178,7 @@ export function Organizacoes() {
                     )}
                   </div>
                 </TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{o.gmv_anual != null ? fmtBRL(o.gmv_anual) : '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{o.ultimaAtividade ? fmtDate(new Date(o.ultimaAtividade)) : '—'}</TableCell>
               </TableRow>
             ))}

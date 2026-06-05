@@ -20,6 +20,21 @@ export async function setAdmin(id: string, isAdmin: boolean): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/** Edita o nome de um usuário (admin — via RLS profiles_update_admin). */
+export async function setUserNome(id: string, nome: string): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ nome: nome.trim() || null })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Edita o próprio nome (via RPC, já que a RLS só deixa admin dar update). */
+export async function setMyNome(nome: string): Promise<void> {
+  const { error } = await supabase.rpc('set_my_nome', { p_nome: nome })
+  if (error) throw new Error(error.message)
+}
+
 /** Define/retira o papel gestor de um usuário. */
 export async function setGestor(id: string, isGestor: boolean): Promise<void> {
   const { error } = await supabase

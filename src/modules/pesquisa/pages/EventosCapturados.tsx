@@ -22,10 +22,13 @@ import { CopyUrlButton } from '../components/CopyUrlButton'
 import {
   useCrawlerSources, usePesquisaOrgId, useSourceMap,
   useCrawledEventsPaged, useEventFacets, fetchAllCrawledEvents,
+  useArtistNamesByClasse,
   setEventoIgnorado, promoverEvento,
   EVENTS_PAGE_SIZE, type CrawledEventRow, type EventFilters, type EventStatusFiltro,
   type PaisFiltro,
 } from '../hooks/usePesquisa'
+import { ARTIST_CLASSES } from '@/modules/crm/hooks/useCadastros'
+import { cn } from '@/lib/utils'
 
 function preco(ev: CrawledEventRow): string {
   if (ev.gratuito) return 'Grátis'
@@ -55,7 +58,9 @@ export function EventosCapturados() {
   const [uf, setUf] = useState('')
   const [local, setLocal] = useState('')
   const [organizador, setOrganizador] = useState('')
+  const [classes, setClasses] = useState<string[]>([])
   const [page, setPage] = useState(0)
+  const artistNames = useArtistNamesByClasse(classes)
   const [busy, setBusy] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -77,12 +82,15 @@ export function EventosCapturados() {
   }, [search])
 
   const filters: EventFilters = useMemo(
-    () => ({ search: searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador }),
-    [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador],
+    () => ({
+      search: searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador,
+      artistasNomes: classes.length > 0 ? artistNames.data : undefined,
+    }),
+    [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data],
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data])
 
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
   const rows = data?.rows ?? []
@@ -223,6 +231,25 @@ export function EventosCapturados() {
               <SelectItem value="todos">Todos</SelectItem>
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-1" title="Eventos cujo nome contenha artistas das classes selecionadas">
+            <span className="text-xs text-muted-foreground">Artistas:</span>
+            {ARTIST_CLASSES.map((c) => {
+              const on = classes.includes(c)
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setClasses((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c])}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                    on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+                  )}
+                >
+                  {c}
+                </button>
+              )
+            })}
+          </div>
           {([['UF', uf, setUf], ['Local', local, setLocal], ['Organizador', organizador, setOrganizador]] as const)
             .filter(([, v]) => v)
             .map(([label, v, set]) => (

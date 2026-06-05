@@ -8,12 +8,16 @@ import { useCrmOrgId } from './useFunnelStages'
 export const ESCALOES = ['Local', 'Regional', 'Nacional', 'Internacional'] as const
 export type Escalao = (typeof ESCALOES)[number]
 
+export const ARTIST_CLASSES = ['A+', 'A', 'B', 'C'] as const
+export type ArtistClasse = (typeof ARTIST_CLASSES)[number]
+
 export interface Artist {
   id: string
   org_id: string
   nome: string
   genero_id: string | null
   escalao: Escalao | null
+  classificacao: ArtistClasse | null
   organization_id: string | null
   platform_id: string | null
   observacoes: string | null
@@ -53,6 +57,7 @@ export async function saveArtist(orgId: string, a: Partial<Artist> & { nome: str
     nome: a.nome,
     genero_id: a.genero_id ?? null,
     escalao: a.escalao ?? null,
+    classificacao: a.classificacao ?? null,
     organization_id: a.organization_id ?? null,
     platform_id: a.platform_id ?? null,
     observacoes: a.observacoes ?? null,
@@ -98,6 +103,13 @@ export interface LocalPlatform {
 
 export interface LocalRow extends Local {
   platforms: LocalPlatform[]
+  /** Nº de oportunidades em aberto (resultado nulo) vinculadas ao local via evento. */
+  oppAtivas: number
+  /** Estágio + cor da oportunidade ativa (para exibir o status como nos eventos). */
+  oppStatus: string | null
+  oppCor: string | null
+  /** GMV estimado somado dos eventos realizados/planejados neste local. */
+  gmv: number | null
 }
 
 export function useLocais() {
@@ -107,14 +119,19 @@ export function useLocais() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'locais', orgId],
     queryFn: async (): Promise<LocalRow[]> => {
-      const [locs, lps] = await Promise.all([
+      const [locs, lps, evs, opps] = await Promise.all([
         supabase.from('crm_locals').select('*').eq('org_id', orgId!).order('nome'),
         supabase
           .from('local_platforms')
           .select('local_id, platform_id, tipo_relacao, platforms(nome)')
           .eq('org_id', orgId!),
+        // Oportunidade → crm_event → local: conta oportunidades em aberto por
+        // local e soma o GMV estimado dos eventos do local.
+        supabase.from('crm_events').select('id, local_id, gmv_estimado').eq('org_id', orgId!).not('local_id', 'is', null),
+        supabase.from('opportunities').select('crm_event_id, funnel_stages(nome, cor)').eq('org_id', orgId!).is('resultado', null).not('crm_event_id', 'is', null),
       ])
       if (locs.error) throw new Error(locs.error.message)
+
       const byLocal = new Map<string, LocalPlatform[]>()
       for (const lp of lps.data ?? []) {
         const arr = byLocal.get(lp.local_id) ?? []
@@ -125,9 +142,34 @@ export function useLocais() {
         })
         byLocal.set(lp.local_id, arr)
       }
+
+      const eventToLocal = new Map<string, string>()
+      const gmvPorLocal = new Map<string, number>()
+      for (const e of evs.data ?? []) {
+        const localId = e.local_id as string
+        eventToLocal.set(e.id as string, localId)
+        const g = e.gmv_estimado as number | null
+        if (g != null) gmvPorLocal.set(localId, (gmvPorLocal.get(localId) ?? 0) + g)
+      }
+      const oppPorLocal = new Map<string, number>()
+      const oppStatusPorLocal = new Map<string, { nome: string | null; cor: string | null }>()
+      for (const o of opps.data ?? []) {
+        const localId = eventToLocal.get(o.crm_event_id as string)
+        if (!localId) continue
+        oppPorLocal.set(localId, (oppPorLocal.get(localId) ?? 0) + 1)
+        if (!oppStatusPorLocal.has(localId)) {
+          const fs = o.funnel_stages as unknown as { nome: string; cor: string | null } | null
+          oppStatusPorLocal.set(localId, { nome: fs?.nome ?? null, cor: fs?.cor ?? null })
+        }
+      }
+
       return (locs.data ?? []).map((l) => ({
         ...(l as Local),
         platforms: byLocal.get(l.id) ?? [],
+        oppAtivas: oppPorLocal.get(l.id) ?? 0,
+        oppStatus: oppStatusPorLocal.get(l.id)?.nome ?? null,
+        oppCor: oppStatusPorLocal.get(l.id)?.cor ?? null,
+        gmv: gmvPorLocal.get(l.id) ?? null,
       }))
     },
   })
@@ -220,6 +262,7 @@ export interface CrmEventRow extends CrmEvent {
   datas: string[]
   oportunidade_id: string | null
   oportunidade_status: string | null
+  oportunidade_cor: string | null
 }
 
 export interface CrmEventEdition {
@@ -247,7 +290,7 @@ export function useCrmEvents() {
           .eq('org_id', orgId!),
         supabase
           .from('opportunities')
-          .select('id, crm_event_id, funnel_stages(nome)')
+          .select('id, crm_event_id, funnel_stages(nome, cor)')
           .eq('org_id', orgId!)
           .not('crm_event_id', 'is', null),
       ])
@@ -259,11 +302,11 @@ export function useCrmEvents() {
         arr.push(ed.data)
         byEvent.set(ed.crm_event_id, arr)
       }
-      const oppByEvent = new Map<string, { id: string; stage: string | null }>()
+      const oppByEvent = new Map<string, { id: string; stage: string | null; cor: string | null }>()
       for (const op of opps.data ?? []) {
         if (!op.crm_event_id || oppByEvent.has(op.crm_event_id)) continue
-        const st = (op.funnel_stages as unknown as { nome: string } | null)?.nome ?? null
-        oppByEvent.set(op.crm_event_id, { id: op.id as string, stage: st })
+        const fs = op.funnel_stages as unknown as { nome: string; cor: string | null } | null
+        oppByEvent.set(op.crm_event_id, { id: op.id as string, stage: fs?.nome ?? null, cor: fs?.cor ?? null })
       }
       return (evs.data ?? []).map((e) => {
         const opp = oppByEvent.get(e.id)
@@ -275,6 +318,7 @@ export function useCrmEvents() {
           datas: (byEvent.get(e.id) ?? []).sort(),
           oportunidade_id: opp?.id ?? null,
           oportunidade_status: opp?.stage ?? null,
+          oportunidade_cor: opp?.cor ?? null,
         }
       })
     },

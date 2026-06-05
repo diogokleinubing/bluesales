@@ -67,6 +67,7 @@ export function EventosCrm() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('todos')
   const [oppFilter, setOppFilter] = useState<string>('todos')
+  const [gmvMin, setGmvMin] = useState('')
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [f, setF] = useState({ ...EMPTY_FORM })
@@ -97,9 +98,10 @@ export function EventosCrm() {
       if (oppFilter === '__sem__' && e.oportunidade_status) return false
       if (oppFilter !== 'todos' && oppFilter !== '__com__' && oppFilter !== '__sem__'
         && e.oportunidade_status !== oppFilter) return false
+      if (gmvMin.trim() !== '' && (e.gmv_estimado == null || e.gmv_estimado < Number(gmvMin))) return false
       return true
     })
-  }, [data, search, statusFilter, oppFilter])
+  }, [data, search, statusFilter, oppFilter, gmvMin])
 
   function openNew() {
     setEditId(null)
@@ -228,6 +230,8 @@ export function EventosCrm() {
                 {oppStages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
+              placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           </>
         }
       >
@@ -258,10 +262,11 @@ export function EventosCrm() {
                   {e.oportunidade_status ? (
                     <Badge
                       variant="outline"
-                      className="cursor-pointer"
+                      className="cursor-pointer gap-1.5"
                       title="Duplo clique para abrir a oportunidade"
                       onDoubleClick={(ev) => { ev.stopPropagation(); if (e.oportunidade_id) navigate(`/comercial/oportunidades/${e.oportunidade_id}`) }}
                     >
+                      <span className="size-2 rounded-full" style={{ backgroundColor: e.oportunidade_cor ?? 'var(--muted-foreground)' }} />
                       {e.oportunidade_status}
                     </Badge>
                   ) : (

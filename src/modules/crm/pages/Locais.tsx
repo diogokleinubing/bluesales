@@ -25,7 +25,7 @@ import {
 } from '../hooks/useCadastros'
 import { usePlatforms } from '../hooks/useConfigCadastros'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '../components/ListView'
-import { fmtInt } from '@/lib/format'
+import { fmtBRL, fmtInt } from '@/lib/format'
 
 const NONE = '__none__'
 const ALL = '__all__'
@@ -43,6 +43,7 @@ export function Locais() {
   )
   const [search, setSearch] = useState('')
   const [platFilter, setPlatFilter] = useState<string>(ALL)
+  const [gmvMin, setGmvMin] = useState('')
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [nome, setNome] = useState('')
@@ -57,10 +58,13 @@ export function Locais() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const min = Number(gmvMin)
+    const temMin = gmvMin.trim() !== '' && Number.isFinite(min)
     return (data ?? []).filter((l) =>
       (!q || l.nome.toLowerCase().includes(q) || (l.cidade ?? '').toLowerCase().includes(q)) &&
-      (platFilter === ALL || l.platforms.some((p) => p.platform_id === platFilter)))
-  }, [data, search, platFilter])
+      (platFilter === ALL || l.platforms.some((p) => p.platform_id === platFilter)) &&
+      (!temMin || (l.gmv != null && l.gmv >= min)))
+  }, [data, search, platFilter, gmvMin])
 
   function openNew() {
     setEditId(null); setNome(''); setCidade(''); setUf(''); setCapacidade(''); setTipo(NONE); setObs('')
@@ -121,6 +125,8 @@ export function Locais() {
                 {(platforms.data ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
+              placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           </>
         }
       >
@@ -128,15 +134,16 @@ export function Locais() {
           <TableHeader><TableRow>
             <TableHead>Nome</TableHead><TableHead>Cidade/UF</TableHead>
             <TableHead>Capacidade</TableHead><TableHead>Tipo</TableHead>
-            <TableHead>Plataformas</TableHead><TableHead className="w-20" />
+            <TableHead>Plataformas</TableHead><TableHead className="text-right">GMV</TableHead>
+            <TableHead>Oportunidade</TableHead><TableHead className="w-20" />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhum local.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhum local.</TableCell></TableRow>
             ) : rows.map((l) => (
               <TableRow key={l.id} className="cursor-pointer" onDoubleClick={() => openEdit(l)}>
                 <TableCell className="font-medium">{l.nome}</TableCell>
@@ -171,6 +178,16 @@ export function Locais() {
                         )
                       })}
                     </div>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{l.gmv != null ? fmtBRL(l.gmv) : '—'}</TableCell>
+                <TableCell>
+                  {l.oppAtivas > 0 ? (
+                    <Badge variant="outline" className="gap-1.5" title={`${l.oppAtivas} oportunidade(s) em aberto neste local`}>
+                      <span className="size-2 rounded-full" style={{ backgroundColor: l.oppCor ?? 'var(--muted-foreground)' }} />
+                      {l.oppStatus ?? 'Em aberto'}
+                      {l.oppAtivas > 1 && <span className="text-muted-foreground">+{l.oppAtivas - 1}</span>}
+                    </Badge>
                   ) : <span className="text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell>
