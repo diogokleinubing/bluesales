@@ -18,16 +18,20 @@ const MAX_NOVOS = 60
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 
+const POST_HEADERS = {
+  'User-Agent': UA,
+  Accept: 'application/json, text/javascript, */*; q=0.01',
+  'X-Requested-With': 'XMLHttpRequest',
+  Origin: 'https://www.guicheweb.com.br',
+  Referer: 'https://www.guicheweb.com.br/',
+}
+
 // deno-lint-ignore no-explicit-any
 async function post(url: string, fields: Record<string, string>): Promise<any | null> {
   try {
     const fd = new FormData()
     for (const [k, v] of Object.entries(fields)) fd.set(k, v)
-    const res = await fetch(url, {
-      method: 'POST', body: fd,
-      headers: { 'User-Agent': UA, Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      signal: AbortSignal.timeout(12000),
-    })
+    const res = await fetch(url, { method: 'POST', body: fd, headers: POST_HEADERS, signal: AbortSignal.timeout(12000) })
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -120,7 +124,7 @@ export const guichewebScraper: Scraper = async (ctx) => {
     const candidatos: ListaItem[] = []
     for (let p = 0; p < MAX_PAGINAS; p++) {
       const resp = await post(API, { a: 'carregar_eventos', offset: String(offset) })
-      const items: ListaItem[] = resp?.item_eventos ?? []
+      const items: ListaItem[] = resp?.item ?? resp?.item_eventos ?? []
       if (!items.length) { offset = 0; break } // fim -> recomeça
       for (const it of items) {
         if (!it.url_amigavel || !it.id_evento) continue
