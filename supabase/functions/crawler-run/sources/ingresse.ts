@@ -170,8 +170,10 @@ export const ingresseScraper: Scraper = async () => {
     out.push(...mapped)
   }
 
-  // Avança o offset (ao terminar a passada, recomeça).
-  const novoOffset = events.length < size || offset + size >= total ? 0 : offset + size
+  // Avança enquanto a página vier cheia; recomeça só quando vier curta (fim).
+  // (total pode vir limitado ao size, então não dá pra confiar nele p/ parar.)
+  void total
+  const novoOffset = events.length < size ? 0 : offset + size
   await db.from('crawler_sources').update({ config: { ...cfg, offset: novoOffset } }).eq('id', src.id)
   console.log(`[ingresse] offset ${offset}->${novoOffset} novos=${out.length}`)
 

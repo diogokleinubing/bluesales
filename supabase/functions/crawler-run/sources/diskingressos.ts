@@ -161,7 +161,8 @@ export const diskIngressosScraper: Scraper = async () => {
     out.push(...mapped)
   }
 
-  const novoOffset = hits.length < size || from + size >= total ? 0 : from + size
+  void total
+  const novoOffset = hits.length < size ? 0 : from + size
   await db.from('crawler_sources').update({ config: { ...cfg, offset: novoOffset } }).eq('id', src.id)
   console.log(`[disk] offset ${from}->${novoOffset} novos=${out.length}`)
 
