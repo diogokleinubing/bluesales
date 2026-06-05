@@ -30,7 +30,7 @@ export function EventosDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-[700px]">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
           {subtitulo && <p className="text-sm text-muted-foreground">{subtitulo}</p>}
