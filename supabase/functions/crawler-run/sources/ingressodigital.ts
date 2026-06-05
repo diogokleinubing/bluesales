@@ -1,24 +1,25 @@
 // Fonte: Ingresso Digital — HTML server-side (sem API). Listagem paginada:
 //   https://ingressodigital.com/pesquisa.php?busca=S&pg=N&txt_genero=
 // Cards .card-evento (link /evento/<id>/<slug>, título, categoria, data pt-BR,
-// "Cidade, UF"). Preço não vem na listagem (fica nulo). Poucas páginas: varre
-// pg=1.. até esvaziar. Pula os já coletados (dedupe por URL).
+// "Cidade, UF"). Local e preço vêm na PÁGINA do evento (.dados-loca-detalhes e
+// .valores-ing). Poucas páginas: varre pg=1.. até esvaziar; pula os já
+// coletados (dedupe por URL). Taxa não é exposta -> nula.
 
 import { load } from 'https://esm.sh/cheerio@1.0.0'
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const HOST = 'https://ingressodigital.com'
-const MAX_PG = 6 // teto de segurança (o site tem ~3 páginas)
+const MAX_PG = 6
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+const HEADERS = { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'pt-BR' }
 
 const MESES: Record<string, number> = {
   jan: 0, fev: 1, mar: 2, abr: 3, mai: 4, jun: 5,
   jul: 6, ago: 7, set: 8, out: 9, nov: 10, dez: 11,
 }
 
-/** "04 de Jun às 20:00" / "06 de Jun a 07 de Jun" -> ISO (ano inferido). */
 function parseDataBR(txt: string, agora: Date): string | null {
   const m = txt.match(/(\d{1,2})\s+de\s+([A-Za-zçÇ]{3})/i)
   if (!m) return null
@@ -32,6 +33,38 @@ function parseDataBR(txt: string, agora: Date): string | null {
   const ano = mes >= mesAtual ? agora.getUTCFullYear() : agora.getUTCFullYear() + 1
   const p = (n: number) => String(n).padStart(2, '0')
   return `${ano}-${p(mes + 1)}-${p(dia)}T${p(hh)}:${p(mm)}:00-03:00`
+}
+
+interface Candidato {
+  url: string
+  nome: string
+  dataIso: string | null
+  categoria: string | null
+  cidade: string | null
+  uf: string | null
+  img: string | null
+}
+
+/** Página do evento: local (nome do espaço) + faixa de preço. */
+async function fetchDetalhe(url: string): Promise<{ local: string | null; min: number | null; max: number | null }> {
+  try {
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(12000) })
+    if (!res.ok) return { local: null, min: null, max: null }
+    const $ = load(await res.text())
+    const local = $('.dados-loca-detalhes p').first().text().replace(/\s+/g, ' ').trim() || null
+    const precoTxt = $('.valores-ing').first().text()
+    const nums = [...precoTxt.matchAll(/R\$\s*([\d.]+,\d{2})/g)]
+      .map((m) => Number(m[1].replace(/\./g, '').replace(',', '.')))
+      .filter((n) => Number.isFinite(n))
+    return {
+      local,
+      min: nums.length ? Math.min(...nums) : null,
+      max: nums.length ? Math.max(...nums) : null,
+    }
+  } catch (e) {
+    console.error('[idigital] detalhe falhou', url, String(e))
+    return { local: null, min: null, max: null }
+  }
 }
 
 async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>> {
@@ -53,14 +86,14 @@ export const ingressoDigitalScraper: Scraper = async () => {
   const db = adminClient()
   const known = await getKnown(db)
   const agora = new Date()
-  const out: RawEvent[] = []
 
+  // Fase 1: descobre os eventos novos pela listagem.
+  const candidatos: Candidato[] = []
   for (let pg = 1; pg <= MAX_PG; pg++) {
     let html: string
     try {
       const res = await fetch(`${HOST}/pesquisa.php?busca=S&pg=${pg}&txt_genero=`, {
-        headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'pt-BR' },
-        signal: AbortSignal.timeout(15000),
+        headers: HEADERS, signal: AbortSignal.timeout(15000),
       })
       if (!res.ok) { console.error('[idigital] pg', pg, 'HTTP', res.status); break }
       html = await res.text()
@@ -68,11 +101,9 @@ export const ingressoDigitalScraper: Scraper = async () => {
       console.error('[idigital] pg', pg, 'falhou', String(e))
       break
     }
-
     const $ = load(html)
     const cards = $('.card-evento')
     if (cards.length === 0) break
-
     let novos = 0
     cards.each((_i: number, el: unknown) => {
       const card = $(el as never)
@@ -82,46 +113,56 @@ export const ingressoDigitalScraper: Scraper = async () => {
       if (known.has(url)) return
       const nome = card.find('.titulo-card').first().text().trim()
       if (!nome) return
-
-      const categoria = card.find('.genero-evento-card').first().text().trim() || null
-      const dataTxt = card.find('.data-evento').first().text().trim()
       const loc = card.find('.area-cont-card p').last().text().replace(/\s+/g, ' ').trim()
       let cidade: string | null = null
       let uf: string | null = null
       const parts = loc.split(',')
-      if (parts.length >= 2) {
-        uf = parts.pop()!.trim().toUpperCase()
-        cidade = parts.join(',').trim()
-      } else if (loc) {
-        cidade = loc
-      }
-      const img = card.find('img.card-evento-img').first().attr('data-src') || null
-
-      out.push({
-        url_evento: url,
+      if (parts.length >= 2) { uf = parts.pop()!.trim().toUpperCase(); cidade = parts.join(',').trim() } else if (loc) cidade = loc
+      candidatos.push({
+        url,
         nome,
-        data_inicio: parseDataBR(dataTxt, agora),
-        data_fim: null,
-        organizador_raw: null,
-        organizador_url: null,
-        local_raw: null,
+        dataIso: parseDataBR(card.find('.data-evento').first().text().trim(), agora),
+        categoria: card.find('.genero-evento-card').first().text().trim() || null,
         cidade,
         uf: uf && uf.length === 2 ? uf : null,
-        pais: 'Brasil',
-        preco_min: null,
-        preco_max: null,
-        taxa_pct: null,
-        gratuito: false,
-        online: false,
-        categoria,
-        imagem_url: img,
-        descricao: null,
-        raw: { href },
+        img: card.find('img.card-evento-img').first().attr('data-src') || null,
       })
       known.add(url)
       novos++
     })
     console.log(`[idigital] pg=${pg} cards=${cards.length} novos=${novos}`)
+  }
+
+  // Fase 2: detalhe (local + preço) em paralelo.
+  const out: RawEvent[] = []
+  const BATCH = 6
+  for (let i = 0; i < candidatos.length; i += BATCH) {
+    const slice = candidatos.slice(i, i + BATCH)
+    const mapped = await Promise.all(slice.map(async (c) => {
+      const det = await fetchDetalhe(c.url)
+      return {
+        url_evento: c.url,
+        nome: c.nome,
+        data_inicio: c.dataIso,
+        data_fim: null,
+        organizador_raw: null,
+        organizador_url: null,
+        local_raw: det.local,
+        cidade: c.cidade,
+        uf: c.uf,
+        pais: 'Brasil',
+        preco_min: det.min,
+        preco_max: det.max,
+        taxa_pct: null,
+        gratuito: det.min === 0,
+        online: false,
+        categoria: c.categoria,
+        imagem_url: c.img,
+        descricao: null,
+        raw: { url: c.url },
+      } as RawEvent
+    }))
+    out.push(...mapped)
   }
 
   return out
