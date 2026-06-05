@@ -1,6 +1,7 @@
 // Fonte: BaladaApp — API JSON de anúncios + HTML do evento (Instagram da produção).
 //   Listagem: GET https://api.baladapp.com.br/api/v3/anuncios -> { anuncios[] }
-//     Retorna ~150 mais recentes (sem paginação); o skip-forever cobre os novos.
+//     Retorna o catálogo ativo (~150 eventos; sem paginação). O skip-forever
+//     cobre os já coletados; novos entram quando o BaladaApp publica.
 //     anuncio: { id, uri, comprar_url, data_inicio, data_fim,
 //       evento: { titulo, foto_url, ocultar_local,
 //         local: { nome, ficticio, nome_sem_cidade, cidade_estado "Cidade/UF" } } }
