@@ -101,39 +101,39 @@ async function runScan(): Promise<Scanned[]> {
   if (!src) return scanCache
 
   const cfg = (src.config ?? {}) as Record<string, unknown>
-  const cursor = Number(cfg.id_cursor ?? 119000)
   const maxScan = Number(cfg.scan ?? MAX_SCAN)
+  const topo = Number(cfg.id_topo ?? 122500) // recomeço (acima da fronteira atual)
+  const minId = Number(cfg.id_min ?? 1)
   const known = await getKnown(db)
 
-  let id = cursor + 1
+  // Varredura DESCENDENTE a partir do cursor de baixo, pulando os já coletados
+  // (rápido) e capturando os de IDs menores. Cobre toda a faixa ao longo das
+  // execuções (use o Lote). Ao chegar no fundo, recomeça do topo (pega novos).
+  let id = Number(cfg.id_baixo ?? topo)
+  if (id < minId || id > topo) id = topo
   let scanned = 0
-  let misses = 0
-  let lastValid = cursor
-  let stop = false
   const events: Scanned[] = []
 
-  while (scanned < maxScan && !stop) {
+  while (scanned < maxScan && id >= minId) {
     const ids: number[] = []
-    for (let k = 0; k < BATCH && scanned < maxScan; k++) { ids.push(id); id++; scanned++ }
+    for (let k = 0; k < BATCH && scanned < maxScan && id >= minId; k++) { ids.push(id); id--; scanned++ }
     const results = await Promise.all(
       ids.map(async (i) =>
         known.has(String(i)) ? { i, ev: 'KNOWN' as const } : { i, ev: await fetchBileto(i) },
       ),
     )
     for (const { i, ev } of results) {
-      if (ev === 'KNOWN') { misses = 0; lastValid = i; continue }
-      if (!ev) { misses++; if (misses >= MISS_STREAK) { stop = true; break } }
-      else { misses = 0; lastValid = i; events.push({ id: i, ev }) }
+      if (ev === 'KNOWN' || !ev) continue
+      events.push({ id: i, ev })
     }
   }
 
-  // Cursor = último ID válido encontrado. Não ultrapassa a fronteira: ao chegar
-  // no topo, fica re-checando os próximos IDs a cada execução (pega novos).
-  const newCursor = lastValid
+  const fim = id < minId
+  const novoBaixo = fim ? topo : id
   await db.from('crawler_sources')
-    .update({ config: { ...cfg, id_cursor: newCursor } })
+    .update({ config: { ...cfg, id_baixo: novoBaixo } })
     .eq('id', src.id)
-  console.log(`[bileto] scan: cursor ${cursor} -> ${newCursor} (${scanned} ids, ${events.length} eventos)`)
+  console.log(`[bileto] scan desc: ${Number(cfg.id_baixo ?? topo)} -> ${novoBaixo} (${scanned} ids, ${events.length} novos${fim ? ', recomeçou do topo' : ''})`)
 
   scanCache = events
   return scanCache
