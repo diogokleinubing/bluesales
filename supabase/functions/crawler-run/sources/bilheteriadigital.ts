@@ -12,8 +12,8 @@ import { adminClient } from '../../_shared/db.ts'
 import { avgTaxaPct } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.bilheteriadigital.com'
-const MAX_PG_UF = 15 // teto de páginas por estado
-const MAX_NOVOS = 150 // teto de eventos novos por execução (restante na próxima)
+const MAX_PG_UF = 10 // teto de páginas por estado
+const MAX_NOVOS = 60 // teto de detalhes por execução (restante na próxima)
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
@@ -43,7 +43,7 @@ interface Detalhe {
 async function fetchDetalhe(url: string): Promise<Detalhe> {
   const vazio: Detalhe = { min: null, max: null, taxa: null, dataInicio: null, local: null, organizador: null }
   try {
-    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(15000) })
+    const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) })
     if (!res.ok) return vazio
     const html = await res.text()
     const $ = load(html)
@@ -100,7 +100,7 @@ async function getSource() {
   return { id: data.id, cfg: (data.config ?? {}) as Record<string, unknown> }
 }
 
-const ESTADOS_POR_RUN = 5 // varre poucos estados por execução (gira o cursor)
+const ESTADOS_POR_RUN = 3 // varre poucos estados por execução (gira o cursor)
 
 export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
   try {
@@ -117,7 +117,7 @@ export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
       for (let pg = 1; pg <= MAX_PG_UF; pg++) {
         let html: string
         try {
-          const res = await fetch(`${HOST}/${uf}/as/${pg}`, { headers: HEADERS, signal: AbortSignal.timeout(15000) })
+          const res = await fetch(`${HOST}/${uf}/as/${pg}`, { headers: HEADERS, signal: AbortSignal.timeout(10000) })
           if (!res.ok) break
           html = await res.text()
         } catch { break }
@@ -149,13 +149,14 @@ export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
 
     const novoCursor = (cursor + ESTADOS_POR_RUN) % UFS.length
     if (src) await db.from('crawler_sources').update({ config: { ...cfg, uf_cursor: novoCursor } }).eq('id', src.id)
-    console.log(`[bdigital] estados=${ufsRun.join(',')} cursor ${cursor}->${novoCursor} candidatos=${candidatos.length}`)
+    const aProcessar = candidatos.slice(0, MAX_NOVOS) // teto de detalhes por execução
+    console.log(`[bdigital] estados=${ufsRun.join(',')} cursor ${cursor}->${novoCursor} candidatos=${candidatos.length} processando=${aProcessar.length}`)
 
     // Fase 2: detalhe (preço/taxa/data/organizador) em paralelo.
     const out: RawEvent[] = []
-    const BATCH = 6
-    for (let i = 0; i < candidatos.length; i += BATCH) {
-      const slice = candidatos.slice(i, i + BATCH)
+    const BATCH = 8
+    for (let i = 0; i < aProcessar.length; i += BATCH) {
+      const slice = aProcessar.slice(i, i + BATCH)
       const mapped = await Promise.all(slice.map(async (c) => {
         const det = await fetchDetalhe(c.url)
         return {
