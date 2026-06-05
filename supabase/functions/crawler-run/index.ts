@@ -25,6 +25,7 @@ import { symplaScraper } from './sources/sympla.ts'
 import { biletoScraper } from './sources/bileto.ts'
 import { ingresseScraper } from './sources/ingresse.ts'
 import { diskIngressosScraper } from './sources/diskingressos.ts'
+import { ingressoDigitalScraper } from './sources/ingressodigital.ts'
 import { guichewebScraper } from './sources/guicheweb.ts'
 import { bilheteriaDigitalScraper } from './sources/bilheteriadigital.ts'
 
@@ -33,6 +34,7 @@ const SCRAPERS: Record<string, Scraper> = {
   bileto: biletoScraper,
   ingresse: ingresseScraper,
   diskingressos: diskIngressosScraper,
+  ingressodigital: ingressoDigitalScraper,
   guicheweb: guichewebScraper,
   bilheteriadigital: bilheteriaDigitalScraper,
 }
