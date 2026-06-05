@@ -29,6 +29,7 @@ import { ingressoDigitalScraper } from './sources/ingressodigital.ts'
 import { pensaNoEventoScraper } from './sources/pensanoevento.ts'
 import { guichewebScraper } from './sources/guicheweb.ts'
 import { bilheteriaDigitalScraper } from './sources/bilheteriadigital.ts'
+import { baladAppScraper } from './sources/baladapp.ts'
 
 const SCRAPERS: Record<string, Scraper> = {
   sympla: symplaScraper,
@@ -39,6 +40,7 @@ const SCRAPERS: Record<string, Scraper> = {
   pensanoevento: pensaNoEventoScraper,
   guicheweb: guichewebScraper,
   bilheteriadigital: bilheteriaDigitalScraper,
+  baladapp: baladAppScraper,
 }
 
 interface SourceRow {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { Plus } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,8 @@ import { useCrmOrgId, useFunnel } from '../hooks/useFunnelStages'
 import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions } from '../hooks/useCrmLookups'
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { createOpportunity } from '../hooks/useOpportunities'
+import { createOrganization } from '../hooks/useOrganizations'
+import { linkLocalToOrg } from '../hooks/useCadastros'
 
 const NONE = '__none__'
 
@@ -62,6 +65,43 @@ export function NovaOportunidadeDialog({
   const [gmv, setGmv] = useState('')
   const [saving, setSaving] = useState(false)
   const { consider, dialog: gmvDialog } = useGmvCopy(gmv, setGmv)
+
+  // Criação rápida de organização dentro do diálogo.
+  const [newOrgOpen, setNewOrgOpen] = useState(false)
+  const [newOrgNome, setNewOrgNome] = useState('')
+  const [creatingOrg, setCreatingOrg] = useState(false)
+
+  function abrirNovaOrg() {
+    // Pré-preenche com o nome do local selecionado, se houver.
+    const localNome = local !== NONE ? localOptions.data?.find((l) => l.id === local)?.nome : ''
+    setNewOrgNome(localNome ?? '')
+    setNewOrgOpen(true)
+  }
+
+  async function criarOrg() {
+    if (!orgId || !newOrgNome.trim()) return
+    setCreatingOrg(true)
+    try {
+      const novoId = await createOrganization(orgId, { nome: newOrgNome.trim() })
+      // Se há um local selecionado, vincula-o à nova organização.
+      if (local !== NONE) {
+        try {
+          await linkLocalToOrg(orgId, novoId, local)
+          qc.invalidateQueries({ queryKey: ['crm', 'org-locais', novoId] })
+        } catch { /* vínculo opcional */ }
+      }
+      qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'orgs-gmv'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'orgs'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+      setOrg(novoId)
+      setNewOrgOpen(false)
+      toast.success('Organização criada')
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setCreatingOrg(false)
+    }
+  }
 
   // Reinicializa o formulário ao abrir (com valores pré-preenchidos, se houver).
   useEffect(() => {
@@ -128,7 +168,18 @@ export function NovaOportunidadeDialog({
             <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Organização</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Organização</Label>
+              {!organizationId && (
+                <button
+                  type="button"
+                  onClick={abrirNovaOrg}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Plus className="size-3" /> Nova
+                </button>
+              )}
+            </div>
             <Select value={org ?? ''} onValueChange={onOrgChange} disabled={!!organizationId}>
               <SelectTrigger className="h-9" size="sm">
                 <SelectValue placeholder="Selecione…" />
@@ -176,6 +227,36 @@ export function NovaOportunidadeDialog({
           </Button>
           <Button onClick={save} disabled={saving}>Criar</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={newOrgOpen} onOpenChange={(o) => !creatingOrg && setNewOrgOpen(o)}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Nova organização</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => { e.preventDefault(); criarOrg() }}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Nome</Label>
+            <Input value={newOrgNome} autoFocus onChange={(e) => setNewOrgNome(e.target.value)} />
+          </div>
+          {local !== NONE && (
+            <p className="text-xs text-muted-foreground">
+              O local selecionado será vinculado a esta organização.
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setNewOrgOpen(false)} disabled={creatingOrg}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={creatingOrg || !newOrgNome.trim()}>
+              {creatingOrg ? 'Criando…' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
     {gmvDialog}
