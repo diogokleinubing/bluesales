@@ -4,9 +4,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { fmtBRL, fmtDate } from '@/lib/format'
-import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
+import { fmtDate } from '@/lib/format'
+import { Input } from '@/components/ui/input'
+import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
+import { faixaPreco, acumulaPreco } from '../lib/preco'
 import { useCrawledEvents } from '../hooks/usePesquisa'
 
 interface Agg {
@@ -19,22 +21,10 @@ interface Agg {
   precoMax: number | null
 }
 
-export function faixaPreco(min: number | null, max: number | null): string {
-  if (min == null && max == null) return '—'
-  if (min != null && max != null && min !== max) return `${fmtBRL(min)} – ${fmtBRL(max)}`
-  return fmtBRL(min ?? max)
-}
-
-export function acumulaPreco(a: { precoMin: number | null; precoMax: number | null }, e: { preco_min: number | null; preco_max: number | null }) {
-  const pmin = e.preco_min ?? e.preco_max
-  const pmax = e.preco_max ?? e.preco_min
-  if (pmin != null) a.precoMin = a.precoMin == null ? pmin : Math.min(a.precoMin, pmin)
-  if (pmax != null) a.precoMax = a.precoMax == null ? pmax : Math.max(a.precoMax, pmax)
-}
-
 export function OrganizadoresMercado() {
   const { data, isLoading } = useCrawledEvents()
   const [search, setSearch] = useState('')
+  const [valorMin, setValorMin] = useState('')
   const [sel, setSel] = useState<string | null>(null)
 
   const eventosDoSel = useMemo(
@@ -63,15 +53,27 @@ export function OrganizadoresMercado() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return aggregated.filter((a) => !q || a.nome.toLowerCase().includes(q))
-  }, [aggregated, search])
+    const min = Number(valorMin)
+    const temMin = valorMin.trim() !== '' && Number.isFinite(min)
+    return aggregated.filter((a) => {
+      if (q && !a.nome.toLowerCase().includes(q)) return false
+      if (temMin && (a.precoMax == null || a.precoMax < min)) return false
+      return true
+    })
+  }, [aggregated, search, valorMin])
 
   return (
     <ListView
       title="Organizadores"
       count={aggregated.length ? String(aggregated.length) : undefined}
       footer={aggregated.length ? `${rows.length} de ${aggregated.length}` : undefined}
-      toolbar={<ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />}
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />
+          <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
+            placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
+        </div>
+      }
     >
       <Table>
         <TableHeader><TableRow>

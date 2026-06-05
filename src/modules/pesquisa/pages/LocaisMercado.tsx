@@ -5,9 +5,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { fmtDate } from '@/lib/format'
-import { ListView, ToolbarSearch } from '@/modules/crm/components/ListView'
+import { Input } from '@/components/ui/input'
+import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
-import { faixaPreco, acumulaPreco } from './OrganizadoresMercado'
+import { faixaPreco, acumulaPreco } from '../lib/preco'
 import { useCrawledEvents } from '../hooks/usePesquisa'
 
 interface Agg {
@@ -24,6 +25,7 @@ interface Agg {
 export function LocaisMercado() {
   const { data, isLoading } = useCrawledEvents()
   const [search, setSearch] = useState('')
+  const [valorMin, setValorMin] = useState('')
   const [sel, setSel] = useState<Agg | null>(null)
 
   const eventosDoSel = useMemo(() => {
@@ -58,15 +60,27 @@ export function LocaisMercado() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return aggregated.filter((a) => !q || a.nome.toLowerCase().includes(q))
-  }, [aggregated, search])
+    const min = Number(valorMin)
+    const temMin = valorMin.trim() !== '' && Number.isFinite(min)
+    return aggregated.filter((a) => {
+      if (q && !a.nome.toLowerCase().includes(q)) return false
+      if (temMin && (a.precoMax == null || a.precoMax < min)) return false
+      return true
+    })
+  }, [aggregated, search, valorMin])
 
   return (
     <ListView
       title="Locais"
       count={aggregated.length ? String(aggregated.length) : undefined}
       footer={aggregated.length ? `${rows.length} de ${aggregated.length}` : undefined}
-      toolbar={<ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar local…" />}
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar local…" />
+          <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
+            placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
+        </div>
+      }
     >
       <Table>
         <TableHeader><TableRow>
