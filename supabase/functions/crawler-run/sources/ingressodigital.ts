@@ -48,8 +48,6 @@ interface Candidato {
 
 interface Detalhe { local: string | null; min: number | null; max: number | null; taxa: number | null }
 
-let diagDone = false // DIAG temporário: confere acesso à página /comprar
-
 /**
  * Detalhe: página do evento (local + preço fallback) e página de compra
  * (preço base em valor<n> + taxa em taxa_adm<n>), buscadas em paralelo.
@@ -84,11 +82,6 @@ async function fetchDetalhe(url: string): Promise<Detalhe> {
     const precos = Object.values(valByKey).filter((p) => p > 0)
     if (precos.length) { min = Math.min(...precos); max = Math.max(...precos) }
     taxa = avgTaxaPct(Object.keys(valByKey).map((k) => ({ price: valByKey[k], tax: taxByKey[k] ?? NaN })))
-  }
-
-  if (!diagDone) {
-    diagDone = true
-    console.log('[idigital] DIAG', comprarUrl, 'comprarHtml?', !!cpHtml, 'len=', cpHtml?.length ?? 0, 'min=', min, 'taxa=', taxa)
   }
 
   // Fallback de preço pela página do evento se a de compra não veio.
