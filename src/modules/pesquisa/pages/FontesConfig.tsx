@@ -23,6 +23,7 @@ import {
   type CrawlerSource,
 } from '../hooks/usePesquisa'
 import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
+import { ExecucoesTabela } from '../components/ExecucoesTabela'
 
 const METODO_LABEL: Record<string, string> = {
   edge_api: 'API (JSON)',
@@ -223,6 +224,14 @@ export function FontesConfig() {
           </TableBody>
         </Table>
       </CardContent></Card>
+
+      <div className="flex items-center justify-between gap-2 pt-2">
+        <h2 className="text-lg font-semibold tracking-tight">Execuções recentes</h2>
+        <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })}>
+          <RefreshCw className="size-4" /> Atualizar
+        </Button>
+      </div>
+      <ExecucoesTabela limit={50} />
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
         <DialogContent>
