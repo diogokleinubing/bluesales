@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Play, Pencil, Loader2, RefreshCw, BarChart3 } from 'lucide-react'
+import { Play, Pencil, Loader2, RefreshCw, BarChart3, Repeat, Square } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -52,6 +52,45 @@ export function FontesConfig() {
   const [janela, setJanela] = useState('90')
   const [cidadesTxt, setCidadesTxt] = useState('')
 
+  // Lote: roda N ciclos em sequência com intervalo (loop no front, interrompível).
+  const [batch, setBatch] = useState<{ slug: string; nome: string; total: number; done: number; intervalSec: number; running: boolean } | null>(null)
+  const batchStop = useRef(false)
+  const [loteCfg, setLoteCfg] = useState<CrawlerSource | null>(null)
+  const [ciclos, setCiclos] = useState('20')
+  const [intervalo, setIntervalo] = useState('60')
+
+  // Para o lote ao sair da tela.
+  useEffect(() => () => { batchStop.current = true }, [])
+
+  async function cicloLote(slug: string, total: number, intervalSec: number, done: number) {
+    if (batchStop.current || done >= total) { setBatch((b) => (b ? { ...b, running: false } : null)); return }
+    try { await runCrawler(slug) } catch { /* segue para o próximo ciclo */ }
+    const novoDone = done + 1
+    setBatch((b) => (b ? { ...b, done: novoDone } : null))
+    setTimeout(() => qc.invalidateQueries({ queryKey: ['pesquisa'] }), 4000)
+    if (batchStop.current || novoDone >= total) { setBatch((b) => (b ? { ...b, running: false } : null)); return }
+    window.setTimeout(() => cicloLote(slug, total, intervalSec, novoDone), intervalSec * 1000)
+  }
+
+  function iniciarLote() {
+    if (!loteCfg) return
+    const total = Math.max(1, Math.floor(Number(ciclos) || 1))
+    const intervalSec = Math.max(5, Math.floor(Number(intervalo) || 60))
+    const { slug, nome } = loteCfg
+    setLoteCfg(null)
+    batchStop.current = false
+    setBatch({ slug, nome, total, done: 0, intervalSec, running: true })
+    void cicloLote(slug, total, intervalSec, 0)
+  }
+
+  function pararLote() {
+    batchStop.current = true
+    setBatch((b) => (b ? { ...b, running: false } : null))
+    toast('Lote interrompido', { description: 'Para após o ciclo atual.' })
+  }
+
+  const batchAtivo = !!batch?.running
+
   async function executar(slug?: string, reprocessar = false) {
     setRunning((reprocessar ? 'rp:' : '') + (slug ?? '__all__'))
     try {
@@ -99,12 +138,30 @@ export function FontesConfig() {
           <p className="text-sm text-muted-foreground">Plataformas monitoradas pela coleta automática semanal.</p>
         </div>
         {editable && (
-          <Button onClick={() => executar()} disabled={running !== null}>
+          <Button onClick={() => executar()} disabled={running !== null || batchAtivo}>
             {running === '__all__' ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
             Executar tudo
           </Button>
         )}
       </div>
+
+      {batch && (
+        <Card><CardContent className="flex items-center justify-between gap-3 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            {batch.running && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+            <span className="font-medium">Lote · {batch.nome}</span>
+            <span className="text-muted-foreground">
+              ciclo {batch.done}/{batch.total}
+              {batch.running ? ` · intervalo ${batch.intervalSec}s` : ' · finalizado'}
+            </span>
+          </div>
+          {batch.running ? (
+            <Button size="sm" variant="destructive" onClick={pararLote}><Square className="size-4" /> Parar</Button>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setBatch(null)}>Fechar</Button>
+          )}
+        </CardContent></Card>
+      )}
 
       <Card><CardContent className="p-0">
         <Table>
@@ -140,11 +197,15 @@ export function FontesConfig() {
                         <BarChart3 className="size-4" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Executar agora"
-                        disabled={running !== null} onClick={() => executar(s.slug)}>
+                        disabled={running !== null || batchAtivo} onClick={() => executar(s.slug)}>
                         {running === s.slug ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                       </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Rodar em lote (vários ciclos)"
+                        disabled={running !== null || batchAtivo} onClick={() => { setCiclos('20'); setIntervalo('60'); setLoteCfg(s) }}>
+                        <Repeat className="size-4" />
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Reprocessar (atualiza os já coletados)"
-                        disabled={running !== null} onClick={() => executar(s.slug, true)}>
+                        disabled={running !== null || batchAtivo} onClick={() => executar(s.slug, true)}>
                         {running === `rp:${s.slug}` ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Editar cidades/janela"
@@ -182,6 +243,28 @@ export function FontesConfig() {
       </Dialog>
 
       <RelatorioFonteDialog source={report} onOpenChange={(o) => !o && setReport(null)} />
+
+      <Dialog open={!!loteCfg} onOpenChange={(o) => !o && setLoteCfg(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{loteCfg?.nome} — rodar em lote</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Número de ciclos</Label>
+              <Input type="number" min={1} value={ciclos} onChange={(e) => setCiclos(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Cada ciclo dispara uma coleta e avança a varredura (Sympla ~150 itens/ciclo; Bileto/Ingresse/Disk conforme o <code>scan</code>).</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Intervalo entre ciclos (segundos)</Label>
+              <Input type="number" min={5} value={intervalo} onChange={(e) => setIntervalo(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Espaça as requisições para não sobrecarregar o IP. Mantenha a aba aberta; dá para interromper a qualquer momento.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLoteCfg(null)}>Cancelar</Button>
+            <Button onClick={iniciarLote}>Iniciar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
