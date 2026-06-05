@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Play, Pencil, Loader2, RefreshCw } from 'lucide-react'
+import { Play, Pencil, Loader2, RefreshCw, BarChart3 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,7 @@ import {
   useCrawlerSources, setSourceAtivo, saveSourceConfig, runCrawler,
   type CrawlerSource,
 } from '../hooks/usePesquisa'
+import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
 
 const METODO_LABEL: Record<string, string> = {
   edge_api: 'API (JSON)',
@@ -46,6 +47,7 @@ export function FontesConfig() {
   const { data, isLoading } = useCrawlerSources()
 
   const [running, setRunning] = useState<string | null>(null)
+  const [report, setReport] = useState<CrawlerSource | null>(null)
   const [edit, setEdit] = useState<CrawlerSource | null>(null)
   const [janela, setJanela] = useState('90')
   const [cidadesTxt, setCidadesTxt] = useState('')
@@ -133,6 +135,10 @@ export function FontesConfig() {
                 {editable && (
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Relatório"
+                        onClick={() => setReport(s)}>
+                        <BarChart3 className="size-4" />
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Executar agora"
                         disabled={running !== null} onClick={() => executar(s.slug)}>
                         {running === s.slug ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
@@ -174,6 +180,8 @@ export function FontesConfig() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RelatorioFonteDialog source={report} onOpenChange={(o) => !o && setReport(null)} />
     </div>
   )
 }

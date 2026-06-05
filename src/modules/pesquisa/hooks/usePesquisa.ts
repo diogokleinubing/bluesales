@@ -201,6 +201,34 @@ export function useCrawledEventsPaged(
   })
 }
 
+export interface SourceReport {
+  total: number
+  por_estado: { uf: string; qtd: number }[]
+  por_cidade: { cidade: string; uf: string | null; qtd: number }[]
+  por_local: { local: string; cidade: string | null; uf: string | null; qtd: number }[]
+  por_organizador: { organizador: string; qtd: number }[]
+}
+
+export function useSourceReport(sourceId: string | null): UseQueryResult<SourceReport> {
+  return useQuery({
+    enabled: !!sourceId,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'report', sourceId],
+    queryFn: async (): Promise<SourceReport> => {
+      const { data, error } = await supabase.rpc('crawler_source_report', { p_source: sourceId })
+      if (error) throw new Error(error.message)
+      const d = (data ?? {}) as Partial<SourceReport>
+      return {
+        total: d.total ?? 0,
+        por_estado: d.por_estado ?? [],
+        por_cidade: d.por_cidade ?? [],
+        por_local: d.por_local ?? [],
+        por_organizador: d.por_organizador ?? [],
+      }
+    },
+  })
+}
+
 export function useEventFacets(): UseQueryResult<{ cidades: string[]; categorias: string[] }> {
   const orgId = useCrmOrgId()
   return useQuery({
