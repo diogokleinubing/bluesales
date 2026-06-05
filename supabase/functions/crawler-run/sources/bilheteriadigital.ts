@@ -12,7 +12,12 @@ import { adminClient } from '../../_shared/db.ts'
 import { avgTaxaPct } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.bilheteriadigital.com'
-const MAX_PG = 40
+const MAX_PG_UF = 15 // teto de páginas por estado
+const MAX_NOVOS = 150 // teto de eventos novos por execução (restante na próxima)
+const UFS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+]
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 const HEADERS = { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'pt-BR' }
@@ -88,52 +93,53 @@ async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>
   return set
 }
 
-export const bilheteriaDigitalScraper: Scraper = async () => {
+export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
   const db = adminClient()
-  const known = await getKnown(db)
+  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
 
-  // Fase 1: descobre os eventos novos pela listagem paginada.
+  // Fase 1: descobre os eventos novos varrendo por estado (/<UF>/as/<pg>).
   const candidatos: Candidato[] = []
-  for (let pg = 1; pg <= MAX_PG; pg++) {
-    let html: string
-    try {
-      const res = await fetch(`${HOST}/busca/aa/as/${pg}`, { headers: HEADERS, signal: AbortSignal.timeout(15000) })
-      if (!res.ok) { console.error('[bdigital] pg', pg, 'HTTP', res.status); break }
-      html = await res.text()
-    } catch (e) {
-      console.error('[bdigital] pg', pg, 'falhou', String(e))
-      break
-    }
-    const $ = load(html)
-    const cards = $('.box-li-evento')
-    if (cards.length === 0) break
-    let novos = 0
-    cards.each((_i: number, el: unknown) => {
-      const card = $(el as never)
-      const href = card.find('a').first().attr('href')
-      if (!href) return
-      const url = href.startsWith('http') ? href : `${HOST}${href}`
-      if (known.has(url)) return
-      const nome = card.find('.titulo-evento-thumb').first().text().trim()
-      if (!nome) return
-      const cidadeUf = card.find('.cidade-box-evento').first().text().replace(/\s+/g, ' ').trim()
-      let cidade: string | null = null
-      let uf: string | null = null
-      const m = cidadeUf.match(/^(.*?)\s*-\s*([A-Za-z]{2})$/)
-      if (m) { cidade = m[1].trim(); uf = m[2].toUpperCase() } else if (cidadeUf) cidade = cidadeUf
-      candidatos.push({
-        url,
-        nome,
-        cidade,
-        uf,
-        local: card.find('.local-box-evento').first().text().replace(/\s+/g, ' ').trim() || null,
-        img: card.find('img').first().attr('src') || null,
+  estados:
+  for (const uf of UFS) {
+    for (let pg = 1; pg <= MAX_PG_UF; pg++) {
+      let html: string
+      try {
+        const res = await fetch(`${HOST}/${uf}/as/${pg}`, { headers: HEADERS, signal: AbortSignal.timeout(15000) })
+        if (!res.ok) break
+        html = await res.text()
+      } catch {
+        break
+      }
+      const $ = load(html)
+      const cards = $('.box-li-evento')
+      if (cards.length === 0) break
+      cards.each((_i: number, el: unknown) => {
+        const card = $(el as never)
+        const href = card.find('a').first().attr('href')
+        if (!href) return
+        const url = href.startsWith('http') ? href : `${HOST}${href}`
+        if (known.has(url)) return
+        const nome = card.find('.titulo-evento-thumb').first().text().trim()
+        if (!nome) return
+        const cidadeUf = card.find('.cidade-box-evento').first().text().replace(/\s+/g, ' ').trim()
+        let cidade: string | null = null
+        let estadoUf: string | null = uf
+        const m = cidadeUf.match(/^(.*?)\s*-\s*([A-Za-z]{2})$/)
+        if (m) { cidade = m[1].trim(); estadoUf = m[2].toUpperCase() } else if (cidadeUf) cidade = cidadeUf
+        candidatos.push({
+          url,
+          nome,
+          cidade,
+          uf: estadoUf,
+          local: card.find('.local-box-evento').first().text().replace(/\s+/g, ' ').trim() || null,
+          img: card.find('img').first().attr('src') || null,
+        })
+        known.add(url)
       })
-      known.add(url)
-      novos++
-    })
-    console.log(`[bdigital] pg=${pg} cards=${cards.length} novos=${novos}`)
+      if (candidatos.length >= MAX_NOVOS) break estados
+    }
   }
+  console.log(`[bdigital] candidatos=${candidatos.length}`)
 
   // Fase 2: detalhe (preço/taxa/data/organizador) em paralelo.
   const out: RawEvent[] = []

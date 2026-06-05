@@ -28,6 +28,8 @@ export interface ScrapeContext {
   cidade: string
   uf: string
   janelaDias: number
+  /** Quando true, reprocessa eventos já coletados (ignora o skip-forever). */
+  reprocessar?: boolean
 }
 
 // Assinatura de um scraper de fonte.

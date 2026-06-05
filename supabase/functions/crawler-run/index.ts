@@ -84,6 +84,7 @@ async function runSource(
   source: SourceRow,
   ignoreRules: IgnoreRule[],
   disparadoPor: 'manual' | 'cron',
+  reprocessar: boolean,
 ): Promise<{ vistos: number; novos: number; ignorados: number; erros: number }> {
   const scraper = SCRAPERS[source.slug]
   const cidadesCfg = source.config?.cidades ?? []
@@ -112,7 +113,7 @@ async function runSource(
   }
 
   for (const c of scraper ? cidades : []) {
-    const ctx: ScrapeContext = { cidade: c.cidade, uf: c.uf, janelaDias }
+    const ctx: ScrapeContext = { cidade: c.cidade, uf: c.uf, janelaDias, reprocessar }
     const { data: job } = await db
       .from('crawler_jobs')
       .insert({
@@ -191,7 +192,7 @@ Deno.serve(async (req) => {
   const auth = await authorize(req)
   if (!auth.ok) return json({ error: 'Não autorizado' }, 403)
 
-  let body: { source_slug?: string } = {}
+  let body: { source_slug?: string; reprocessar?: boolean } = {}
   try { body = await req.json() } catch { /* sem body = todas as fontes */ }
 
   const db = adminClient()
@@ -221,7 +222,7 @@ Deno.serve(async (req) => {
   // invoke). A run/UI refletem o resultado quando termina (tela Execuções).
   const work = (async () => {
     for (const s of (sources ?? []) as SourceRow[]) {
-      try { await runSource(db, s, ignoreRules, auth.disparadoPor) }
+      try { await runSource(db, s, ignoreRules, auth.disparadoPor, !!body.reprocessar) }
       catch (e) { console.error('[crawler-run] fonte', s.slug, String(e)) }
     }
   })()

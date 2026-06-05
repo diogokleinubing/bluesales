@@ -111,9 +111,9 @@ async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>
   return set
 }
 
-export const ingressoDigitalScraper: Scraper = async () => {
+export const ingressoDigitalScraper: Scraper = async (ctx) => {
   const db = adminClient()
-  const known = await getKnown(db)
+  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
   const agora = new Date()
 
   // Fase 1: descobre os eventos novos pela listagem.
