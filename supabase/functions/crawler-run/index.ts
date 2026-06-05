@@ -26,6 +26,7 @@ import { biletoScraper } from './sources/bileto.ts'
 import { ingresseScraper } from './sources/ingresse.ts'
 import { diskIngressosScraper } from './sources/diskingressos.ts'
 import { ingressoDigitalScraper } from './sources/ingressodigital.ts'
+import { pensaNoEventoScraper } from './sources/pensanoevento.ts'
 import { guichewebScraper } from './sources/guicheweb.ts'
 import { bilheteriaDigitalScraper } from './sources/bilheteriadigital.ts'
 
@@ -35,6 +36,7 @@ const SCRAPERS: Record<string, Scraper> = {
   ingresse: ingresseScraper,
   diskingressos: diskIngressosScraper,
   ingressodigital: ingressoDigitalScraper,
+  pensanoevento: pensaNoEventoScraper,
   guicheweb: guichewebScraper,
   bilheteriadigital: bilheteriaDigitalScraper,
 }
