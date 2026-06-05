@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -6,7 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { fmtInt } from '@/lib/format'
 import { useSourceReport, type CrawlerSource } from '../hooks/usePesquisa'
 
-function Lista({ itens }: { itens: { label: string; sub?: string | null; qtd: number }[] }) {
+interface ItemRel { label: string; sub?: string | null; qtd: number; params: Record<string, string> }
+
+function Lista({ itens, onPick }: { itens: ItemRel[]; onPick: (params: Record<string, string>) => void }) {
   if (itens.length === 0) {
     return <div className="px-3 py-10 text-center text-sm text-muted-foreground">Sem dados.</div>
   }
@@ -14,12 +17,15 @@ function Lista({ itens }: { itens: { label: string; sub?: string | null; qtd: nu
     <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border">
       <ul className="divide-y divide-border/60">
         {itens.map((it, i) => (
-          <li key={i} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-            <span className="min-w-0 truncate">
-              {it.label}
-              {it.sub ? <span className="ml-1 text-xs text-muted-foreground">· {it.sub}</span> : null}
-            </span>
-            <span className="shrink-0 tabular-nums text-muted-foreground">{fmtInt(it.qtd)}</span>
+          <li key={i}>
+            <button onClick={() => onPick(it.params)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/60">
+              <span className="min-w-0 truncate">
+                {it.label}
+                {it.sub ? <span className="ml-1 text-xs text-muted-foreground">· {it.sub}</span> : null}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">{fmtInt(it.qtd)}</span>
+            </button>
           </li>
         ))}
       </ul>
@@ -35,6 +41,14 @@ export function RelatorioFonteDialog({
   onOpenChange: (o: boolean) => void
 }) {
   const { data, isLoading } = useSourceReport(source?.id ?? null)
+  const navigate = useNavigate()
+
+  function abrir(params: Record<string, string>) {
+    if (!source) return
+    const q = new URLSearchParams({ fonte: source.slug, ...params })
+    onOpenChange(false)
+    navigate(`/pesquisa/eventos?${q.toString()}`)
+  }
 
   return (
     <Dialog open={!!source} onOpenChange={onOpenChange}>
@@ -61,18 +75,26 @@ export function RelatorioFonteDialog({
             </TabsList>
 
             <TabsContent value="estado">
-              <Lista itens={data.por_estado.map((e) => ({ label: e.uf, qtd: e.qtd }))} />
+              <Lista onPick={abrir} itens={data.por_estado.map((e) => ({
+                label: e.uf, qtd: e.qtd, params: { uf: e.uf },
+              }))} />
             </TabsContent>
             <TabsContent value="cidade">
-              <Lista itens={data.por_cidade.map((c) => ({ label: c.cidade, sub: c.uf, qtd: c.qtd }))} />
+              <Lista onPick={abrir} itens={data.por_cidade.map((c) => ({
+                label: c.cidade, sub: c.uf, qtd: c.qtd,
+                params: { cidade: c.cidade, ...(c.uf ? { uf: c.uf } : {}) },
+              }))} />
             </TabsContent>
             <TabsContent value="local">
-              <Lista itens={data.por_local.map((l) => ({
+              <Lista onPick={abrir} itens={data.por_local.map((l) => ({
                 label: l.local, sub: [l.cidade, l.uf].filter(Boolean).join('/'), qtd: l.qtd,
+                params: { local: l.local },
               }))} />
             </TabsContent>
             <TabsContent value="organizador">
-              <Lista itens={data.por_organizador.map((o) => ({ label: o.organizador, qtd: o.qtd }))} />
+              <Lista onPick={abrir} itens={data.por_organizador.map((o) => ({
+                label: o.organizador, qtd: o.qtd, params: { organizador: o.organizador },
+              }))} />
             </TabsContent>
           </Tabs>
         )}

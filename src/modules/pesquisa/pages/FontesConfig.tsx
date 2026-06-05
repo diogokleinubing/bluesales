@@ -16,10 +16,10 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, fmtInt } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
-  useCrawlerSources, setSourceAtivo, saveSourceConfig, runCrawler,
+  useCrawlerSources, useSourceCounts, setSourceAtivo, saveSourceConfig, runCrawler,
   type CrawlerSource,
 } from '../hooks/usePesquisa'
 import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
@@ -45,6 +45,7 @@ export function FontesConfig() {
   const { profile } = useProfile()
   const editable = profile?.role === 'gestor'
   const { data, isLoading } = useCrawlerSources()
+  const counts = useSourceCounts()
 
   const [running, setRunning] = useState<string | null>(null)
   const [report, setReport] = useState<CrawlerSource | null>(null)
@@ -134,8 +135,8 @@ export function FontesConfig() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Fontes</h1>
-          <p className="text-sm text-muted-foreground">Plataformas monitoradas pela coleta automática semanal.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
+          <p className="text-sm text-muted-foreground">Plataformas monitoradas pela coleta.</p>
         </div>
         {editable && (
           <Button onClick={() => executar()} disabled={running !== null || batchAtivo}>
@@ -171,13 +172,14 @@ export function FontesConfig() {
             <TableHead>Cidades</TableHead>
             <TableHead>Janela</TableHead>
             <TableHead>Última execução</TableHead>
+            <TableHead className="text-right">Eventos</TableHead>
             <TableHead>Ativa</TableHead>
             {editable && <TableHead className="w-28" />}
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : (data ?? []).map((s) => (
               <TableRow key={s.id}>
@@ -186,6 +188,7 @@ export function FontesConfig() {
                 <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>
                 <TableCell className="text-muted-foreground">{s.config?.janela_dias ?? 90} dias</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
+                <TableCell className="text-right tabular-nums">{fmtInt(counts.data?.[s.id] ?? 0)}</TableCell>
                 <TableCell>
                   <Switch checked={s.ativo} disabled={!editable} onCheckedChange={() => toggle(s)} />
                 </TableCell>

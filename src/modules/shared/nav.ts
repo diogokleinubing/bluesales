@@ -135,6 +135,7 @@ export const MODULES: ModuleDef[] = [
       {
         title: 'Operação',
         items: [
+          { to: '/pesquisa/configuracao/fontes', label: 'Sites', icon: Rss, requires: 'gestor' },
           { to: '/pesquisa/eventos', label: 'Eventos capturados', icon: CalendarSearch },
           { to: '/pesquisa/organizadores', label: 'Organizadores', icon: Building2 },
           { to: '/pesquisa/locais', label: 'Locais', icon: MapPin },
@@ -143,10 +144,9 @@ export const MODULES: ModuleDef[] = [
       {
         // Título != 'Configuração' de propósito: assim a Pesquisa NÃO usa o
         // drill-in de configurações; estes itens ficam inline na home do
-        // módulo, com uma divisória antes (depois de Locais).
+        // módulo, com uma divisória antes.
         title: 'Gestão',
         items: [
-          { to: '/pesquisa/configuracao/fontes', label: 'Fontes', icon: Rss, requires: 'gestor' },
           { to: '/pesquisa/configuracao/filtros', label: 'Filtros de ignorar', icon: FilterX, requires: 'gestor' },
           { to: '/pesquisa/configuracao/execucoes', label: 'Execuções', icon: ScrollText, requires: 'gestor' },
         ],

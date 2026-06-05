@@ -136,6 +136,10 @@ export interface EventFilters {
   categoria: string // valor | 'todas'
   status: EventStatusFiltro
   pais: PaisFiltro
+  // Filtros exatos (deep-link a partir do relatório): '' = não aplica.
+  uf?: string
+  local?: string
+  organizador?: string
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -161,6 +165,9 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
   else if (f.status === 'ignorados') qq = qq.eq('ignorado', true)
   if (f.pais === 'brasil') qq = qq.eq('pais', 'Brasil')
   else if (f.pais === 'exterior') qq = qq.not('pais', 'is', null).neq('pais', 'Brasil')
+  if (f.uf) qq = qq.eq('uf', f.uf)
+  if (f.local) qq = qq.eq('local_raw', f.local)
+  if (f.organizador) qq = qq.eq('organizador_raw', f.organizador)
   return qq
 }
 
@@ -197,6 +204,20 @@ export function useCrawledEventsPaged(
         .range(from, from + pageSize - 1)
       if (error) throw new Error(error.message)
       return { rows: (data ?? []).map(mapEventRow), total: count ?? 0 }
+    },
+  })
+}
+
+export function useSourceCounts(): UseQueryResult<Record<string, number>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'source-counts', orgId],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase.rpc('crawler_source_counts')
+      if (error) throw new Error(error.message)
+      return (data ?? {}) as Record<string, number>
     },
   })
 }

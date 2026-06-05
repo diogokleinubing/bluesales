@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Ban, RotateCcw, ArrowUpRight, Check, Download, RefreshCw, ChevronLeft, ChevronRight,
+  Ban, RotateCcw, ArrowUpRight, Check, Download, RefreshCw, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -52,9 +52,23 @@ export function EventosCapturados() {
   const [cidade, setCidade] = useState('todas')
   const [categoria, setCategoria] = useState('todas')
   const [pais, setPais] = useState<PaisFiltro>('todos')
+  const [uf, setUf] = useState('')
+  const [local, setLocal] = useState('')
+  const [organizador, setOrganizador] = useState('')
   const [page, setPage] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+
+  // Deep-link a partir do relatório de uma fonte (?fonte=&uf=&cidade=&local=&organizador=).
+  const [params] = useSearchParams()
+  useEffect(() => {
+    if (params.get('fonte')) setFonte(params.get('fonte')!)
+    if (params.get('cidade')) setCidade(params.get('cidade')!)
+    setUf(params.get('uf') ?? '')
+    setLocal(params.get('local') ?? '')
+    setOrganizador(params.get('organizador') ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   // Debounce da busca (evita 1 query por tecla).
   useEffect(() => {
@@ -63,12 +77,12 @@ export function EventosCapturados() {
   }, [search])
 
   const filters: EventFilters = useMemo(
-    () => ({ search: searchAplicada, fonte, cidade, categoria, status, pais }),
-    [searchAplicada, fonte, cidade, categoria, status, pais],
+    () => ({ search: searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador }),
+    [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador],
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador])
 
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
   const rows = data?.rows ?? []
@@ -209,6 +223,14 @@ export function EventosCapturados() {
               <SelectItem value="todos">Todos</SelectItem>
             </SelectContent>
           </Select>
+          {([['UF', uf, setUf], ['Local', local, setLocal], ['Organizador', organizador, setOrganizador]] as const)
+            .filter(([, v]) => v)
+            .map(([label, v, set]) => (
+              <Badge key={label} variant="secondary" className="h-8 gap-1 px-2 text-sm font-normal">
+                {label}: <span className="max-w-[160px] truncate">{v}</span>
+                <button onClick={() => set('')} className="ml-0.5 text-muted-foreground hover:text-foreground"><X className="size-3.5" /></button>
+              </Badge>
+            ))}
         </div>
       }
     >
