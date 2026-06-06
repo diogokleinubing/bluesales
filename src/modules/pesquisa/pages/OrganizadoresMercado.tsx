@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowUpRight, Check } from 'lucide-react'
+import { ArrowUpRight, Check, Star, Ban } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,11 +14,14 @@ import {
 import { fmtDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
+import { cn } from '@/lib/utils'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
+import { StarButton, IgnoreButton } from '../components/StarButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 import {
   useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrawlerSources,
+  useFavoritos, setFavoritoAgregado, useIgnorados, setIgnoradoAgregado,
   promoverOrganizador, useCrmOrgId,
   type OrganizerAgg, type OrganizerFilters, type PromoverAggInput,
 } from '../hooks/usePesquisa'
@@ -33,8 +36,12 @@ export function OrganizadoresMercado() {
   const [valorMin, setValorMin] = useState('')
   const [fonte, setFonte] = useState('todas')
   const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
+  const [soFav, setSoFav] = useState(false)
+  const [soIgnorados, setSoIgnorados] = useState(false)
   const [sel, setSel] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const favoritos = useFavoritos('organizador').data
+  const ignorados = useIgnorados('organizador').data
 
   // Debounce de busca/valor (evita uma query por tecla).
   useEffect(() => {
@@ -50,8 +57,34 @@ export function OrganizadoresMercado() {
   }), [aplicado, fonte])
 
   const { data, isLoading } = useCrawledOrganizers(filters)
-  const rows = data ?? []
+  const rows = useMemo(() => {
+    const base = data ?? []
+    if (soIgnorados) return base.filter((a) => ignorados?.has(a.chave))
+    let r = base.filter((a) => !ignorados?.has(a.chave))
+    if (soFav) r = r.filter((a) => favoritos?.has(a.chave))
+    return r
+  }, [data, soFav, soIgnorados, favoritos, ignorados])
   const { data: eventosDoSel } = useEventosDoOrganizador(sel)
+
+  async function onFav(a: OrganizerAgg) {
+    if (!orgId) return
+    try {
+      await setFavoritoAgregado(orgId, 'organizador', a.chave, !favoritos?.has(a.chave))
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'favoritos', 'organizador'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  async function onIgnorar(a: OrganizerAgg) {
+    if (!orgId) return
+    try {
+      await setIgnoradoAgregado(orgId, 'organizador', a.chave, !ignorados?.has(a.chave))
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'ignorados-agg', 'organizador'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
 
   async function onPromover(a: OrganizerAgg) {
     if (!orgId) return
@@ -97,6 +130,26 @@ export function OrganizadoresMercado() {
           </Select>
           <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
             placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
+          <button
+            type="button"
+            onClick={() => setSoFav((v) => !v)}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              soFav ? 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <Star className={cn('size-4', soFav && 'fill-amber-400 text-amber-400')} /> Favoritos
+          </button>
+          <button
+            type="button"
+            onClick={() => setSoIgnorados((v) => !v)}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              soIgnorados ? 'border-destructive/50 bg-destructive/10 text-destructive' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <Ban className="size-4" /> Ignorados
+          </button>
         </div>
       }
     >
@@ -134,7 +187,13 @@ export function OrganizadoresMercado() {
             const promo = promos?.get(a.chave)
             return (
               <TableRow key={a.chave} className="cursor-pointer" onClick={() => setSel(a.nome)}>
-                <TableCell className="truncate font-medium" title={a.nome}>{a.nome}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <StarButton active={!!favoritos?.has(a.chave)} onToggle={() => onFav(a)} />
+                    <IgnoreButton ignored={!!ignorados?.has(a.chave)} onToggle={() => onIgnorar(a)} />
+                    <span className="truncate" title={a.nome}>{a.nome}</span>
+                  </div>
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
                 <TableCell className="truncate text-muted-foreground" title={a.cidades.join(', ')}>{a.cidades.slice(0, 3).join(', ')}{a.cidades.length > 3 ? ` +${a.cidades.length - 3}` : ''}</TableCell>
                 <TableCell className="truncate text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>

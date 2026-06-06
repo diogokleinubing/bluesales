@@ -23,11 +23,13 @@ import {
   useCrawlerSources, usePesquisaOrgId, useSourceMap,
   useCrawledEventsPaged, useEventFacets, fetchAllCrawledEvents,
   useArtistNamesByClasse,
-  setEventoIgnorado, promoverEvento,
+  setEventoIgnorado, setEventoFavorito, promoverEvento,
   EVENTS_PAGE_SIZE, type CrawledEventRow, type EventFilters, type EventStatusFiltro,
   type PaisFiltro,
 } from '../hooks/usePesquisa'
 import { ARTIST_CLASSES } from '@/modules/crm/hooks/useCadastros'
+import { StarButton } from '../components/StarButton'
+import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function preco(ev: CrawledEventRow): string {
@@ -59,6 +61,7 @@ export function EventosCapturados() {
   const [local, setLocal] = useState('')
   const [organizador, setOrganizador] = useState('')
   const [classes, setClasses] = useState<string[]>([])
+  const [favoritos, setFavoritos] = useState(false)
   const [page, setPage] = useState(0)
   const artistNames = useArtistNamesByClasse(classes)
   const [busy, setBusy] = useState<string | null>(null)
@@ -85,12 +88,13 @@ export function EventosCapturados() {
     () => ({
       search: searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador,
       artistasNomes: classes.length > 0 ? artistNames.data : undefined,
+      favoritos: favoritos || undefined,
     }),
-    [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data],
+    [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data, favoritos],
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoria, status, pais, uf, local, organizador, classes, artistNames.data, favoritos])
 
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
   const rows = data?.rows ?? []
@@ -107,6 +111,15 @@ export function EventosCapturados() {
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     } finally { setBusy(null) }
+  }
+
+  async function onFavoritar(ev: CrawledEventRow) {
+    try {
+      await setEventoFavorito(ev.id, !ev.favorito)
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'events-paged'] })
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
   }
 
   async function onPromover(ev: CrawledEventRow) {
@@ -250,6 +263,16 @@ export function EventosCapturados() {
               )
             })}
           </div>
+          <button
+            type="button"
+            onClick={() => setFavoritos((v) => !v)}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              favoritos ? 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <Star className={cn('size-4', favoritos && 'fill-amber-400 text-amber-400')} /> Favoritos
+          </button>
           {([['UF', uf, setUf], ['Local', local, setLocal], ['Organizador', organizador, setOrganizador]] as const)
             .filter(([, v]) => v)
             .map(([label, v, set]) => (
@@ -287,10 +310,15 @@ export function EventosCapturados() {
             return (
               <TableRow key={e.id} className={e.ignorado ? 'opacity-50' : ''}>
                 <TableCell className="max-w-[280px]">
-                  <div className="truncate font-medium">{e.nome}</div>
-                  {e.organizador_raw && (
-                    <div className="truncate text-xs text-muted-foreground">{e.organizador_raw}</div>
-                  )}
+                  <div className="flex items-start gap-2">
+                    <StarButton active={e.favorito} onToggle={() => onFavoritar(e)} className="mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{e.nome}</div>
+                      {e.organizador_raw && (
+                        <div className="truncate text-xs text-muted-foreground">{e.organizador_raw}</div>
+                      )}
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell><Badge variant="outline">{e.source_nome ?? e.source_slug ?? '—'}</Badge></TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>

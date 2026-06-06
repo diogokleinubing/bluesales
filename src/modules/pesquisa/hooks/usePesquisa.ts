@@ -50,6 +50,7 @@ export interface CrawledEventRow {
   ignorado_motivo: string | null
   promovido_crm_event_id: string | null
   promovido_em: string | null
+  favorito: boolean
   primeira_vez_visto: string
   ultima_vez_visto: string
 }
@@ -284,6 +285,8 @@ export interface EventFilters {
    * undefined = filtro inativo; [] = ativo sem nenhum nome (não retorna nada).
    */
   artistasNomes?: string[]
+  /** Só eventos marcados (favoritos). */
+  favoritos?: boolean
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -312,6 +315,7 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
   if (f.uf) qq = qq.eq('uf', f.uf)
   if (f.local) qq = qq.eq('local_raw', f.local)
   if (f.organizador) qq = qq.eq('organizador_raw', f.organizador)
+  if (f.favoritos) qq = qq.eq('favorito', true)
   // Filtro por nome de artista: evento cujo nome contenha algum dos nomes.
   if (f.artistasNomes !== undefined) {
     const nomes = f.artistasNomes
@@ -520,6 +524,88 @@ export async function setEventoIgnorado(id: string, ignorado: boolean): Promise<
     })
     .eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+/** Marca/desmarca um evento como favorito. */
+export async function setEventoFavorito(id: string, favorito: boolean): Promise<void> {
+  const { error } = await supabase.from('crawled_events').update({ favorito }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Conjunto de chaves marcadas (favoritos) de organizadores ou locais. */
+export function useFavoritos(tipo: 'organizador' | 'local'): UseQueryResult<Set<string>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 15_000,
+    queryKey: ['pesquisa', 'favoritos', tipo, orgId],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('crawled_favorites')
+        .select('chave')
+        .eq('org_id', orgId!).eq('tipo', tipo)
+      if (error) throw new Error(error.message)
+      return new Set((data ?? []).map((r) => String(r.chave)))
+    },
+  })
+}
+
+/** Marca/desmarca um organizador ou local (agregado por chave) como favorito. */
+export async function setFavoritoAgregado(
+  orgId: string,
+  tipo: 'organizador' | 'local',
+  chave: string,
+  favorito: boolean,
+): Promise<void> {
+  if (favorito) {
+    const { error } = await supabase
+      .from('crawled_favorites')
+      .upsert({ org_id: orgId, tipo, chave }, { onConflict: 'org_id,tipo,chave' })
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await supabase
+      .from('crawled_favorites')
+      .delete().eq('org_id', orgId).eq('tipo', tipo).eq('chave', chave)
+    if (error) throw new Error(error.message)
+  }
+}
+
+/** Conjunto de chaves ignoradas (descartadas) de organizadores ou locais. */
+export function useIgnorados(tipo: 'organizador' | 'local'): UseQueryResult<Set<string>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 15_000,
+    queryKey: ['pesquisa', 'ignorados-agg', tipo, orgId],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('crawled_ignored')
+        .select('chave')
+        .eq('org_id', orgId!).eq('tipo', tipo)
+      if (error) throw new Error(error.message)
+      return new Set((data ?? []).map((r) => String(r.chave)))
+    },
+  })
+}
+
+/** Ignora/reativa um organizador ou local (agregado por chave). */
+export async function setIgnoradoAgregado(
+  orgId: string,
+  tipo: 'organizador' | 'local',
+  chave: string,
+  ignorado: boolean,
+): Promise<void> {
+  if (ignorado) {
+    const { error } = await supabase
+      .from('crawled_ignored')
+      .upsert({ org_id: orgId, tipo, chave }, { onConflict: 'org_id,tipo,chave' })
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await supabase
+      .from('crawled_ignored')
+      .delete().eq('org_id', orgId).eq('tipo', tipo).eq('chave', chave)
+    if (error) throw new Error(error.message)
+  }
 }
 
 /**
