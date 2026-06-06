@@ -405,6 +405,20 @@ export function useSourceCounts(): UseQueryResult<Record<string, number>> {
   })
 }
 
+export function useSourceFutureCounts(): UseQueryResult<Record<string, number>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'source-future-counts', orgId],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase.rpc('crawler_source_future_counts')
+      if (error) throw new Error(error.message)
+      return (data ?? {}) as Record<string, number>
+    },
+  })
+}
+
 export interface SourceReport {
   total: number
   por_estado: { uf: string; qtd: number }[]

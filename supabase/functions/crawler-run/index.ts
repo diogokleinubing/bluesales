@@ -31,6 +31,9 @@ import { guichewebScraper } from './sources/guicheweb.ts'
 import { bilheteriaDigitalScraper } from './sources/bilheteriadigital.ts'
 import { baladAppScraper } from './sources/baladapp.ts'
 import { ingressoNacionalScraper } from './sources/ingressonacional.ts'
+import { q2IngressosScraper } from './sources/q2ingressos.ts'
+import { zigTicketsScraper } from './sources/zigtickets.ts'
+import { uhuuScraper } from './sources/uhuu.ts'
 
 const SCRAPERS: Record<string, Scraper> = {
   sympla: symplaScraper,
@@ -43,6 +46,9 @@ const SCRAPERS: Record<string, Scraper> = {
   bilheteriadigital: bilheteriaDigitalScraper,
   baladapp: baladAppScraper,
   ingressonacional: ingressoNacionalScraper,
+  q2ingressos: q2IngressosScraper,
+  zigtickets: zigTicketsScraper,
+  uhuu: uhuuScraper,
 }
 
 interface SourceRow {

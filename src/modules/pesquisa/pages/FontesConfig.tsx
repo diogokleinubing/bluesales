@@ -19,7 +19,7 @@ import {
 import { fmtDate, fmtInt } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
-  useCrawlerSources, useSourceCounts, setSourceAtivo, saveSourceConfig, resetSourceScan, runCrawler,
+  useCrawlerSources, useSourceCounts, useSourceFutureCounts, setSourceAtivo, saveSourceConfig, resetSourceScan, runCrawler,
   type CrawlerSource,
 } from '../hooks/usePesquisa'
 import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
@@ -47,6 +47,7 @@ export function FontesConfig() {
   const editable = profile?.role === 'gestor'
   const { data, isLoading } = useCrawlerSources()
   const counts = useSourceCounts()
+  const futureCounts = useSourceFutureCounts()
 
   const [running, setRunning] = useState<string | null>(null)
   const [report, setReport] = useState<CrawlerSource | null>(null)
@@ -177,13 +178,14 @@ export function FontesConfig() {
             <TableHead>Método</TableHead>
             <TableHead>Cidades</TableHead>            <TableHead>Última execução</TableHead>
             <TableHead className="text-right">Eventos</TableHead>
+            <TableHead className="text-right">Eventos Futuros</TableHead>
             <TableHead>Ativa</TableHead>
             {editable && <TableHead className="w-28" />}
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : (data ?? []).map((s) => (
               <TableRow key={s.id}>
@@ -191,6 +193,7 @@ export function FontesConfig() {
                 <TableCell><Badge variant="outline">{METODO_LABEL[s.metodo] ?? s.metodo}</Badge></TableCell>
                 <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>                <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtInt(counts.data?.[s.id] ?? 0)}</TableCell>
+                <TableCell className="text-right tabular-nums">{fmtInt(futureCounts.data?.[s.id] ?? 0)}</TableCell>
                 <TableCell>
                   <Switch checked={s.ativo} disabled={!editable} onCheckedChange={() => toggle(s)} />
                 </TableCell>
@@ -222,6 +225,19 @@ export function FontesConfig() {
                 )}
               </TableRow>
             ))}
+            {!isLoading && (data ?? []).length > 0 && (
+              <TableRow className="border-t-2 font-medium">
+                <TableCell colSpan={4}>Total</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {fmtInt((data ?? []).reduce((s, x) => s + (counts.data?.[x.id] ?? 0), 0))}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {fmtInt((data ?? []).reduce((s, x) => s + (futureCounts.data?.[x.id] ?? 0), 0))}
+                </TableCell>
+                <TableCell />
+                {editable && <TableCell />}
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent></Card>
