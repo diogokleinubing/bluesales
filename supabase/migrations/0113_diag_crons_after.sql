@@ -1,0 +1,1 @@
+-- Diagnóstico pontual (já executado em produção). No-op em resets futuros.
