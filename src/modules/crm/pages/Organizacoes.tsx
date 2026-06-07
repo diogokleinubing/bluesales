@@ -44,7 +44,7 @@ export function Organizacoes() {
   const [classesSel, setClassesSel] = useState<string[]>(['A+', 'A', 'B'])
   const [statusF, setStatusF] = useState<string>(ALL)
   const [gmvMin, setGmvMin] = useState('')
-  const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
+  const [kbStatuses, setKbStatuses] = useState<string[]>(['Ativo', 'Eventual', 'Inativo'])
   const [estagios, setEstagios] = useState<'ativos' | 'todos'>('ativos')
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
