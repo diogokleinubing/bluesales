@@ -27,6 +27,7 @@ export interface Organization {
 export interface OrgListRow extends Organization {
   stageNome: string | null
   stageCor: string | null
+  stageAtivo: boolean | null // null = sem estágio
   ultimaAtividade: string | null
   oppStageNome: string | null
   oppStageCor: string | null
@@ -46,7 +47,7 @@ export function useOrganizations() {
           .eq('org_id', orgId!)
           .is('deleted_at', null)
           .order('nome'),
-        supabase.from('funnel_stages').select('id, nome, cor'),
+        supabase.from('funnel_stages').select('id, nome, cor, ativo'),
         supabase
           .from('activities')
           .select('organization_id, data_hora')
@@ -84,6 +85,7 @@ export function useOrganizations() {
           ...(o as Organization),
           stageNome: st?.nome ?? null,
           stageCor: st?.cor ?? null,
+          stageAtivo: st ? (st.ativo as boolean) : null,
           ultimaAtividade: lastAct.get(o.id) ?? null,
           oppStageNome: oppSt?.nome ?? null,
           oppStageCor: oppSt?.cor ?? null,

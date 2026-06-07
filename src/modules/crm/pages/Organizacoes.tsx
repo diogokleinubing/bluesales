@@ -45,6 +45,7 @@ export function Organizacoes() {
   const [statusF, setStatusF] = useState<string>(ALL)
   const [gmvMin, setGmvMin] = useState('')
   const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
+  const [estagios, setEstagios] = useState<'ativos' | 'todos'>('ativos')
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -63,9 +64,11 @@ export function Organizacoes() {
         (!q || o.nome.toLowerCase().includes(q)) &&
         (classe === ALL || o.classificacao === classe) &&
         (statusF === ALL || o.status_comercial === statusF) &&
+        // "Ativos" esconde organizações em estágio inativo (ex.: Inativo).
+        (estagios === 'todos' || o.stageAtivo !== false) &&
         (!temMin || (o.gmv_anual != null && o.gmv_anual >= min)),
     )
-  }, [data, search, classe, statusF, gmvMin])
+  }, [data, search, classe, statusF, gmvMin, estagios])
 
   async function criar() {
     if (!orgId || !novoNome.trim()) return
@@ -112,9 +115,23 @@ export function Organizacoes() {
               </Select>
               <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
                 placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
+              <Select value={estagios} onValueChange={(v) => setEstagios(v as 'ativos' | 'todos')}>
+                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativos">Estágios ativos</SelectItem>
+                  <SelectItem value="todos">Todos os estágios</SelectItem>
+                </SelectContent>
+              </Select>
             </>
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <Select value={estagios} onValueChange={(v) => setEstagios(v as 'ativos' | 'todos')}>
+                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativos">Estágios ativos</SelectItem>
+                  <SelectItem value="todos">Todos os estágios</SelectItem>
+                </SelectContent>
+              </Select>
               {STATUS_COMERCIAL.map((s) => {
                 const on = kbStatuses.includes(s)
                 return (
@@ -137,7 +154,7 @@ export function Organizacoes() {
       >
         {view === 'kanban' ? (
           <div className="p-4">
-            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} />
+            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} includeInactiveStages={estagios === 'todos'} />
           </div>
         ) : (
         <Table>

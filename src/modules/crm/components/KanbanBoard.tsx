@@ -26,7 +26,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFilter?: string[] | null }) {
+export function KanbanBoard({ slug, statusFilter, includeInactiveStages }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -46,8 +46,8 @@ export function KanbanBoard({ slug, statusFilter }: { slug: FunnelSlug; statusFi
   )
 
   const activeStages = useMemo(
-    () => stages.filter((s) => s.ativo),
-    [stages],
+    () => (includeInactiveStages ? stages : stages.filter((s) => s.ativo)),
+    [stages, includeInactiveStages],
   )
 
   // Colunas: estágios ativos + "Sem estágio" como PRIMEIRA coluna, apenas no
