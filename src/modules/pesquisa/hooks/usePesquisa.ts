@@ -325,9 +325,12 @@ function applyEventFilters(
 ): any {
   let qq = q
   // Oculta eventos de locais marcados como ignorados (crawled_ignored 'local').
+  // Mantém eventos SEM local (local_chave null) — senão "NULL not in (...)" os
+  // descartaria (ex.: Ticket Sports não tem local).
   if (excludeLocais.length > 0) {
     const quote = (v: string) => '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'
-    qq = qq.not('local_chave', 'in', `(${excludeLocais.map(quote).join(',')})`)
+    const list = excludeLocais.map(quote).join(',')
+    qq = qq.or(`local_chave.is.null,local_chave.not.in.(${list})`)
   }
   const s = f.search.trim().replace(/[,()*%]/g, ' ').trim()
   if (s) qq = qq.or(`nome.ilike.*${s}*,local_raw.ilike.*${s}*,organizador_raw.ilike.*${s}*`)

@@ -211,10 +211,14 @@ async function runSource(
       if (ev.online || ev.gratuito) continue
       if (!ev.url_evento || !ev.nome) continue
       jVistos++
-      const ig = shouldIgnore(
-        { nome: ev.nome, local: ev.local_raw, organizador: ev.organizador_raw },
-        ignoreRules,
-      )
+      // Ticket Sports é uma fonte 100% esportiva (corridas/provas) — todos os
+      // eventos são desejados, então as regras de palavra-chave não se aplicam.
+      const ig = source.slug === 'ticketsports'
+        ? { ignore: false, motivo: null }
+        : shouldIgnore(
+            { nome: ev.nome, local: ev.local_raw, organizador: ev.organizador_raw },
+            ignoreRules,
+          )
       if (ig.ignore) jIgnorados++
       try {
         const r = await upsertCrawledEvent(db, source.org_id, source.id, ev, ig)
