@@ -14,7 +14,7 @@ const HOST = 'https://www.pensanoevento.com.br'
 const BUSCA = `${HOST}/sitev2/api/eventos/busca`
 const DATE_RANGE = '01/01/2020 até 31/12/2099' // inclui passados também
 const MAX_PAGINAS = 14 // páginas por execução
-const MAX_NOVOS = 120
+const MAX_NOVOS = 80
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
 const HEADERS_API = { 'X-Public-Token': 'pne-site-api', Accept: 'application/json', 'User-Agent': UA }

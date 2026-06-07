@@ -50,6 +50,7 @@ export function FontesConfig() {
   const futureCounts = useSourceFutureCounts()
 
   const [running, setRunning] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [report, setReport] = useState<CrawlerSource | null>(null)
   const [edit, setEdit] = useState<CrawlerSource | null>(null)
   const [cidadesTxt, setCidadesTxt] = useState('')
@@ -244,8 +245,13 @@ export function FontesConfig() {
 
       <div className="flex items-center justify-between gap-2 pt-2">
         <h2 className="text-lg font-semibold tracking-tight">Execuções recentes</h2>
-        <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })}>
-          <RefreshCw className="size-4" /> Atualizar
+        <Button variant="outline" size="sm" disabled={refreshing}
+          onClick={async () => {
+            setRefreshing(true)
+            try { await qc.refetchQueries({ queryKey: ['pesquisa', 'runs'] }) }
+            finally { setRefreshing(false) }
+          }}>
+          <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} /> Atualizar
         </Button>
       </div>
       <ExecucoesTabela limit={50} />
