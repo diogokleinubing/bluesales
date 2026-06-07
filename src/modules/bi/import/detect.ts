@@ -24,7 +24,7 @@ function a(...aliases: string[]): string[][] {
 }
 
 const EVENTOS_SIGNATURE: SignatureField[] = [
-  { aliases: a('organizador', 'produtor', 'cliente'), distinctive: true },
+  { aliases: a('codigo organizador', 'cod organizador', 'id organizador'), distinctive: true },
   { aliases: a('data evento', 'data do evento', 'mes evento', 'competencia'), distinctive: true },
   { aliases: a('cidade evento', 'cidade', 'municipio'), distinctive: true },
   { aliases: a('uf evento', 'uf', 'estado'), distinctive: true },

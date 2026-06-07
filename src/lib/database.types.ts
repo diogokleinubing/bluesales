@@ -16,6 +16,8 @@ export interface EventRow {
   org_id: string
   codigo_evento: string
   organizador: string | null
+  codigo_organizador: number | null
+  organizador_org_id: string | null
   nome: string | null
   local: string | null
   data_evento: string | null // date (YYYY-MM-DD)

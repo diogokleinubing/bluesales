@@ -33,6 +33,8 @@ type EventInsert = Omit<
   EventRow,
   | 'id'
   | 'created_at'
+  | 'organizador'
+  | 'organizador_org_id'
   | 'segmento'
   | 'segmento_manual'
   | 'genero'
@@ -72,6 +74,15 @@ function strOrNull(v: unknown): string | null {
   return s.length ? s : null
 }
 
+/** Código inteiro positivo; vazio/0/negativo -> null. */
+function intOrNull(v: unknown): number | null {
+  if (v == null) return null
+  const d = String(v).trim().replace(/[^\d-]/g, '')
+  if (!d) return null
+  const n = Number(d)
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null
+}
+
 /**
  * Transforma as planilhas (uma ou várias, de eventos e/ou vendas) em registros.
  * Eventos e vendas podem vir separados; qualquer combinação é válida.
@@ -90,7 +101,7 @@ export function buildRecords(
       eventsByCodigo.set(codigo, {
         org_id: orgId,
         codigo_evento: codigo,
-        organizador: strOrNull(cell(row, map.organizador)),
+        codigo_organizador: intOrNull(cell(row, map.codigo_organizador)),
         nome: strOrNull(cell(row, map.nome)),
         local: strOrNull(cell(row, map.local)),
         data_evento: parseEventDate(cell(row, map.data_evento)),
@@ -205,6 +216,12 @@ export async function runImport({
       current: Math.min(i + CHUNK, events.length),
       total: events.length,
     })
+  }
+
+  // 2.1) Resolve organizador_org_id (codigo_organizador -> organização).
+  if (build.hasEvents) {
+    const { error: rErr } = await supabase.rpc('resolve_event_organizers', { p_org: orgId })
+    if (rErr) throw new Error(`Erro ao vincular organizadores: ${rErr.message}`)
   }
 
   // 3) Backfill: reconecta vendas órfãs anteriores aos eventos agora disponíveis.

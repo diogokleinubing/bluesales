@@ -2,7 +2,7 @@
 
 export type EventField =
   | 'codigo_evento'
-  | 'organizador'
+  | 'codigo_organizador'
   | 'nome'
   | 'local'
   | 'data_evento'
@@ -33,8 +33,8 @@ export interface FieldDef<F extends string> {
 }
 
 export const EVENT_FIELDS: FieldDef<EventField>[] = [
-  { field: 'codigo_evento', label: 'Código do evento', required: true, aliases: ['codigo_evento', 'codigoevento', 'codigo', 'cod_evento', 'id_evento'] },
-  { field: 'organizador', label: 'Organizador', required: false, aliases: ['organizador', 'produtor', 'cliente'] },
+  { field: 'codigo_evento', label: 'Código do evento', required: true, aliases: ['codigo_evento', 'codigoevento', 'cod_evento', 'id_evento'] },
+  { field: 'codigo_organizador', label: 'Código do organizador', required: false, aliases: ['codigo_organizador', 'codigoorganizador', 'cod_organizador', 'id_organizador', 'codigo', 'organizador'] },
   { field: 'nome', label: 'Nome do evento', required: false, aliases: ['evento', 'nome', 'nome_evento', 'nomeevento'] },
   { field: 'local', label: 'Local', required: false, aliases: ['local', 'casa', 'venue', 'espaco'] },
   { field: 'data_evento', label: 'Data do evento', required: false, aliases: ['data_evento', 'dataevento', 'data', 'mes', 'mes_evento', 'competencia'] },
