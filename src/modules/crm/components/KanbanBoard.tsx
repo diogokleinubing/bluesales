@@ -37,7 +37,9 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages }: { slu
   const cards = useMemo(() => {
     const all = cardsQ.data ?? []
     if (!statusFilter || statusFilter.length === 0) return all
-    return all.filter((c) => c.status != null && statusFilter.includes(c.status))
+    // Sem status comercial (ex.: organizações importadas) sempre aparecem; os
+    // chips filtram apenas entre as que TÊM status.
+    return all.filter((c) => c.status == null || statusFilter.includes(c.status))
   }, [cardsQ.data, statusFilter])
 
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -150,6 +152,8 @@ function Column({
   onOpen: (href: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
+  const CAP = 60
+  const shown = cards.slice(0, CAP)
   return (
     <div className="flex min-w-0 flex-1 basis-0 flex-col rounded-lg border border-border bg-muted/30">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -168,9 +172,14 @@ function Column({
           isOver ? 'bg-primary/5' : ''
         }`}
       >
-        {cards.map((c) => (
+        {shown.map((c) => (
           <DraggableCard key={c.id} card={c} kind={kind} onOpen={onOpen} />
         ))}
+        {cards.length > CAP && (
+          <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+            +{cards.length - CAP} — use a visão de lista ou a busca
+          </p>
+        )}
         {cards.length === 0 && (
           <p className="px-1 py-4 text-center text-xs text-muted-foreground">
             Vazio

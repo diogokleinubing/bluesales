@@ -33,6 +33,23 @@ export interface OrgListRow extends Organization {
   oppStageCor: string | null
 }
 
+/** Busca TODAS as organizações vivas do tenant, paginando além do teto de 1000. */
+export async function fetchAllOrganizations(
+  orgId: string, columns = '*',
+): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('organizations').select(columns)
+      .eq('org_id', orgId).is('deleted_at', null).order('nome')
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    out.push(...((data ?? []) as unknown as Record<string, unknown>[]))
+    if (!data || data.length < 1000) break
+  }
+  return out
+}
+
 export function useOrganizations() {
   const orgId = useCrmOrgId()
   return useQuery({
@@ -40,13 +57,8 @@ export function useOrganizations() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'organizations', orgId],
     queryFn: async (): Promise<OrgListRow[]> => {
-      const [orgs, stages, acts, opps] = await Promise.all([
-        supabase
-          .from('organizations')
-          .select('*')
-          .eq('org_id', orgId!)
-          .is('deleted_at', null)
-          .order('nome'),
+      const [orgsData, stages, acts, opps] = await Promise.all([
+        fetchAllOrganizations(orgId!),
         supabase.from('funnel_stages').select('id, nome, cor, ativo'),
         supabase
           .from('activities')
@@ -62,7 +74,6 @@ export function useOrganizations() {
           .is('resultado', null)
           .order('created_at', { ascending: false }),
       ])
-      if (orgs.error) throw new Error(orgs.error.message)
       const stageById = new Map(
         (stages.data ?? []).map((s) => [s.id, s]),
       )
@@ -78,7 +89,7 @@ export function useOrganizations() {
         const k = op.organization_id as string
         if (k && !openOpp.has(k) && op.stage_id) openOpp.set(k, op.stage_id as string)
       }
-      return (orgs.data ?? []).map((o) => {
+      return (orgsData as unknown as Organization[]).map((o) => {
         const st = o.funil_stage_id ? stageById.get(o.funil_stage_id) : null
         const oppSt = openOpp.has(o.id) ? stageById.get(openOpp.get(o.id)!) : null
         return {

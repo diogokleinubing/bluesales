@@ -21,17 +21,21 @@ export function useOrgsKanban() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'kanban', 'orgs', orgId],
     queryFn: async (): Promise<KanbanCard[]> => {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id')
-        .eq('org_id', orgId!)
-        .is('deleted_at', null)
-        .order('nome')
-      if (error) throw new Error(error.message)
-      return (data ?? []).map((o) => ({
-        id: o.id,
+      const cols = 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id'
+      const rows: Array<Record<string, string | null>> = []
+      for (let from = 0; ; from += 1000) {
+        const res = await supabase
+          .from('organizations').select(cols)
+          .eq('org_id', orgId!).is('deleted_at', null).order('nome')
+          .range(from, from + 999)
+        if (res.error) throw new Error(res.error.message)
+        rows.push(...((res.data ?? []) as unknown as Array<Record<string, string | null>>))
+        if (!res.data || res.data.length < 1000) break
+      }
+      return rows.map((o) => ({
+        id: o.id as string,
         stageId: o.funil_stage_id,
-        title: o.nome,
+        title: o.nome as string,
         badge: o.classificacao,
         subtitle: [o.cidade, o.uf].filter(Boolean).join('/') || null,
         status: o.status_comercial,
