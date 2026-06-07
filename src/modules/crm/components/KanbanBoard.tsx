@@ -26,7 +26,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter, includeInactiveStages }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean }) {
+export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -35,12 +35,18 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages }: { slu
   const oppsQ = useOppsKanban()
   const cardsQ = kind === 'org' ? orgsQ : oppsQ
   const cards = useMemo(() => {
-    const all = cardsQ.data ?? []
-    if (!statusFilter || statusFilter.length === 0) return all
+    let all = cardsQ.data ?? []
     // Sem status comercial (ex.: organizações importadas) sempre aparecem; os
     // chips filtram apenas entre as que TÊM status.
-    return all.filter((c) => c.status == null || statusFilter.includes(c.status))
-  }, [cardsQ.data, statusFilter])
+    if (statusFilter && statusFilter.length > 0) {
+      all = all.filter((c) => c.status == null || statusFilter.includes(c.status))
+    }
+    // Classe (badge): quando há filtro, exige classe na seleção.
+    if (classFilter && classFilter.length > 0) {
+      all = all.filter((c) => c.badge != null && classFilter.includes(c.badge))
+    }
+    return all
+  }, [cardsQ.data, statusFilter, classFilter])
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(

@@ -41,7 +41,7 @@ export function Organizacoes() {
   const { data, isLoading } = useOrganizations()
   const [view, setView] = useViewPref('crm:orgView', 'list')
   const [search, setSearch] = useState(biOrganizador)
-  const [classe, setClasse] = useState<string>(ALL)
+  const [classesSel, setClassesSel] = useState<string[]>(['A+', 'A', 'B'])
   const [statusF, setStatusF] = useState<string>(ALL)
   const [gmvMin, setGmvMin] = useState('')
   const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
@@ -54,6 +54,9 @@ export function Organizacoes() {
   function toggleKbStatus(s: string) {
     setKbStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
   }
+  function toggleClasse(c: string) {
+    setClassesSel((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  }
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -63,13 +66,13 @@ export function Organizacoes() {
       (o) =>
         o.parent_id == null && // só principais; subs aparecem dentro da principal
         (!q || o.nome.toLowerCase().includes(q)) &&
-        (classe === ALL || o.classificacao === classe) &&
+        (classesSel.length === 0 || (o.classificacao != null && classesSel.includes(o.classificacao))) &&
         (statusF === ALL || o.status_comercial === statusF) &&
         // "Ativos" esconde organizações em estágio inativo (ex.: Inativo).
         (estagios === 'todos' || o.stageAtivo !== false) &&
         (!temMin || (o.gmv_anual != null && o.gmv_anual >= min)),
     )
-  }, [data, search, classe, statusF, gmvMin, estagios])
+  }, [data, search, classesSel, statusF, gmvMin, estagios])
 
   async function criar() {
     if (!orgId || !novoNome.trim()) return
@@ -84,6 +87,27 @@ export function Organizacoes() {
   const totalPrincipais = useMemo(
     () => (data ?? []).filter((o) => o.parent_id == null).length,
     [data],
+  )
+
+  const classeChips = (
+    <div className="flex items-center gap-1">
+      {CLASSES.map((c) => {
+        const on = classesSel.includes(c)
+        return (
+          <button
+            key={c}
+            type="button"
+            onClick={() => toggleClasse(c)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+              on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            {c}
+          </button>
+        )
+      })}
+    </div>
   )
 
   return (
@@ -105,13 +129,7 @@ export function Organizacoes() {
           view === 'list' ? (
             <>
               <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
-              <Select value={classe} onValueChange={setClasse}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue placeholder="Classe" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todas as classes</SelectItem>
-                  {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {classeChips}
               <Select value={statusF} onValueChange={setStatusF}>
                 <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
                 <SelectContent>
@@ -138,6 +156,7 @@ export function Organizacoes() {
                   <SelectItem value="todos">Todos os estágios</SelectItem>
                 </SelectContent>
               </Select>
+              {classeChips}
               {STATUS_COMERCIAL.map((s) => {
                 const on = kbStatuses.includes(s)
                 return (
@@ -160,7 +179,7 @@ export function Organizacoes() {
       >
         {view === 'kanban' ? (
           <div className="p-4">
-            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} includeInactiveStages={estagios === 'todos'} />
+            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} includeInactiveStages={estagios === 'todos'} classFilter={classesSel} />
           </div>
         ) : (
         <Table>
