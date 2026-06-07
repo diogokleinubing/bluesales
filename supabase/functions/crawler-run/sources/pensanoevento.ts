@@ -51,10 +51,17 @@ function isoData(d?: string): string | null {
  */
 async function fetchDetalhe(url: string): Promise<{ min: number | null; max: number | null; taxa: number | null; gratuito: boolean; temVenda: boolean }> {
   try {
-    const res = await fetch(url, { headers: HEADERS_HTML, signal: AbortSignal.timeout(10000) })
-    // Em erro/transiente, assume que vende (temVenda=true) p/ não descartar eventos.
-    if (!res.ok) return { min: null, max: null, taxa: null, gratuito: false, temVenda: true }
-    const $ = load(await res.text())
+    // Tenta 2x (timeout 15s) — reduz nulos por timeout sob concorrência.
+    let html: string | null = null
+    for (let attempt = 0; attempt < 2 && html === null; attempt++) {
+      try {
+        const res = await fetch(url, { headers: HEADERS_HTML, signal: AbortSignal.timeout(15000) })
+        if (res.ok) html = await res.text()
+      } catch { /* retry */ }
+    }
+    // Falha transitória: assume que vende (temVenda=true) p/ não descartar evento.
+    if (html === null) return { min: null, max: null, taxa: null, gratuito: false, temVenda: true }
+    const $ = load(html)
     // Sem nenhum div.lotes = página só de agenda/divulgação (não vende ingresso).
     const temVenda = $('div.lotes').length > 0
     const precos: number[] = []
@@ -191,7 +198,7 @@ export const pensaNoEventoScraper: Scraper = async (ctx) => {
     if (src && !ctx.reprocessar) {
       try {
         const nowIso = new Date().toISOString()
-        const REPRICE = 60
+        const REPRICE = 150
         const { data: semPreco } = await db
           .from('crawled_events')
           .select('id, url_evento')
@@ -206,7 +213,7 @@ export const pensaNoEventoScraper: Scraper = async (ctx) => {
         const lista = (semPreco ?? []) as { id: string; url_evento: string }[]
         let curados = 0
         let semVenda = 0
-        const RB = 8
+        const RB = 10
         for (let i = 0; i < lista.length; i += RB) {
           const slice = lista.slice(i, i + RB)
           await Promise.all(slice.map(async (r) => {
