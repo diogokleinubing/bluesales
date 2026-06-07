@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Upload, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Upload, Loader2, CheckCircle2 } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -12,23 +12,15 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { readWorkbook } from '@/modules/bi/import/parse'
 import type { ParsedWorkbook, SheetData, ColumnMap, ImportProgress } from '@/modules/bi/import/types'
-import { useCrmOrgId, useFunnel } from '@/modules/crm/hooks/useFunnelStages'
+import { useCrmOrgId } from '@/modules/crm/hooks/useFunnelStages'
 import { ORG_FIELDS, type OrgField } from './orgTypes'
 import { autoMapOrgs, buildOrgRows, runOrgImport, type OrgImportResult } from './orgImport'
 
 const NONE = -1
-function norm(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-}
 
 export function OrgImportWizard({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
-  const rel = useFunnel('relacionamento')
-  const inativo = useMemo(
-    () => (rel.stages ?? []).find((s) => norm(s.nome) === 'inativo') ?? null,
-    [rel.stages],
-  )
 
   const [wb, setWb] = useState<ParsedWorkbook | null>(null)
   const [sheetName, setSheetName] = useState<string>('')
@@ -68,18 +60,19 @@ export function OrgImportWizard({ open, onOpenChange }: { open: boolean; onOpenC
   }
 
   const headers = sheet?.headers ?? []
-  const podeImportar = !!orgId && !!sheet && !!inativo
+  const podeImportar = !!orgId && !!sheet
     && map.blueticket_code >= 0 && map.nome >= 0 && !running
 
   async function importar() {
-    if (!orgId || !sheet || !inativo) return
+    if (!orgId || !sheet) return
     setRunning(true); setErro(null); setProgress(null)
     try {
       const { rows, ignoradas } = buildOrgRows(sheet, map)
       if (rows.length === 0) { setErro('Nenhuma linha válida (verifique Código e Nome).'); setRunning(false); return }
-      const r = await runOrgImport(orgId, rows, inativo.id, setProgress)
+      const r = await runOrgImport(orgId, rows, setProgress)
       setResult(r)
       qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'orgs'] })
       toast.success('Importação concluída', {
         description: `${r.inseridos} novas, ${r.atualizados} atualizadas${ignoradas ? `, ${ignoradas} ignoradas` : ''}.`,
       })
@@ -94,16 +87,10 @@ export function OrgImportWizard({ open, onOpenChange }: { open: boolean; onOpenC
         <DialogHeader>
           <DialogTitle>Importar organizações</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Planilha (.xlsx/.csv) da base Blueticket. Casa por <strong>Código</strong>; novas entram no estágio <strong>Inativo</strong>.
+            Planilha (.xlsx/.csv) da base Blueticket. Casa por <strong>Código</strong>. Marca
+            <strong> Ativo</strong> quem teve venda de 2024+ e atualiza a classe (categoria comercial).
           </p>
         </DialogHeader>
-
-        {!inativo && rel.stages && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            Não encontrei o estágio <strong>"Inativo"</strong> no funil de relacionamento. Crie-o antes de importar.
-          </div>
-        )}
 
         {result ? (
           <div className="space-y-3 py-2">
@@ -112,6 +99,8 @@ export function OrgImportWizard({ open, onOpenChange }: { open: boolean; onOpenC
               <li>Novas organizações: <strong className="text-foreground">{result.inseridos}</strong></li>
               <li>Atualizadas: <strong className="text-foreground">{result.atualizados}</strong></li>
               <li>Sub-organizações vinculadas à principal: <strong className="text-foreground">{result.vinculadas}</strong></li>
+              <li>Marcadas Ativo (venda 2024+): <strong className="text-foreground">{result.ativadas}</strong></li>
+              <li>Classes atualizadas: <strong className="text-foreground">{result.classes}</strong></li>
             </ul>
             <DialogFooter>
               <Button variant="ghost" onClick={() => { reset() }}>Importar outra</Button>

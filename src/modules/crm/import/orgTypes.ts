@@ -9,6 +9,7 @@ export type OrgField =
   | 'documento'
   | 'telefone'
   | 'relationship_user_code'
+  | 'categoria_comercial'
   | 'cidade'
   | 'uf'
 
@@ -20,6 +21,7 @@ export const ORG_FIELDS: FieldDef<OrgField>[] = [
   { field: 'documento', label: 'Documento (CNPJ/CPF)', required: false, aliases: ['documento', 'cnpj', 'cpf', 'cpf_cnpj', 'doc'] },
   { field: 'telefone', label: 'Telefone', required: false, aliases: ['telefone', 'fone', 'celular', 'contato', 'tel'] },
   { field: 'relationship_user_code', label: 'Cód. usuário relacionamento', required: false, aliases: ['codigo_usuario_relacionamento', 'cod_usuario_relacionamento', 'codigo_relacionamento', 'usuario_relacionamento', 'cod_relacionamento'] },
+  { field: 'categoria_comercial', label: 'Categoria comercial (classe)', required: false, aliases: ['categoria_comercial', 'categoriacomercial', 'categoria', 'classe', 'classificacao'] },
   { field: 'cidade', label: 'Cidade', required: false, aliases: ['cidade', 'municipio'] },
   { field: 'uf', label: 'Estado (UF)', required: false, aliases: ['uf', 'estado'] },
 ]

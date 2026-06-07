@@ -32,6 +32,7 @@ export interface OrgRow {
   documento: string | null
   telefone: string | null
   relationship_user_code: number | null
+  categoria_comercial: string | null
   cidade: string | null
   uf: string | null
 }
@@ -58,6 +59,7 @@ export function buildOrgRows(sheet: SheetData, map: ColumnMap<OrgField>): OrgBui
       documento: strOrNull(cell(row, map.documento)),
       telefone: strOrNull(cell(row, map.telefone)),
       relationship_user_code: intOrNull(cell(row, map.relationship_user_code)),
+      categoria_comercial: strOrNull(cell(row, map.categoria_comercial)),
       cidade: strOrNull(cell(row, map.cidade)),
       uf: uf ? uf.toUpperCase().slice(0, 2) : null,
     })
@@ -69,22 +71,24 @@ export interface OrgImportResult {
   inseridos: number
   atualizados: number
   vinculadas: number // sub-orgs com parent_id resolvido
+  ativadas: number // marcadas Ativo por venda 2024+
+  classes: number // classes atualizadas via categoria_comercial
 }
 
 const CHUNK = 400
+const ATIVO_DESDE = 2024
 
 /**
- * Importa as organizações: upsert por (org_id, blueticket_code). Em organizações
- * NOVAS define funil_stage_id = estágio "Inativo"; nas existentes NÃO mexe no
- * estágio (não regride o que já foi promovido). Depois resolve parent_id.
+ * Importa as organizações: upsert por (org_id, blueticket_code). Depois resolve
+ * parent_id (sub -> principal), atualiza a classe a partir de categoria_comercial
+ * e marca Ativo quem teve venda no BI de ATIVO_DESDE em diante.
  */
 export async function runOrgImport(
   orgId: string,
   rows: OrgRow[],
-  inativoStageId: string,
   onProgress?: (p: ImportProgress) => void,
 ): Promise<OrgImportResult> {
-  // 1) Descobre quais codes já existem (para saber quem é novo -> estágio Inativo).
+  // 1) Quais codes já existem (para contagem novas x atualizadas).
   const codes = rows.map((r) => r.blueticket_code)
   const existentes = new Set<number>()
   for (let i = 0; i < codes.length; i += CHUNK) {
@@ -95,9 +99,9 @@ export async function runOrgImport(
     if (error) throw new Error(error.message)
     for (const d of data ?? []) existentes.add(d.blueticket_code as number)
   }
-  const novosCodes = codes.filter((c) => !existentes.has(c))
+  const novos = codes.filter((c) => !existentes.has(c)).length
 
-  // 2) Upsert de TODOS (sem funil_stage_id — preserva o estágio dos existentes).
+  // 2) Upsert de TODOS (sem mexer em estágio/status — preserva dados do CRM).
   let processados = 0
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK)
@@ -121,24 +125,35 @@ export async function runOrgImport(
     onProgress?.({ phase: 'Importando organizações', current: processados, total: rows.length })
   }
 
-  // 3) Estágio "Inativo" só nas NOVAS (e que ainda estão sem estágio).
-  for (let i = 0; i < novosCodes.length; i += CHUNK) {
-    const slice = novosCodes.slice(i, i + CHUNK)
-    const { error } = await supabase
-      .from('organizations')
-      .update({ funil_stage_id: inativoStageId })
-      .eq('org_id', orgId).is('funil_stage_id', null).in('blueticket_code', slice)
-    if (error) throw new Error(error.message)
-  }
-
-  // 4) Resolve parent_id (sub -> principal) a partir do blueticket_parent_code.
+  // 3) Resolve parent_id (sub -> principal) a partir do blueticket_parent_code.
   onProgress?.({ phase: 'Vinculando sub-organizações', current: rows.length, total: rows.length })
   const { data: vinc, error: vErr } = await supabase.rpc('resolve_org_parents', { p_org: orgId })
   if (vErr) throw new Error(vErr.message)
 
+  // 4) Atualiza a classe (categoria_comercial), apenas onde veio valor.
+  const comClasse = rows.filter((r) => r.categoria_comercial)
+  let classes = 0
+  if (comClasse.length > 0) {
+    const { data: nClasse, error: cErr } = await supabase.rpc('set_org_classificacao', {
+      p_org: orgId,
+      p_codes: comClasse.map((r) => r.blueticket_code),
+      p_classes: comClasse.map((r) => r.categoria_comercial as string),
+    })
+    if (cErr) throw new Error(cErr.message)
+    classes = (nClasse as number) ?? 0
+  }
+
+  // 5) Marca Ativo quem teve venda 2024+ (só quem está sem status).
+  const { data: nAtivo, error: aErr } = await supabase.rpc('mark_orgs_active_by_sales', {
+    p_org: orgId, p_min_year: ATIVO_DESDE,
+  })
+  if (aErr) throw new Error(aErr.message)
+
   return {
-    inseridos: novosCodes.length,
-    atualizados: rows.length - novosCodes.length,
+    inseridos: novos,
+    atualizados: rows.length - novos,
     vinculadas: (vinc as number) ?? 0,
+    ativadas: (nAtivo as number) ?? 0,
+    classes,
   }
 }
