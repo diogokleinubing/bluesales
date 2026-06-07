@@ -61,6 +61,7 @@ export function Organizacoes() {
     const temMin = gmvMin.trim() !== '' && Number.isFinite(min)
     return (data ?? []).filter(
       (o) =>
+        o.parent_id == null && // só principais; subs aparecem dentro da principal
         (!q || o.nome.toLowerCase().includes(q)) &&
         (classe === ALL || o.classificacao === classe) &&
         (statusF === ALL || o.status_comercial === statusF) &&
@@ -80,11 +81,16 @@ export function Organizacoes() {
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
+  const totalPrincipais = useMemo(
+    () => (data ?? []).filter((o) => o.parent_id == null).length,
+    [data],
+  )
+
   return (
     <>
       <ListView
         title="Organizações"
-        count={data ? String(data.length) : undefined}
+        count={data ? String(totalPrincipais) : undefined}
         actions={
           <>
             <ViewToggle view={view} onChange={setView} />
@@ -94,7 +100,7 @@ export function Organizacoes() {
             <Button onClick={() => setNovoOpen(true)}><Plus className="size-4" /> Nova organização</Button>
           </>
         }
-        footer={view === 'list' && data ? `${rows.length} de ${data.length}` : undefined}
+        footer={view === 'list' && data ? `${rows.length} de ${totalPrincipais}` : undefined}
         toolbar={
           view === 'list' ? (
             <>

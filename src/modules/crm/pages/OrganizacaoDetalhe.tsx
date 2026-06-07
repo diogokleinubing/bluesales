@@ -27,6 +27,7 @@ import {
 } from '../hooks/useCadastros'
 import {
   useOrganization,
+  useSubOrganizations,
   updateOrganization,
   deleteOrganization,
   STATUS_COMERCIAL,
@@ -79,6 +80,8 @@ export function OrganizacaoDetalhe() {
         {/* Coluna direita — detalhes, contatos e opções */}
         <aside className="space-y-5 border-border px-6 py-4 lg:border-l">
           <OrgVisaoGeral org={org} />
+
+          <OrgSubs parentId={org.id} />
 
           <section className="border-t border-border pt-4">
             <h3 className="mb-2 text-sm font-medium">Contatos</h3>
@@ -133,6 +136,36 @@ export function OrganizacaoDetalhe() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+/** Sub-organizações desta principal (só aparece quando há). */
+function OrgSubs({ parentId }: { parentId: string }) {
+  const navigate = useNavigate()
+  const { data, isLoading } = useSubOrganizations(parentId)
+  if (isLoading || !data || data.length === 0) return null
+  return (
+    <section className="border-t border-border pt-4">
+      <h3 className="mb-2 text-sm font-medium">Sub-organizações <span className="text-muted-foreground">({data.length})</span></h3>
+      <div className="space-y-1">
+        {data.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => navigate(`/comercial/organizacoes/${s.id}`)}
+            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+          >
+            <span className="min-w-0 flex-1 truncate">{s.nome}</span>
+            <span className="flex shrink-0 items-center gap-2">
+              {s.classificacao && <ClasseBadge classe={s.classificacao} />}
+              <span className="text-xs text-muted-foreground">
+                {[s.cidade, s.uf].filter(Boolean).join('/') || '—'}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

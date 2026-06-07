@@ -26,7 +26,7 @@ export function useOrgsKanban() {
       for (let from = 0; ; from += 1000) {
         const res = await supabase
           .from('organizations').select(cols)
-          .eq('org_id', orgId!).is('deleted_at', null).order('nome')
+          .eq('org_id', orgId!).is('deleted_at', null).is('parent_id', null).order('nome')
           .range(from, from + 999)
         if (res.error) throw new Error(res.error.message)
         rows.push(...((res.data ?? []) as unknown as Array<Record<string, string | null>>))

@@ -20,6 +20,8 @@ export interface Organization {
   funil_stage_id: string | null
   bi_organizador: string | null
   observacoes: string | null
+  parent_id: string | null
+  blueticket_code: number | null
   created_at: string
   updated_at: string
 }
@@ -102,6 +104,34 @@ export function useOrganizations() {
           oppStageCor: oppSt?.cor ?? null,
         }
       })
+    },
+  })
+}
+
+export interface SubOrgRow {
+  id: string
+  nome: string
+  cidade: string | null
+  uf: string | null
+  classificacao: string | null
+  status_comercial: string | null
+}
+
+/** Sub-organizações de uma principal (parent_id = id). */
+export function useSubOrganizations(parentId: string | undefined) {
+  return useQuery({
+    enabled: !!parentId,
+    staleTime: 30 * 1000,
+    queryKey: ['crm', 'org-subs', parentId],
+    queryFn: async (): Promise<SubOrgRow[]> => {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('id, nome, cidade, uf, classificacao, status_comercial')
+        .eq('parent_id', parentId!)
+        .is('deleted_at', null)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as unknown as SubOrgRow[]
     },
   })
 }
