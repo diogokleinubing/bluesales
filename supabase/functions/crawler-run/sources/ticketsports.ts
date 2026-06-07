@@ -64,28 +64,30 @@ function bodyHtml(raw: string): string {
   try { return String(JSON.parse(raw)?.body ?? raw) } catch { return raw }
 }
 
-/** IDs das categorias (modalidades) de um evento. */
-async function fetchCategoriaIds(eventId: number): Promise<string[]> {
+/** Preço mín/máx + taxa média de um evento.
+ *  1) GET categoria: pega os data-ids E o cookie de sessão (Cloudflare _cfuvid);
+ *  2) POST por categoria COM o cookie — sem ele o servidor responde 500. */
+async function fetchPreco(eventId: number): Promise<{ min: number | null; max: number | null; taxa: number | null } | null> {
+  let ids: string[] = []
+  let cookie = ''
   try {
     const res = await fetch(`${CTRL}?eventoId=${eventId}&tagO=&action=categoria&lang=pt-BR`, {
       headers: HEADERS, signal: AbortSignal.timeout(15000),
     })
-    if (!res.ok) return []
+    if (!res.ok) return null
+    cookie = (res.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ')
     const html = bodyHtml(await res.text())
-    return [...new Set([...html.matchAll(/data-id="(\d+)"/g)].map((m) => m[1]))]
-  } catch { return [] }
-}
-
-/** Preço mín/máx + taxa média de um evento (POST por categoria). */
-async function fetchPreco(eventId: number): Promise<{ min: number | null; max: number | null; taxa: number | null } | null> {
-  const ids = await fetchCategoriaIds(eventId)
+    ids = [...new Set([...html.matchAll(/data-id="(\d+)"/g)].map((m) => m[1]))]
+  } catch { return null }
   if (ids.length === 0) return null
+
   const precos: number[] = []
   const taxaItems: { price: number; tax: number }[] = []
   for (const id of ids) {
     try {
       const res = await fetch(CTRL, {
-        method: 'POST', headers: POST_HEADERS,
+        method: 'POST',
+        headers: cookie ? { ...POST_HEADERS, Cookie: cookie } : POST_HEADERS,
         body: `__idMOD=${id}&__idEV=${eventId}`,
         signal: AbortSignal.timeout(15000),
       })
