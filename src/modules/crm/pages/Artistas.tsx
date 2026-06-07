@@ -66,6 +66,7 @@ export function Artistas() {
   const [orgSel, setOrgSel] = useState(NONE)
   const [platSel, setPlatSel] = useState(NONE)
   const [obs, setObs] = useState('')
+  const [aliases, setAliases] = useState('')
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -120,12 +121,12 @@ export function Artistas() {
 
   function openNew() {
     setEdit(null); setNome(''); setGeneroId(NONE); setClasse(NONE); setOrgSel(NONE)
-    setPlatSel(NONE); setObs(''); setOpen(true)
+    setPlatSel(NONE); setObs(''); setAliases(''); setOpen(true)
   }
   function openEdit(a: ArtistRow) {
     setEdit(a); setNome(a.nome); setGeneroId(a.genero_id ?? NONE)
     setClasse(a.classificacao ?? NONE); setOrgSel(a.organization_id ?? NONE)
-    setPlatSel(a.platform_id ?? NONE); setObs(a.observacoes ?? ''); setOpen(true)
+    setPlatSel(a.platform_id ?? NONE); setObs(a.observacoes ?? ''); setAliases(a.aliases ?? ''); setOpen(true)
   }
 
   async function salvar() {
@@ -138,6 +139,7 @@ export function Artistas() {
         organization_id: orgSel === NONE ? null : orgSel,
         platform_id: platSel === NONE ? null : platSel,
         observacoes: obs.trim() || null,
+        aliases: aliases.trim() || null,
       }, edit?.id)
       qc.invalidateQueries({ queryKey: ['crm', 'artists'] })
       setOpen(false)
@@ -207,6 +209,9 @@ export function Artistas() {
           <div className="space-y-3">
             <div className="space-y-1"><Label>Nome</Label>
               <Input value={nome} autoFocus onChange={(e) => setNome(e.target.value)} /></div>
+            <div className="space-y-1"><Label>Nomes alternativos (busca)</Label>
+              <Input value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Ex.: Gustavo Lima, Gusttavo" />
+              <p className="text-xs text-muted-foreground">Separe por vírgula. Também usados para detectar este artista nos eventos capturados.</p></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Gênero</Label>
                 <Select value={generoId} onValueChange={setGeneroId}>

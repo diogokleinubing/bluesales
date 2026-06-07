@@ -22,6 +22,7 @@ export interface Artist {
   organization_id: string | null
   platform_id: string | null
   observacoes: string | null
+  aliases: string | null
 }
 
 export interface ArtistRow extends Artist {
@@ -63,6 +64,7 @@ export async function saveArtist(orgId: string, a: Partial<Artist> & { nome: str
     organization_id: a.organization_id ?? null,
     platform_id: a.platform_id ?? null,
     observacoes: a.observacoes ?? null,
+    aliases: a.aliases ?? null,
   }
   const { error } = id
     ? await supabase.from('artists').update(payload).eq('id', id)
