@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
+import { useAuth } from '@/lib/auth'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { ListView, ToolbarSearch, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
+import { OrgImportWizard } from '../import/OrgImportWizard'
 import { cn } from '@/lib/utils'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
@@ -45,6 +47,8 @@ export function Organizacoes() {
   const [kbStatuses, setKbStatuses] = useState<string[]>(['Eventual', 'Inativo'])
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
+  const { isGestor } = useAuth()
 
   function toggleKbStatus(s: string) {
     setKbStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -81,6 +85,9 @@ export function Organizacoes() {
         actions={
           <>
             <ViewToggle view={view} onChange={setView} />
+            {isGestor && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar</Button>
+            )}
             <Button onClick={() => setNovoOpen(true)}><Plus className="size-4" /> Nova organização</Button>
           </>
         }
@@ -197,6 +204,8 @@ export function Organizacoes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <OrgImportWizard open={importOpen} onOpenChange={setImportOpen} />
     </>
   )
 }
