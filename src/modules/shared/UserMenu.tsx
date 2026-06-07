@@ -54,7 +54,7 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'Sistema', icon: Monitor },
 ]
 
-export function UserMenu() {
+export function UserMenu({ collapsed }: { collapsed?: boolean }) {
   const { user, isAdmin, signOut } = useAuth()
   const { profile } = useProfile()
   const { theme, setTheme } = useTheme()
@@ -71,21 +71,31 @@ export function UserMenu() {
   return (
     <div className="border-t border-sidebar-border p-3">
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md p-2 text-left transition-colors hover:bg-sidebar-accent">
+        <DropdownMenuTrigger
+          title={collapsed ? displayName : undefined}
+          className={cn(
+            'flex w-full items-center rounded-md p-2 transition-colors hover:bg-sidebar-accent',
+            collapsed ? 'justify-center' : 'gap-2 text-left',
+          )}
+        >
           <Avatar className="size-8">
             <AvatarFallback className="bg-primary text-xs text-primary-foreground">
               {initials(user?.email)}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">
-              {displayName}
-            </div>
-            <div className="truncate text-xs text-muted-foreground">
-              {user?.email}
-            </div>
-          </div>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">
+                  {displayName}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {user?.email}
+                </div>
+              </div>
+              <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+            </>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"

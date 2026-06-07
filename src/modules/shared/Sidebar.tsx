@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronRight, ChevronLeft, Settings } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { getModule, moduleFromPath, type NavItem } from './nav'
@@ -10,10 +10,12 @@ import { UserMenu } from './UserMenu'
 import { APP_VERSION } from '@/lib/version'
 
 const CONFIG_TITLE = 'Configuração'
+const COLLAPSE_KEY = 'bs-sidebar-collapsed'
 
-const itemClass = ({ isActive }: { isActive: boolean }) =>
+const itemClass = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+    'flex items-center gap-3 rounded-md py-2 text-sm transition-colors',
+    collapsed ? 'justify-center px-2' : 'px-3',
     isActive
       ? 'bg-sidebar-accent text-sidebar-accent-foreground'
       : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
@@ -24,6 +26,13 @@ export function Sidebar() {
   const { isAdmin, isGestor } = useAuth()
   const moduleId = moduleFromPath(pathname)
   const mod = getModule(moduleId)
+
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0') } catch { /* ignore */ }
+  }, [collapsed])
 
   const canSee = (item: NavItem) =>
     item.requires === 'admin'
@@ -44,34 +53,54 @@ export function Sidebar() {
   useEffect(() => { setView('main') }, [moduleId])
   useEffect(() => { if (onConfigPath) setView('config') }, [onConfigPath])
 
+  const ic = itemClass(collapsed)
+
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="px-2.5 pt-3">
-        <ModuleDropdown active={moduleId} />
+    <aside
+      className={cn(
+        'flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200',
+        collapsed ? 'w-16' : 'w-60',
+      )}
+    >
+      <div className={cn('flex items-center gap-1 pt-3', collapsed ? 'flex-col px-1.5' : 'px-2.5')}>
+        <div className={cn('min-w-0', collapsed ? '' : 'flex-1')}>
+          <ModuleDropdown active={moduleId} collapsed={collapsed} />
+        </div>
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          className="shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        </button>
       </div>
 
-      {moduleId === 'comercial' && (
+      {moduleId === 'comercial' && !collapsed && (
         <div className="px-2.5 pt-2">
           <GlobalSearch />
         </div>
       )}
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
         {view === 'config' && configGroup ? (
           <div className="space-y-1">
             <button
               onClick={() => setView('main')}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+              title={collapsed ? 'Voltar' : undefined}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground',
+                collapsed ? 'justify-center px-2' : 'px-3',
+              )}
             >
-              <ChevronLeft className="size-4" /> Voltar
+              <ChevronLeft className="size-4 shrink-0" /> {!collapsed && 'Voltar'}
             </button>
             <div className="-mx-3 my-2 border-t border-sidebar-border" />
             <ul className="space-y-1">
               {configGroup.items.map((item) => (
                 <li key={item.to}>
-                  <NavLink to={item.to} className={itemClass}>
-                    <item.icon className="size-4" />
-                    {item.label}
+                  <NavLink to={item.to} className={ic} title={collapsed ? item.label : undefined}>
+                    <item.icon className="size-4 shrink-0" />
+                    {!collapsed && item.label}
                   </NavLink>
                 </li>
               ))}
@@ -85,9 +114,9 @@ export function Sidebar() {
                 <ul className="space-y-1">
                   {group.items.map((item) => (
                     <li key={item.to}>
-                      <NavLink to={item.to} className={itemClass}>
-                        <item.icon className="size-4" />
-                        {item.label}
+                      <NavLink to={item.to} className={ic} title={collapsed ? item.label : undefined}>
+                        <item.icon className="size-4 shrink-0" />
+                        {!collapsed && item.label}
                       </NavLink>
                     </li>
                   ))}
@@ -100,11 +129,19 @@ export function Sidebar() {
                 <div className="-mx-3 my-2 border-t border-sidebar-border" />
                 <button
                   onClick={() => setView('config')}
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+                  title={collapsed ? 'Configurações' : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground',
+                    collapsed ? 'justify-center px-2' : 'px-3',
+                  )}
                 >
-                  <Settings className="size-4" />
-                  <span className="flex-1 text-left">Configurações</span>
-                  <ChevronRight className="size-4" />
+                  <Settings className="size-4 shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left">Configurações</span>
+                      <ChevronRight className="size-4" />
+                    </>
+                  )}
                 </button>
               </>
             )}
@@ -112,11 +149,13 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="px-4 pb-1 pt-1 text-center text-[11px] text-muted-foreground">
-        Versão {APP_VERSION}
-      </div>
+      {!collapsed && (
+        <div className="px-4 pb-1 pt-1 text-center text-[11px] text-muted-foreground">
+          Versão {APP_VERSION}
+        </div>
+      )}
 
-      <UserMenu />
+      <UserMenu collapsed={collapsed} />
     </aside>
   )
 }

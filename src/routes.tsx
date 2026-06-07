@@ -96,6 +96,9 @@ const LocaisMercado = lazy(() =>
 const FontesConfig = lazy(() =>
   import('@/modules/pesquisa/pages/FontesConfig').then((m) => ({ default: m.FontesConfig })),
 )
+const AgendaOficial = lazy(() =>
+  import('@/modules/pesquisa/pages/AgendaOficial').then((m) => ({ default: m.AgendaOficial })),
+)
 const FiltrosConfig = lazy(() =>
   import('@/modules/pesquisa/pages/FiltrosConfig').then((m) => ({ default: m.FiltrosConfig })),
 )
@@ -195,6 +198,7 @@ export const router = createBrowserRouter([
       { path: 'pesquisa/eventos', element: <EventosCapturados /> },
       { path: 'pesquisa/organizadores', element: <OrganizadoresMercado /> },
       { path: 'pesquisa/locais', element: <LocaisMercado /> },
+      { path: 'pesquisa/agenda', element: <AgendaOficial /> },
       { path: 'pesquisa/configuracao/fontes', element: <FontesConfig /> },
       { path: 'pesquisa/configuracao/filtros', element: <FiltrosConfig /> },
       { path: 'pesquisa/configuracao/execucoes', element: <ExecucoesConfig /> },

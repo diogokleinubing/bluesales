@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Ban, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
-  useIgnoreRules, usePesquisaOrgId, addIgnoreRule, deleteIgnoreRule, toggleIgnoreRule,
+  useIgnoreRules, usePesquisaOrgId, addIgnoreRule, deleteIgnoreRule, toggleIgnoreRule, applyIgnoreRules,
   type IgnoreTipoRow,
 } from '../hooks/usePesquisa'
 
@@ -31,6 +31,7 @@ export function FiltrosConfig() {
 
   const [tipo, setTipo] = useState<IgnoreTipoRow>('nome_evento')
   const [keyword, setKeyword] = useState('')
+  const [applying, setApplying] = useState(false)
 
   const grupos = useMemo(() => {
     const m: Record<IgnoreTipoRow, typeof data> = { nome_evento: [], local: [], organizador: [] }
@@ -57,6 +58,16 @@ export function FiltrosConfig() {
     catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
+  async function aplicarAgora() {
+    setApplying(true)
+    try {
+      const n = await applyIgnoreRules()
+      qc.invalidateQueries({ queryKey: ['pesquisa'] })
+      toast.success(n > 0 ? `${n} evento(s) marcados como ignorados` : 'Nenhum evento novo a ignorar')
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+    finally { setApplying(false) }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -80,6 +91,11 @@ export function FiltrosConfig() {
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') adicionar() }} />
           <Button onClick={adicionar} disabled={!keyword.trim()}><Plus className="size-4" /> Adicionar</Button>
+          <Button variant="outline" className="ml-auto" onClick={aplicarAgora} disabled={applying}
+            title="Marca como ignorados os eventos já capturados que batem com as regras ativas">
+            {applying ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
+            Aplicar aos eventos já capturados
+          </Button>
         </CardContent></Card>
       )}
 

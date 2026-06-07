@@ -30,12 +30,12 @@ export function EventosDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[700px]">
+      <DialogContent className="w-[95vw] max-w-[1000px] sm:max-w-[1000px]">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
           {subtitulo && <p className="text-sm text-muted-foreground">{subtitulo}</p>}
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="max-h-[65vh] overflow-auto">
           <Table>
             <TableHeader><TableRow>
               <TableHead>Evento</TableHead>
@@ -52,8 +52,8 @@ export function EventosDialog({
                 </TableCell></TableRow>
               ) : ordenados.map((e) => (
                 <TableRow key={e.id}>
-                  <TableCell className="max-w-[260px] truncate font-medium">{e.nome}</TableCell>
-                  <TableCell className="max-w-[180px] truncate text-muted-foreground">{e.organizador_raw ?? '—'}</TableCell>
+                  <TableCell className="max-w-[420px] truncate font-medium" title={e.nome}>{e.nome}</TableCell>
+                  <TableCell className="max-w-[220px] truncate text-muted-foreground" title={e.organizador_raw ?? undefined}>{e.organizador_raw ?? '—'}</TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums">
                     {e.gratuito ? 'Grátis' : faixaPreco(e.preco_min, e.preco_max)}

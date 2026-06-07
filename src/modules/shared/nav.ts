@@ -145,6 +145,7 @@ export const MODULES: ModuleDef[] = [
           { to: '/pesquisa/eventos', label: 'Eventos capturados', icon: CalendarSearch },
           { to: '/pesquisa/organizadores', label: 'Organizadores', icon: Building2 },
           { to: '/pesquisa/locais', label: 'Locais', icon: MapPin },
+          { to: '/pesquisa/agenda', label: 'Agenda oficial', icon: Mic2 },
         ],
       },
       {

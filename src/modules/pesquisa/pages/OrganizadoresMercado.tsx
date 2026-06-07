@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowUpRight, Check, Star, Ban } from 'lucide-react'
+import { Star, Ban } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -18,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EventosDialog } from '../components/EventosDialog'
 import { StarButton, IgnoreButton } from '../components/StarButton'
+import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 import {
   useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrawlerSources,
@@ -64,7 +64,7 @@ export function OrganizadoresMercado() {
     if (soFav) r = r.filter((a) => favoritos?.has(a.chave))
     return r
   }, [data, soFav, soIgnorados, favoritos, ignorados])
-  const { data: eventosDoSel } = useEventosDoOrganizador(sel)
+  const { data: eventosDoSel } = useEventosDoOrganizador(sel, fonte)
 
   async function onFav(a: OrganizerAgg) {
     if (!orgId) return
@@ -158,11 +158,10 @@ export function OrganizadoresMercado() {
           <col />
           <col className="w-16" />
           <col className="w-[16%]" />
-          <col className="w-[120px]" />
+          <col className="w-[200px]" />
           <col className="w-[88px]" />
           <col className="w-[140px]" />
-          <col className="w-[96px]" />
-          <col className="w-12" />
+          <col className="w-[112px]" />
         </colgroup>
         <TableHeader><TableRow>
           <TableHead>Organizador</TableHead>
@@ -172,15 +171,14 @@ export function OrganizadoresMercado() {
           <TableHead className="text-right">Taxa</TableHead>
           <TableHead>Fontes</TableHead>
           <TableHead>Próximo</TableHead>
-          <TableHead></TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
               Nenhum organizador encontrado.
             </TableCell></TableRow>
           ) : rows.map((a) => {
@@ -191,31 +189,16 @@ export function OrganizadoresMercado() {
                   <div className="flex min-w-0 items-center gap-1.5">
                     <StarButton active={!!favoritos?.has(a.chave)} onToggle={() => onFav(a)} />
                     <IgnoreButton ignored={!!ignorados?.has(a.chave)} onToggle={() => onIgnorar(a)} />
+                    <ImportCrmButton imported={!!promo} disabled={busy === a.chave || !orgId} onImport={() => onPromover(a)} />
                     <span className="truncate" title={a.nome}>{a.nome}</span>
                   </div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
                 <TableCell className="truncate text-muted-foreground" title={a.cidades.join(', ')}>{a.cidades.slice(0, 3).join(', ')}{a.cidades.length > 3 ? ` +${a.cidades.length - 3}` : ''}</TableCell>
-                <TableCell className="truncate text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">{fmtTaxa(a.taxa_media)}</TableCell>
                 <TableCell className="truncate"><div className="flex gap-1 overflow-hidden">{a.fontes.map((f) => <Badge key={f} variant="outline" className="shrink-0">{f}</Badge>)}</div></TableCell>
-                <TableCell className="truncate text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
-                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {promo ? (
-                    <Badge variant="secondary" className="gap-1 whitespace-nowrap font-normal">
-                      <Check className="size-3" /> No Comercial
-                    </Badge>
-                  ) : (
-                    <Button
-                      size="sm" variant="ghost" className="h-7 px-2"
-                      disabled={busy === a.chave || !orgId}
-                      title="Promover ao Comercial"
-                      onClick={() => onPromover(a)}
-                    >
-                      <ArrowUpRight className="size-4" />
-                    </Button>
-                  )}
-                </TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{a.proximo ? fmtDate(a.proximo) : '—'}</TableCell>
               </TableRow>
             )
           })}

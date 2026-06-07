@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Copy, Check } from 'lucide-react'
+import { Link2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -30,7 +30,7 @@ export function CopyUrlButton({ url, label }: { url: string; label?: string }) {
       title="Copiar URL do evento"
       onClick={copy}
     >
-      {done ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+      {done ? <Check className="size-4 text-emerald-600" /> : <Link2 className="size-4" />}
       {label ? <span className="ml-1.5">{label}</span> : null}
     </Button>
   )

@@ -292,6 +292,9 @@ Deno.serve(async (req) => {
       try { await runSource(db, s, ignoreRules, auth.disparadoPor, !!body.reprocessar) }
       catch (e) { console.error('[crawler-run] fonte', s.slug, String(e)) }
     }
+    // Detecta artistas nos títulos dos eventos capturados (vínculo evento<>artista).
+    try { await db.rpc('detect_event_artists') }
+    catch (e) { console.error('[crawler-run] detect_event_artists', String(e)) }
   })()
 
   const er = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime

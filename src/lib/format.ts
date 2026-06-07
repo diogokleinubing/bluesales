@@ -72,7 +72,15 @@ export function fmtMonth(monthIndex: number, year?: number): string {
 /** Data curta pt-BR: "30/05/2026". Aceita Date, string ISO ou null. */
 export function fmtDate(value: Date | string | null | undefined): string {
   if (!value) return '—'
-  const d = typeof value === 'string' ? new Date(value) : value
+  let d: Date
+  if (typeof value === 'string') {
+    // Datas "puras" (YYYY-MM-DD) seriam interpretadas como meia-noite UTC e,
+    // em GMT-3, exibidas como o dia anterior. Constrói como data local.
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value)
+  } else {
+    d = value
+  }
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('pt-BR')
 }

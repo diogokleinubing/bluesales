@@ -53,6 +53,7 @@ export interface CrawledEventRow {
   favorito: boolean
   primeira_vez_visto: string
   ultima_vez_visto: string
+  artistas: { id: string; nome: string }[]
 }
 
 export type IgnoreTipoRow = 'nome_evento' | 'local' | 'organizador'
@@ -183,6 +184,7 @@ export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<
 export interface LocalAggFilters {
   search: string
   valorMin: number | null
+  fonte: string
 }
 
 export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<LocalAgg[]> {
@@ -195,6 +197,7 @@ export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<Local
       const { data, error } = await supabase.rpc('crawled_locals', {
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
+        p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
       })
       if (error) throw new Error(error.message)
       return (data ?? []) as LocalAgg[]
@@ -203,21 +206,25 @@ export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<Local
 }
 
 /** Eventos (não ignorados) de um organizador específico — para o dialog. */
-export function useEventosDoOrganizador(nome: string | null): UseQueryResult<CrawledEventRow[]> {
+export function useEventosDoOrganizador(
+  nome: string | null,
+  fonte?: string | null,
+): UseQueryResult<CrawledEventRow[]> {
   const orgId = useCrmOrgId()
+  const fonteSlug = fonte && fonte !== 'todas' ? fonte : null
   return useQuery({
     enabled: !!orgId && !!nome,
     staleTime: 30_000,
-    queryKey: ['pesquisa', 'org-eventos', orgId, nome],
+    queryKey: ['pesquisa', 'org-eventos', orgId, nome, fonteSlug],
     queryFn: async (): Promise<CrawledEventRow[]> => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('crawled_events')
-        .select('*, crawler_sources(slug, nome)')
+        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .ilike('organizador_raw', nome!)
-        .order('data_inicio', { ascending: true })
-        .limit(1000)
+      if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
+      const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)
       return (data ?? []).map((e: Record<string, unknown>) => ({
         ...(e as object),
@@ -232,21 +239,23 @@ export function useEventosDoOrganizador(nome: string | null): UseQueryResult<Cra
 export function useEventosDoLocal(
   nome: string | null,
   cidade: string | null,
+  fonte?: string | null,
 ): UseQueryResult<CrawledEventRow[]> {
   const orgId = useCrmOrgId()
+  const fonteSlug = fonte && fonte !== 'todas' ? fonte : null
   return useQuery({
     enabled: !!orgId && !!nome,
     staleTime: 30_000,
-    queryKey: ['pesquisa', 'local-eventos', orgId, nome, cidade],
+    queryKey: ['pesquisa', 'local-eventos', orgId, nome, cidade, fonteSlug],
     queryFn: async (): Promise<CrawledEventRow[]> => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('crawled_events')
-        .select('*, crawler_sources(slug, nome)')
+        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .ilike('local_raw', nome!)
-        .order('data_inicio', { ascending: true })
-        .limit(1000)
+      if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
+      const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)
       const rows = (data ?? []).map((e: Record<string, unknown>) => ({
         ...(e as object),
@@ -272,10 +281,12 @@ export type PaisFiltro = 'todos' | 'brasil' | 'exterior'
 export interface EventFilters {
   search: string
   fonte: string // slug | 'todas'
-  cidade: string // nome | 'todas'
-  categoria: string // valor | 'todas'
+  cidade: string // 'todas' | 'cidade' (deep-link) | 'cidade|uf' (select)
+  categoria: string // substring na categoria ('' = inativo)
   status: EventStatusFiltro
   pais: PaisFiltro
+  /** Valor mínimo (R$): o ingresso mais barato (preco_min) deve ser >= valorMin. */
+  valorMin?: number
   // Filtros exatos (deep-link a partir do relatório): '' = não aplica.
   uf?: string
   local?: string
@@ -287,26 +298,51 @@ export interface EventFilters {
   artistasNomes?: string[]
   /** Só eventos marcados (favoritos). */
   favoritos?: boolean
+  /** Só eventos com pelo menos um artista vinculado (não removido). */
+  comArtista?: boolean
 }
 
 export const EVENTS_PAGE_SIZE = 100
 
 function mapEventRow(e: Record<string, unknown>): CrawledEventRow {
+  // deno-lint-ignore no-explicit-any
+  const links = (e.crawled_event_artists as any[] | null) ?? []
+  const artistas = links
+    .filter((l) => l && l.removido === false && l.artists)
+    .map((l) => ({ id: l.artist_id as string, nome: (l.artists?.nome as string) ?? '' }))
+    .filter((a) => a.nome)
   return {
     ...(e as object),
     source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
     source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+    artistas,
   } as CrawledEventRow
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<string, string>): any {
+function applyEventFilters(
+  q: any, f: EventFilters, sourceIdBySlug: Record<string, string>, excludeLocais: string[] = [],
+): any {
   let qq = q
+  // Oculta eventos de locais marcados como ignorados (crawled_ignored 'local').
+  if (excludeLocais.length > 0) {
+    const quote = (v: string) => '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'
+    qq = qq.not('local_chave', 'in', `(${excludeLocais.map(quote).join(',')})`)
+  }
   const s = f.search.trim().replace(/[,()*%]/g, ' ').trim()
   if (s) qq = qq.or(`nome.ilike.*${s}*,local_raw.ilike.*${s}*,organizador_raw.ilike.*${s}*`)
   if (f.fonte !== 'todas') qq = qq.eq('source_id', sourceIdBySlug[f.fonte] ?? '00000000-0000-0000-0000-000000000000')
-  if (f.cidade !== 'todas') qq = qq.eq('cidade', f.cidade)
-  if (f.categoria !== 'todas') qq = qq.eq('categoria', f.categoria)
+  if (f.cidade !== 'todas') {
+    const [c, u] = f.cidade.split('|')
+    qq = qq.eq('cidade', c)
+    if (u) qq = qq.eq('uf', u)
+  }
+  if (f.categoria.trim()) qq = qq.ilike('categoria', `%${f.categoria.trim()}%`)
+  if (f.valorMin != null && Number.isFinite(f.valorMin)) {
+    // O ingresso mais barato (preco_min) deve ser >= valorMin. Quando preco_min
+    // é nulo, usa o preco_max como menor preço conhecido.
+    qq = qq.or(`preco_min.gte.${f.valorMin},and(preco_min.is.null,preco_max.gte.${f.valorMin})`)
+  }
   if (f.status === 'ativos') qq = qq.eq('ignorado', false).is('promovido_crm_event_id', null)
   else if (f.status === 'promovidos') qq = qq.not('promovido_crm_event_id', 'is', null)
   else if (f.status === 'ignorados') qq = qq.eq('ignorado', true)
@@ -318,13 +354,27 @@ function applyEventFilters(q: any, f: EventFilters, sourceIdBySlug: Record<strin
   if (f.favoritos) qq = qq.eq('favorito', true)
   // Filtro por nome de artista: evento cujo nome contenha algum dos nomes.
   if (f.artistasNomes !== undefined) {
-    const nomes = f.artistasNomes
-      .map((n) => n.replace(/[,()*%]/g, ' ').trim())
-      .filter((n) => n.length >= 2)
+    // Duplas: "Jorge e Mateus" também procura "Jorge & Mateus" (e vice-versa).
+    const variantes = (n: string): string[] => {
+      const s = new Set([n])
+      if (/\se\s/i.test(n)) s.add(n.replace(/\se\s/gi, ' & '))
+      if (n.includes('&')) s.add(n.replace(/\s*&\s*/g, ' e '))
+      return [...s]
+    }
+    // Remove vírgulas/parênteses do termo (não estruturam o nome) e escapa os
+    // metacaracteres de regex; o match é por palavra inteira via bordas POSIX,
+    // então "Alok" casa em "(Alok)", "Alok/Outro", "Alok & X" — mas não "Aloka".
+    const escRe = (s: string) => s.replace(/[.^$*+?[\]{}|\\]/g, '\\$&')
+    const nomes = [...new Set(
+      f.artistasNomes
+        .flatMap(variantes)
+        .map((n) => n.replace(/[(),%]/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter((n) => n.length >= 2),
+    )]
     if (nomes.length === 0) {
       qq = qq.eq('id', '00000000-0000-0000-0000-000000000000')
     } else {
-      qq = qq.or(nomes.map((n) => `nome.ilike.*${n}*`).join(','))
+      qq = qq.or(nomes.map((n) => `nome.imatch.[[:<:]]${escRe(n)}[[:>:]]`).join(','))
       // Exclui shows de tributo/cover (não são o artista de fato).
       for (const ex of ['tributo', 'tribute', 'cover']) {
         qq = qq.not('nome', 'ilike', `%${ex}%`)
@@ -351,16 +401,22 @@ export function useCrawledEventsPaged(
   const orgId = useCrmOrgId()
   const sources = useCrawlerSources()
   const sourceMap = useSourceMap()
+  const ignoradosLocais = useIgnorados('local')
+  const excludeLocais = useMemo(() => [...(ignoradosLocais.data ?? [])], [ignoradosLocais.data])
   return useQuery({
-    enabled: !!orgId && !!sources.data,
+    enabled: !!orgId && !!sources.data && ignoradosLocais.isSuccess,
     staleTime: 15_000,
-    queryKey: ['pesquisa', 'events-paged', orgId, filters, page, pageSize],
+    queryKey: ['pesquisa', 'events-paged', orgId, filters, page, pageSize, excludeLocais],
     queryFn: async (): Promise<{ rows: CrawledEventRow[]; total: number }> => {
+      const caEmbed = filters.comArtista
+        ? 'crawled_event_artists!inner(artist_id, removido, artists(nome))'
+        : 'crawled_event_artists(artist_id, removido, artists(nome))'
       let q = supabase
         .from('crawled_events')
-        .select('*, crawler_sources(slug, nome)', { count: 'exact' })
+        .select(`*, crawler_sources(slug, nome), ${caEmbed}`, { count: 'exact' })
         .eq('org_id', orgId!)
-      q = applyEventFilters(q, filters, sourceMap)
+      q = applyEventFilters(q, filters, sourceMap, excludeLocais)
+      if (filters.comArtista) q = q.eq('crawled_event_artists.removido', false)
       const from = page * pageSize
       const { data, error, count } = await q
         .order('primeira_vez_visto', { ascending: false })
@@ -447,7 +503,8 @@ export function useSourceReport(sourceId: string | null): UseQueryResult<SourceR
   })
 }
 
-export function useEventFacets(): UseQueryResult<{ cidades: string[]; categorias: string[] }> {
+export interface CidadeFacet { cidade: string; uf: string | null }
+export function useEventFacets(): UseQueryResult<{ cidades: CidadeFacet[]; ufs: string[] }> {
   const orgId = useCrmOrgId()
   return useQuery({
     enabled: !!orgId,
@@ -456,8 +513,8 @@ export function useEventFacets(): UseQueryResult<{ cidades: string[]; categorias
     queryFn: async () => {
       const { data, error } = await supabase.rpc('crawled_event_facets')
       if (error) throw new Error(error.message)
-      const d = (data ?? {}) as { cidades?: string[]; categorias?: string[] }
-      return { cidades: d.cidades ?? [], categorias: d.categorias ?? [] }
+      const d = (data ?? {}) as { cidades?: CidadeFacet[]; ufs?: string[] }
+      return { cidades: d.cidades ?? [], ufs: d.ufs ?? [] }
     },
   })
 }
@@ -467,11 +524,12 @@ export async function fetchAllCrawledEvents(
   orgId: string,
   filters: EventFilters,
   sourceIdBySlug: Record<string, string>,
+  excludeLocais: string[] = [],
 ): Promise<CrawledEventRow[]> {
   const all: CrawledEventRow[] = []
   for (let from = 0; ; from += 1000) {
     let q = supabase.from('crawled_events').select('*, crawler_sources(slug, nome)').eq('org_id', orgId)
-    q = applyEventFilters(q, filters, sourceIdBySlug)
+    q = applyEventFilters(q, filters, sourceIdBySlug, excludeLocais)
     const { data, error } = await q
       .order('primeira_vez_visto', { ascending: false })
       .range(from, from + 999)
@@ -842,6 +900,30 @@ export async function deleteIgnoreRule(id: string): Promise<void> {
 
 export async function toggleIgnoreRule(id: string, ativo: boolean): Promise<void> {
   const { error } = await supabase.from('crawler_ignore_rules').update({ ativo }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Aplica as regras de ignorar (ativas) aos eventos já capturados. Retorna nº afetados. */
+export async function applyIgnoreRules(): Promise<number> {
+  const { data, error } = await supabase.rpc('apply_ignore_rules')
+  if (error) throw new Error(error.message)
+  return Number(data ?? 0)
+}
+
+/** Detecta artistas nos títulos dos eventos capturados (vínculo evento<>artista). */
+export async function detectEventArtists(): Promise<number> {
+  const { data, error } = await supabase.rpc('detect_event_artists')
+  if (error) throw new Error(error.message)
+  return Number(data ?? 0)
+}
+
+/** Remove manualmente um artista detectado de um evento (não será redetectado). */
+export async function removeEventArtist(crawledEventId: string, artistId: string): Promise<void> {
+  const { error } = await supabase
+    .from('crawled_event_artists')
+    .update({ removido: true })
+    .eq('crawled_event_id', crawledEventId)
+    .eq('artist_id', artistId)
   if (error) throw new Error(error.message)
 }
 
