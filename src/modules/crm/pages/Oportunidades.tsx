@@ -61,32 +61,34 @@ export function Oportunidades() {
         }
         footer={view === 'list' && data ? `${rows.length} de ${data.length}` : undefined}
         toolbar={
-          view === 'list' ? (
-            <>
-              <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por título ou organização…" />
-              <Select value={statusF} onValueChange={setStatusF}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos os status</SelectItem>
-                  <SelectItem value={ABERTA}>Em aberto</SelectItem>
-                  <SelectItem value="Ganho">Ganho</SelectItem>
-                  <SelectItem value="Perdida">Perdida</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={stageF} onValueChange={setStageF}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-56`} size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos os estágios</SelectItem>
-                  {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </>
-          ) : undefined
+          <>
+            <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por título ou organização…" />
+            {view === 'list' && (
+              <>
+                <Select value={statusF} onValueChange={setStatusF}>
+                  <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos os status</SelectItem>
+                    <SelectItem value={ABERTA}>Em aberto</SelectItem>
+                    <SelectItem value="Ganho">Ganho</SelectItem>
+                    <SelectItem value="Perdida">Perdida</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={stageF} onValueChange={setStageF}>
+                  <SelectTrigger className={`${TOOLBAR_TRIGGER} w-56`} size="sm"><SelectValue placeholder="Estágio" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos os estágios</SelectItem>
+                    {stages.filter((s) => s.ativo).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </>
         }
       >
         {view === 'kanban' ? (
           <div className="p-4">
-            <KanbanBoard slug="oportunidade" />
+            <KanbanBoard slug="oportunidade" search={search} />
           </div>
         ) : (
         <Table>

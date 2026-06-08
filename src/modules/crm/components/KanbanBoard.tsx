@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/core'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ClasseBadge } from './ClasseBadge'
 import { useFunnel, type FunnelSlug } from '../hooks/useFunnelStages'
 import {
   moveCardStage,
@@ -26,7 +27,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null }) {
+export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, showCidade = true, showGmv = true }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; showCidade?: boolean; showGmv?: boolean }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -36,17 +37,27 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
   const cardsQ = kind === 'org' ? orgsQ : oppsQ
   const cards = useMemo(() => {
     let all = cardsQ.data ?? []
-    // Sem status comercial (ex.: organizações importadas) sempre aparecem; os
-    // chips filtram apenas entre as que TÊM status.
+    // Status comercial: filtro estrito (exige status na seleção).
     if (statusFilter && statusFilter.length > 0) {
-      all = all.filter((c) => c.status == null || statusFilter.includes(c.status))
+      all = all.filter((c) => c.status != null && statusFilter.includes(c.status))
     }
     // Classe (badge): quando há filtro, exige classe na seleção.
     if (classFilter && classFilter.length > 0) {
       all = all.filter((c) => c.badge != null && classFilter.includes(c.badge))
     }
+    const q = (search ?? '').trim().toLowerCase()
+    if (q) all = all.filter((c) => c.title.toLowerCase().includes(q) || (c.subtitle ?? '').toLowerCase().includes(q))
+    if (gmvMin != null) all = all.filter((c) => c.gmv != null && c.gmv >= gmvMin)
+    // Org: ordena dentro das colunas — classe (A+→C), GMV desc, nome asc.
+    if (kind === 'org') {
+      const rank = (b?: string | null) => ({ 'A+': 4, A: 3, B: 2, C: 1 } as Record<string, number>)[b ?? ''] ?? 0
+      all = [...all].sort((a, b) =>
+        (rank(b.badge) - rank(a.badge))
+        || ((b.gmv ?? -Infinity) - (a.gmv ?? -Infinity))
+        || a.title.localeCompare(b.title, 'pt-BR'))
+    }
     return all
-  }, [cardsQ.data, statusFilter, classFilter])
+  }, [cardsQ.data, statusFilter, classFilter, search, gmvMin, kind])
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(
@@ -131,12 +142,14 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
             cor={col.cor}
             cards={byStage.get(col.id) ?? []}
             kind={kind}
+            showCidade={showCidade}
+            showGmv={showGmv}
             onOpen={(href) => navigate(href)}
           />
         ))}
       </div>
       <DragOverlay>
-        {activeCard ? <CardView card={activeCard} kind={kind} dragging /> : null}
+        {activeCard ? <CardView card={activeCard} kind={kind} showCidade={showCidade} showGmv={showGmv} dragging /> : null}
       </DragOverlay>
     </DndContext>
   )
@@ -148,6 +161,8 @@ function Column({
   cor,
   cards,
   kind,
+  showCidade,
+  showGmv,
   onOpen,
 }: {
   id: string
@@ -155,22 +170,32 @@ function Column({
   cor: string | null
   cards: KanbanCard[]
   kind: 'org' | 'opp'
+  showCidade: boolean
+  showGmv: boolean
   onOpen: (href: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const CAP = 60
   const shown = cards.slice(0, CAP)
+  const gmvTotal = kind === 'org' && showGmv
+    ? cards.reduce((s, c) => s + (c.gmv ?? 0), 0)
+    : null
   return (
     <div className="flex min-w-0 flex-1 basis-0 flex-col rounded-lg border border-border bg-muted/30">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="size-2.5 rounded-full"
-            style={{ backgroundColor: cor ?? 'var(--muted-foreground)' }}
-          />
-          <span className="text-sm font-medium">{nome}</span>
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: cor ?? 'var(--muted-foreground)' }}
+            />
+            <span className="truncate text-sm font-medium">{nome}</span>
+          </div>
+          <Badge variant="secondary">{cards.length}</Badge>
         </div>
-        <Badge variant="secondary">{cards.length}</Badge>
+        {gmvTotal != null && (
+          <p className="mt-1 text-xs font-semibold tabular-nums text-muted-foreground">{fmtBRL(gmvTotal)}</p>
+        )}
       </div>
       <div
         ref={setNodeRef}
@@ -179,7 +204,7 @@ function Column({
         }`}
       >
         {shown.map((c) => (
-          <DraggableCard key={c.id} card={c} kind={kind} onOpen={onOpen} />
+          <DraggableCard key={c.id} card={c} kind={kind} showCidade={showCidade} showGmv={showGmv} onOpen={onOpen} />
         ))}
         {cards.length > CAP && (
           <p className="px-1 py-2 text-center text-xs text-muted-foreground">
@@ -199,10 +224,14 @@ function Column({
 function DraggableCard({
   card,
   kind,
+  showCidade,
+  showGmv,
   onOpen,
 }: {
   card: KanbanCard
   kind: 'org' | 'opp'
+  showCidade: boolean
+  showGmv: boolean
   onOpen: (href: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -218,7 +247,7 @@ function DraggableCard({
         isDragging ? 'opacity-40' : ''
       }`}
     >
-      <CardView card={card} kind={kind} />
+      <CardView card={card} kind={kind} showCidade={showCidade} showGmv={showGmv} />
     </div>
   )
 }
@@ -226,10 +255,14 @@ function DraggableCard({
 function CardView({
   card,
   kind,
+  showCidade = true,
+  showGmv = true,
   dragging,
 }: {
   card: KanbanCard
   kind: 'org' | 'opp'
+  showCidade?: boolean
+  showGmv?: boolean
   dragging?: boolean
 }) {
   return (
@@ -243,14 +276,19 @@ function CardView({
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-sm font-medium">{card.title}</span>
         {card.badge && (
-          <Badge variant="outline" className="shrink-0">
-            {card.badge}
-          </Badge>
+          kind === 'org'
+            ? <span className="shrink-0"><ClasseBadge classe={card.badge} /></span>
+            : <Badge variant="outline" className="shrink-0">{card.badge}</Badge>
         )}
       </div>
-      {card.subtitle && (
+      {card.subtitle && (kind !== 'org' || showCidade) && (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {card.subtitle}
+        </p>
+      )}
+      {kind === 'org' && showGmv && card.gmv != null && (
+        <p className="mt-1 text-xs font-medium tabular-nums">
+          {fmtBRL(card.gmv)}
         </p>
       )}
       {kind === 'opp' && card.meta && (

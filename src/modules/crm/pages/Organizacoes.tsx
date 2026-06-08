@@ -2,24 +2,25 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Upload } from 'lucide-react'
+import { Plus, Upload, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
+} from '@/components/ui/dropdown-menu'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useViewPref } from '../hooks/useViewPref'
+import { useViewPref, usePersistedState } from '../hooks/useViewPref'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { KanbanBoard } from '../components/KanbanBoard'
@@ -29,7 +30,15 @@ import { cn } from '@/lib/utils'
 import { fmtBRL, fmtDate } from '@/lib/format'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
-const ALL = '__all__'
+
+// Cores dos chips de classe quando selecionados (espelha o ClasseBadge).
+const CLASSE_CHIP_ON: Record<string, string> = {
+  'A+': 'border-transparent bg-[var(--success)] text-white',
+  A: 'border-[var(--success)] bg-[var(--success)]/15 text-[var(--success)]',
+  B: 'border-[var(--warning)] bg-[var(--warning)]/15 text-[var(--warning)]',
+  C: 'border-destructive bg-destructive/15 text-destructive',
+}
+const CHIP_OFF = 'border-border text-muted-foreground hover:border-primary'
 
 export function Organizacoes() {
   const navigate = useNavigate()
@@ -41,38 +50,43 @@ export function Organizacoes() {
   const { data, isLoading } = useOrganizations()
   const [view, setView] = useViewPref('crm:orgView', 'list')
   const [search, setSearch] = useState(biOrganizador)
-  const [classesSel, setClassesSel] = useState<string[]>(['A+', 'A', 'B'])
-  const [statusF, setStatusF] = useState<string>(ALL)
+  const [classesSel, setClassesSel] = usePersistedState<string[]>('crm:org:classes', ['A+', 'A', 'B'])
+  const [statusSel, setStatusSel] = usePersistedState<string[]>('crm:org:status', ['Eventual', 'Inativo'])
   const [gmvMin, setGmvMin] = useState('')
-  const [kbStatuses, setKbStatuses] = useState<string[]>(['Ativo', 'Eventual', 'Inativo'])
-  const [estagios, setEstagios] = useState<'ativos' | 'todos'>('ativos')
+  const [estagiosInativos, setEstagiosInativos] = usePersistedState<boolean>('crm:org:estagiosInativos', false)
+  const [showCidade, setShowCidade] = usePersistedState<boolean>('crm:org:cardCidade', true)
+  const [showGmv, setShowGmv] = usePersistedState<boolean>('crm:org:cardGmv', true)
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const { isGestor } = useAuth()
 
-  function toggleKbStatus(s: string) {
-    setKbStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  function toggleStatus(s: string) {
+    setStatusSel(statusSel.includes(s) ? statusSel.filter((x) => x !== s) : [...statusSel, s])
   }
   function toggleClasse(c: string) {
-    setClassesSel((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+    setClassesSel(classesSel.includes(c) ? classesSel.filter((x) => x !== c) : [...classesSel, c])
   }
+
+  const gmvMinNum = useMemo(() => {
+    const n = Number(gmvMin)
+    return gmvMin.trim() !== '' && Number.isFinite(n) ? n : null
+  }, [gmvMin])
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const min = Number(gmvMin)
-    const temMin = gmvMin.trim() !== '' && Number.isFinite(min)
     return (data ?? []).filter(
       (o) =>
         o.parent_id == null && // só principais; subs aparecem dentro da principal
         (!q || o.nome.toLowerCase().includes(q)) &&
         (classesSel.length === 0 || (o.classificacao != null && classesSel.includes(o.classificacao))) &&
-        (statusF === ALL || o.status_comercial === statusF) &&
-        // "Ativos" esconde organizações em estágio inativo (ex.: Inativo).
-        (estagios === 'todos' || o.stageAtivo !== false) &&
-        (!temMin || (o.gmv_anual != null && o.gmv_anual >= min)),
+        // Status comercial: filtro estrito (exige status na seleção).
+        (statusSel.length === 0 || (o.status_comercial != null && statusSel.includes(o.status_comercial))) &&
+        // Por padrão esconde organizações em estágio inativo (ex.: Inativo).
+        (estagiosInativos || o.stageAtivo !== false) &&
+        (gmvMinNum == null || (o.gmv_anual != null && o.gmv_anual >= gmvMinNum)),
     )
-  }, [data, search, classesSel, statusF, gmvMin, estagios])
+  }, [data, search, classesSel, statusSel, gmvMinNum, estagiosInativos])
 
   async function criar() {
     if (!orgId || !novoNome.trim()) return
@@ -89,6 +103,12 @@ export function Organizacoes() {
     [data],
   )
 
+  const gmvTotal = useMemo(
+    () => rows.reduce((s, o) => s + (o.gmv_anual ?? 0), 0),
+    [rows],
+  )
+
+
   const classeChips = (
     <div className="flex items-center gap-1">
       {CLASSES.map((c) => {
@@ -100,7 +120,7 @@ export function Organizacoes() {
             onClick={() => toggleClasse(c)}
             className={cn(
               'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-              on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+              on ? (CLASSE_CHIP_ON[c] ?? 'border-primary bg-primary text-primary-foreground') : CHIP_OFF,
             )}
           >
             {c}
@@ -108,6 +128,65 @@ export function Organizacoes() {
         )
       })}
     </div>
+  )
+
+  const statusChips = (
+    <div className="flex items-center gap-1">
+      {STATUS_COMERCIAL.map((s) => {
+        const on = statusSel.includes(s)
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => toggleStatus(s)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              on ? 'border-primary bg-primary text-primary-foreground' : CHIP_OFF,
+            )}
+          >
+            {s}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const exibicaoMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="size-8 shrink-0" title="Configurações de exibição">
+          <SlidersHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {view === 'kanban' && (
+          <>
+            <DropdownMenuLabel>Exibir nos cards</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem checked={showCidade} onCheckedChange={(v) => setShowCidade(v === true)}>
+              Cidade/UF
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={showGmv} onCheckedChange={(v) => setShowGmv(v === true)}>
+              GMV
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuCheckboxItem checked={estagiosInativos} onCheckedChange={(v) => setEstagiosInativos(v === true)}>
+          Estágios inativos
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  // Mesma toolbar nos dois modos (lista e kanban): busca, classe, status, GMV mín., exibição.
+  const toolbar = (
+    <>
+      <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
+      {classeChips}
+      {statusChips}
+      <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
+        placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
+    </>
   )
 
   return (
@@ -118,6 +197,7 @@ export function Organizacoes() {
         actions={
           <>
             <ViewToggle view={view} onChange={setView} />
+            {exibicaoMenu}
             {isGestor && (
               <Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" /> Importar</Button>
             )}
@@ -125,61 +205,11 @@ export function Organizacoes() {
           </>
         }
         footer={view === 'list' && data ? `${rows.length} de ${totalPrincipais}` : undefined}
-        toolbar={
-          view === 'list' ? (
-            <>
-              <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
-              {classeChips}
-              <Select value={statusF} onValueChange={setStatusF}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Status comercial" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todos os status</SelectItem>
-                  {STATUS_COMERCIAL.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
-                placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
-              <Select value={estagios} onValueChange={(v) => setEstagios(v as 'ativos' | 'todos')}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativos">Estágios ativos</SelectItem>
-                  <SelectItem value="todos">Todos os estágios</SelectItem>
-                </SelectContent>
-              </Select>
-            </>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Select value={estagios} onValueChange={(v) => setEstagios(v as 'ativos' | 'todos')}>
-                <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativos">Estágios ativos</SelectItem>
-                  <SelectItem value="todos">Todos os estágios</SelectItem>
-                </SelectContent>
-              </Select>
-              {classeChips}
-              {STATUS_COMERCIAL.map((s) => {
-                const on = kbStatuses.includes(s)
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => toggleKbStatus(s)}
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
-                    )}
-                  >
-                    {s}
-                  </button>
-                )
-              })}
-            </div>
-          )
-        }
+        toolbar={toolbar}
       >
         {view === 'kanban' ? (
           <div className="p-4">
-            <KanbanBoard slug="relacionamento" statusFilter={kbStatuses} includeInactiveStages={estagios === 'todos'} classFilter={classesSel} />
+            <KanbanBoard slug="relacionamento" statusFilter={statusSel} includeInactiveStages={estagiosInativos} classFilter={classesSel} search={search} gmvMin={gmvMinNum} showCidade={showCidade} showGmv={showGmv} />
           </div>
         ) : (
         <Table>
@@ -232,6 +262,15 @@ export function Organizacoes() {
               </TableRow>
             ))}
           </TableBody>
+          {!isLoading && rows.length > 0 && (
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={6} className="font-medium">Total ({rows.length})</TableCell>
+                <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">{fmtBRL(gmvTotal)}</TableCell>
+                <TableCell />
+              </TableRow>
+            </TableFooter>
+          )}
         </Table>
         )}
       </ListView>

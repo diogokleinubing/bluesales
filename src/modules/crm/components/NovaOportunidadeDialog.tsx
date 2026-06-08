@@ -14,13 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CurrencyField } from './EditFields'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { EntityAutocomplete, type Lookup } from './EntityAutocomplete'
 import { useAuth } from '@/lib/auth'
 import { useCrmOrgId, useFunnel } from '../hooks/useFunnelStages'
 import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions } from '../hooks/useCrmLookups'
@@ -126,6 +120,16 @@ export function NovaOportunidadeDialog({
     if (e) consider(e.gmv, `O evento "${e.nome}"`)
   }
 
+  // Valores selecionados (para o autocomplete) e handlers de pick.
+  const orgValue = org ? (orgOptions.data?.find((o) => o.id === org) ?? null) : null
+  const eventoValue = evento !== NONE ? (eventOptions.data?.find((e) => e.id === evento) ?? null) : null
+  const localValue = local !== NONE ? (localOptions.data?.find((l) => l.id === local) ?? null) : null
+  const orgNome = orgValue?.nome ?? ''
+
+  function pickOrg(v: Lookup | null) { if (v) onOrgChange(v.id); else setOrg(null) }
+  function pickEvento(v: Lookup | null) { onEventChange(v ? v.id : NONE) }
+  function pickLocal(v: Lookup | null) { setLocal(v ? v.id : NONE) }
+
   async function save() {
     if (!orgId || !user?.id || !titulo.trim() || !org || ativos.length === 0) {
       toast.error('Informe título e organização.')
@@ -168,56 +172,43 @@ export function NovaOportunidadeDialog({
             <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Organização</Label>
+            <Label className="text-xs text-muted-foreground">Organização</Label>
+            <div className="flex items-center gap-2">
+              {organizationId ? (
+                <Input className="h-9" value={orgNome} disabled />
+              ) : (
+                <EntityAutocomplete
+                  className="flex-1"
+                  value={orgValue}
+                  onPick={pickOrg}
+                  options={orgOptions.data ?? []}
+                  placeholder="Digite para buscar…"
+                />
+              )}
               {!organizationId && (
-                <button
-                  type="button"
-                  onClick={abrirNovaOrg}
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <Plus className="size-3" /> Nova
-                </button>
+                <Button type="button" variant="outline" size="sm" onClick={abrirNovaOrg} className="h-9 shrink-0 gap-1">
+                  <Plus className="size-3.5" /> Nova
+                </Button>
               )}
             </div>
-            <Select value={org ?? ''} onValueChange={onOrgChange} disabled={!!organizationId}>
-              <SelectTrigger className="h-9" size="sm">
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(orgOptions.data ?? []).map((o) => (
-                  <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Evento (opcional)</Label>
-            <Select value={evento} onValueChange={onEventChange}>
-              <SelectTrigger className="h-9" size="sm">
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {(eventOptions.data ?? []).map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EntityAutocomplete
+              value={eventoValue}
+              onPick={pickEvento}
+              options={eventOptions.data ?? []}
+              placeholder="Digite para buscar…"
+            />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Local (opcional)</Label>
-            <Select value={local} onValueChange={setLocal}>
-              <SelectTrigger className="h-9" size="sm">
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>—</SelectItem>
-                {(localOptions.data ?? []).map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EntityAutocomplete
+              value={localValue}
+              onPick={pickLocal}
+              options={localOptions.data ?? []}
+              placeholder="Digite para buscar…"
+            />
           </div>
           <CurrencyField label="GMV estimado" value={gmv} onChange={setGmv} />
         </div>

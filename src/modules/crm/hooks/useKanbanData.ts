@@ -10,6 +10,7 @@ export interface KanbanCard {
   badge?: string | null
   meta?: string | null
   status?: string | null
+  gmv?: number | null
   href: string
 }
 
@@ -21,7 +22,7 @@ export function useOrgsKanban() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'kanban', 'orgs', orgId],
     queryFn: async (): Promise<KanbanCard[]> => {
-      const cols = 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id'
+      const cols = 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id, gmv_anual'
       const rows: Array<Record<string, string | null>> = []
       for (let from = 0; ; from += 1000) {
         const res = await supabase
@@ -39,6 +40,7 @@ export function useOrgsKanban() {
         badge: o.classificacao,
         subtitle: [o.cidade, o.uf].filter(Boolean).join('/') || null,
         status: o.status_comercial,
+        gmv: o.gmv_anual != null ? Number(o.gmv_anual) : null,
         href: `/comercial/organizacoes/${o.id}`,
       }))
     },
