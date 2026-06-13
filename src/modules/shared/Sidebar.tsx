@@ -14,7 +14,7 @@ const COLLAPSE_KEY = 'bs-sidebar-collapsed'
 
 const itemClass = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex items-center gap-3 rounded-md py-2 text-sm transition-colors',
+    'flex items-center gap-3 rounded-md py-1.5 text-sm transition-colors',
     collapsed ? 'justify-center px-2' : 'px-3',
     isActive
       ? 'bg-sidebar-accent text-sidebar-accent-foreground'

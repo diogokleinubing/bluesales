@@ -1,0 +1,5 @@
+# ZIPs baixados da Receita
+data/
+
+# dependências do importador/visualizador (rode: npm install)
+node_modules/

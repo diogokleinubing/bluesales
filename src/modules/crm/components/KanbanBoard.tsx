@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import type { MouseEvent as ReactMouseEvent } from 'react'
+import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -28,7 +29,7 @@ import { fmtBRL } from '@/lib/format'
 const NONE = '__none__'
 
 export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, showCidade = true, showGmv = true }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; showCidade?: boolean; showGmv?: boolean }) {
-  const navigate = useNavigate()
+  const openItem = useOpenItem()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
   const { stages, isLoading: stagesLoading } = useFunnel(slug)
@@ -144,7 +145,7 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
             kind={kind}
             showCidade={showCidade}
             showGmv={showGmv}
-            onOpen={(href) => navigate(href)}
+            onOpen={(e, href) => openItem(e, href)}
           />
         ))}
       </div>
@@ -172,7 +173,7 @@ function Column({
   kind: 'org' | 'opp'
   showCidade: boolean
   showGmv: boolean
-  onOpen: (href: string) => void
+  onOpen: (e: ReactMouseEvent, href: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const CAP = 60
@@ -232,7 +233,7 @@ function DraggableCard({
   kind: 'org' | 'opp'
   showCidade: boolean
   showGmv: boolean
-  onOpen: (href: string) => void
+  onOpen: (e: ReactMouseEvent, href: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
@@ -242,7 +243,7 @@ function DraggableCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={() => onOpen(card.href)}
+      onClick={(e) => onOpen(e, card.href)}
       className={`cursor-pointer rounded-md border border-border bg-card p-2.5 text-left shadow-sm transition-opacity hover:border-primary ${
         isDragging ? 'opacity-40' : ''
       }`}

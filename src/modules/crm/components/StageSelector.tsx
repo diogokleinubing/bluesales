@@ -24,7 +24,9 @@ export function StageSelector({
   className?: string
 }) {
   const { stages } = useFunnel(slug)
-  const ativos = stages.filter((s) => s.ativo || s.id === value)
+  // Mostra todos os estágios (inclusive inativos, ex.: "Inativo") para permitir
+  // mover qualquer entidade para eles.
+  const ativos = stages
 
   return (
     <Select

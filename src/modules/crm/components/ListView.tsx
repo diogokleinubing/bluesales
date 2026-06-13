@@ -70,8 +70,8 @@ export function ListView({
 }) {
   return (
     <div className="-mx-6 -mt-6 flex min-h-[calc(100%+3rem)] flex-col">
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-3 pt-4">
+      {/* Cabeçalho (fundo branco) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-5 pb-3 pt-4">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
           {count != null && <span className="text-sm text-muted-foreground">{count}</span>}
@@ -79,15 +79,15 @@ export function ListView({
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
 
-      {/* Toolbar de filtros */}
+      {/* Toolbar de filtros (fundo branco) */}
       {toolbar && (
-        <div className="flex flex-wrap items-center gap-2 border-y border-border bg-muted/20 px-5 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-5 py-2">
           {toolbar}
         </div>
       )}
 
-      {/* Tabela em largura total */}
-      <div className="min-w-0 flex-1 overflow-x-auto [&_tbody_td]:px-4 [&_tbody_td]:py-2.5 [&_thead_th]:h-11 [&_thead_th]:px-4 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:text-muted-foreground">
+      {/* Tabela em largura total — barra de cabeçalho com fundo próprio e negrito */}
+      <div className="min-w-0 flex-1 overflow-x-auto [&_tbody_td]:px-4 [&_tbody_td]:py-1 [&_tbody_tr]:h-10 [&_thead_th]:h-11 [&_thead_th]:border-b [&_thead_th]:border-border [&_thead_th]:bg-muted [&_thead_th]:px-4 [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:text-foreground">
         {children}
       </div>
 

@@ -1,0 +1,3 @@
+-- Limpeza pontual (já executada em produção): movia crm_locals.site -> instagram
+-- quando o site era um Instagram e o instagram estava vazio. 44 locais movidos,
+-- 0 conflitos. No-op em resets futuros.

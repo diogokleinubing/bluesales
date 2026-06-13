@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Base CNPJ — Receita Federal</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --card: #fff; --border: #e4e4e7; --text: #18181b;
+    --muted: #71717a; --primary: #2563eb; --primary-bg: #eff6ff;
+    --ok-bg: #dcfce7; --ok-fg: #15803d; --warn-bg: #fef3c7; --warn-fg: #b45309;
+    --bad-bg: #fee2e2; --bad-fg: #b91c1c; --mut-bg: #f4f4f5; --mut-fg: #71717a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111113; --card: #1b1b1f; --border: #2e2e33; --text: #ececee;
+      --muted: #9d9da7; --primary: #60a5fa; --primary-bg: #1e2a45;
+      --ok-bg: #14321e; --ok-fg: #6ee7a0; --warn-bg: #3a2c10; --warn-fg: #fcd34d;
+      --bad-bg: #3c1518; --bad-fg: #fca5a5; --mut-bg: #26262b; --mut-fg: #9d9da7;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+    padding: 14px 22px 0; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .status { color: var(--muted); font-size: 12.5px; }
+  nav { display: flex; gap: 4px; padding: 10px 22px 0; border-bottom: 1px solid var(--border); }
+  nav a { padding: 7px 12px; border-radius: 8px 8px 0 0; color: var(--muted);
+    text-decoration: none; font-weight: 500; border: 1px solid transparent; border-bottom: none; }
+  nav a.active { color: var(--text); background: var(--card); border-color: var(--border); }
+  main { padding: 16px 22px 40px; max-width: 1280px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+  input, select { height: 32px; padding: 0 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+  input:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--primary) 40%, transparent); }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+  button { height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; color: var(--muted); font-weight: 500; background: var(--mut-bg); }
+  tr:last-child td { border-bottom: none; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    white-space: nowrap; }
+  .muted { color: var(--muted); }
+  .right { text-align: right; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11.5px;
+    font-weight: 600; }
+  .badge.outline { border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  .empty { padding: 48px 16px; text-align: center; color: var(--muted);
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+  .empty code { background: var(--mut-bg); padding: 2px 6px; border-radius: 5px; font-size: 12px; }
+  .pager { display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .pager .btns { display: flex; gap: 6px; }
+  a { color: var(--primary); }
+  .back { display: inline-block; margin-bottom: 10px; text-decoration: none; color: var(--muted); }
+  .back:hover { color: var(--text); }
+  .head h2 { margin: 0 0 4px; font-size: 19px; display: inline; margin-right: 8px; }
+  .grid { display: grid; gap: 12px 24px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin: 12px 0 20px; }
+  .grid .lbl { font-size: 11.5px; color: var(--muted); }
+  h3 { font-size: 13px; color: var(--muted); margin: 22px 0 8px; text-transform: uppercase;
+    letter-spacing: .04em; }
+  .pessoa { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 14px; overflow: hidden; }
+  .pessoa .ph { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline;
+    padding: 9px 14px; background: var(--mut-bg); border-bottom: 1px solid var(--border); }
+  .pessoa .ph .n { font-weight: 600; }
+  .pessoa table { border: none; border-radius: 0; }
+  .loading { color: var(--muted); padding: 20px 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Base CNPJ — Receita Federal</h1>
+  <span class="status" id="status"></span>
+</header>
+<nav>
+  <a href="#/empresas" data-tab="empresas">Empresas</a>
+  <a href="#/pessoas" data-tab="pessoas">Pessoas &amp; sócios</a>
+</nav>
+<main id="main"></main>
+
+<script>
+'use strict'
+const $ = (sel, el) => (el || document).querySelector(sel)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+const SITUACAO = {
+  1: { l: 'Nula', c: 'mut' }, 2: { l: 'Ativa', c: 'ok' }, 3: { l: 'Suspensa', c: 'warn' },
+  4: { l: 'Inapta', c: 'warn' }, 8: { l: 'Baixada', c: 'bad' },
+}
+const PORTE = { 0: 'Não informado', 1: 'Microempresa', 3: 'Pequeno porte', 5: 'Demais' }
+const TIPO_SOCIO = { 1: 'Pessoa Jurídica', 2: 'Pessoa Física', 3: 'Estrangeiro' }
+const FAIXA = { 0: '', 1: '0–12 anos', 2: '13–20 anos', 3: '21–30 anos', 4: '31–40 anos',
+  5: '41–50 anos', 6: '51–60 anos', 7: '61–70 anos', 8: '71–80 anos', 9: '80+ anos' }
+
+const fmtCnpj = (d) => {
+  if (!d) return '—'
+  d = String(d).replace(/\D/g, '')
+  if (d.length === 14) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`
+  if (d.length === 8) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}`
+  return d
+}
+const fmtData = (s) => s ? s.slice(0, 10).split('-').reverse().join('/') : '—'
+const fmtBRL = (n) => n == null ? '—'
+  : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+const fmtInt = (n) => Number(n || 0).toLocaleString('pt-BR')
+const sitBadge = (code) => {
+  const s = SITUACAO[code] || { l: '—', c: 'mut' }
+  return `<span class="badge" style="background:var(--${s.c}-bg);color:var(--${s.c}-fg)">${s.l}</span>`
+}
+const porte = (p) => p == null ? '—' : (PORTE[Number(p)] ?? p)
+
+async function api(path, params) {
+  const qs = params
+    ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null))
+    : ''
+  const res = await fetch(path + qs)
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error || res.statusText)
+  return body
+}
+
+// ---------------------------------------------------------------------------
+// Estado + roteador por hash: #/empresas, #/empresa/12345678, #/pessoas
+// ---------------------------------------------------------------------------
+const state = {
+  emp: { q: '', uf: '', municipio: '', situacao: '2', matriz: true, page: 0 },
+  pes: { nome: '', cpf: '' },
+}
+let debounceT = null
+const debounce = (fn) => { clearTimeout(debounceT); debounceT = setTimeout(fn, 400) }
+
+window.addEventListener('hashchange', render)
+
+async function render() {
+  const hash = location.hash || '#/empresas'
+  const main = $('#main')
+  const [caminho, query] = hash.split('?')
+  const [, route, arg] = caminho.split('/')
+  document.querySelectorAll('nav a').forEach((a) => {
+    a.classList.toggle('active',
+      a.dataset.tab === (route === 'pessoas' ? 'pessoas' : 'empresas'))
+  })
+  if (route === 'empresa' && /^\d{8}$/.test(arg)) return renderDetalhe(main, arg)
+  if (route === 'pessoas') {
+    // Deep-link: #/pessoas?nome=…&cpf=…
+    if (query) {
+      const p = new URLSearchParams(query)
+      state.pes = { nome: p.get('nome') ?? '', cpf: p.get('cpf') ?? '' }
+    }
+    return renderPessoas(main)
+  }
+  return renderEmpresas(main)
+}
+
+// ---------------------------------------------------------------------------
+// Empresas (busca + lista)
+// ---------------------------------------------------------------------------
+function renderEmpresas(main) {
+  const s = state.emp
+  main.innerHTML = `
+    <div class="toolbar">
+      <input id="q" style="width:280px" placeholder="Razão social, fantasia ou CNPJ…" value="${esc(s.q)}">
+      <select id="uf">
+        <option value="">Todos os estados</option>
+        ${UFS.map((u) => `<option ${s.uf === u ? 'selected' : ''}>${u}</option>`).join('')}
+      </select>
+      <input id="municipio" style="width:160px" placeholder="Município…" value="${esc(s.municipio)}">
+      <select id="situacao">
+        <option value="" ${s.situacao === '' ? 'selected' : ''}>Todas as situações</option>
+        ${Object.entries(SITUACAO).map(([c, v]) =>
+          `<option value="${c}" ${s.situacao === c ? 'selected' : ''}>${v.l}</option>`).join('')}
+      </select>
+      <label class="chk"><input type="checkbox" id="matriz" ${s.matriz ? 'checked' : ''}> Só matriz</label>
+    </div>
+    <div id="lista" class="loading">Carregando…</div>
+    <div class="pager">
+      <span id="pinfo"></span>
+      <span class="btns">
+        <button id="prev">‹ Anterior</button>
+        <button id="next">Próxima ›</button>
+      </span>
+    </div>`
+  const reload = (resetPage) => { if (resetPage) s.page = 0; carregarEmpresas() }
+  $('#q').oninput = (e) => { s.q = e.target.value; debounce(() => reload(true)) }
+  $('#municipio').oninput = (e) => { s.municipio = e.target.value; debounce(() => reload(true)) }
+  $('#uf').onchange = (e) => { s.uf = e.target.value; reload(true) }
+  $('#situacao').onchange = (e) => { s.situacao = e.target.value; reload(true) }
+  $('#matriz').onchange = (e) => { s.matriz = e.target.checked; reload(true) }
+  $('#prev').onclick = () => { s.page--; carregarEmpresas() }
+  $('#next').onclick = () => { s.page++; carregarEmpresas() }
+  carregarEmpresas()
+}
+
+async function carregarEmpresas() {
+  const s = state.emp
+  const lista = $('#lista')
+  if (!lista) return
+  try {
+    const { rows, hasMore } = await api('/api/empresas', {
+      q: s.q, uf: s.uf, municipio: s.municipio, situacao: s.situacao,
+      matriz: s.matriz ? '1' : '0', page: s.page,
+    })
+    if (rows.length === 0) {
+      lista.innerHTML = `<div class="empty">${s.q || s.uf || s.municipio
+        ? 'Nenhuma empresa encontrada.'
+        : 'Base vazia — rode <code>node scripts/cnpj/import.mjs --schema --uf ES --ativas</code> para importar.'}</div>`
+    } else {
+      lista.innerHTML = `<table>
+        <thead><tr>
+          <th>CNPJ</th><th>Razão social</th><th>Nome fantasia</th><th>Situação</th>
+          <th>Município/UF</th><th>CNAE principal</th><th class="right">Capital</th><th>Abertura</th>
+        </tr></thead>
+        <tbody>${rows.map((r) => `
+          <tr class="click" onclick="location.hash='#/empresa/${r.cnpj_basico}'">
+            <td class="mono">${fmtCnpj(r.cnpj)}${r.matriz_filial === 2 ? ' <span class="badge outline">filial</span>' : ''}</td>
+            <td><strong>${esc(r.razao_social ?? '—')}</strong></td>
+            <td class="muted">${esc(r.nome_fantasia ?? '—')}</td>
+            <td>${sitBadge(r.situacao_cadastral)}</td>
+            <td class="muted">${esc(r.municipio_nome ?? '—')}${r.uf ? '/' + r.uf : ''}</td>
+            <td class="muted">${esc(r.cnae_descricao ?? r.cnae_principal ?? '—')}</td>
+            <td class="right muted">${fmtBRL(r.capital_social)}<div style="font-size:10px">${porte(r.porte)}</div></td>
+            <td class="muted">${fmtData(r.data_inicio)}</td>
+          </tr>`).join('')}
+        </tbody></table>`
+    }
+    $('#pinfo').textContent = `Página ${s.page + 1} · ${rows.length} empresa(s)${hasMore ? '+' : ''}`
+    $('#prev').disabled = s.page === 0
+    $('#next').disabled = !hasMore
+  } catch (e) {
+    lista.innerHTML = `<div class="empty">Erro: ${esc(e.message)}</div>`
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Detalhe da empresa
+// ---------------------------------------------------------------------------
+async function renderDetalhe(main, basico) {
+  main.innerHTML = '<div class="loading">Carregando…</div>'
+  let d
+  try { d = await api('/api/empresa/' + basico) }
+  catch (e) { main.innerHTML = `<div class="empty">Erro: ${esc(e.message)}</div>`; return }
+  if (!d.empresa) { main.innerHTML = '<div class="empty">Empresa não encontrada na base importada.</div>'; return }
+
+  const { empresa: emp, estabelecimentos: estabs, socios, simples } = d
+  const matriz = estabs.find((e) => e.matriz_filial === 1) ?? estabs[0]
+  const fones = matriz
+    ? [[matriz.ddd1, matriz.telefone1], [matriz.ddd2, matriz.telefone2]]
+        .filter(([, t]) => t).map(([dd, t]) => (dd ? `(${dd}) ` : '') + t).join(' · ')
+    : ''
+  const endereco = matriz ? [
+    [matriz.tipo_logradouro, matriz.logradouro].filter(Boolean).join(' ')
+      + (matriz.numero ? ', ' + matriz.numero : ''),
+    matriz.complemento, matriz.bairro,
+    matriz.cep ? 'CEP ' + matriz.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : null,
+    matriz.municipio_nome ? `${matriz.municipio_nome}/${matriz.uf}` : null,
+  ].filter(Boolean).join(' – ') : '—'
+  const simplesTxt = !simples ? '—'
+    : simples.opcao_simples && !simples.data_exclusao_simples
+      ? 'Optante desde ' + fmtData(simples.data_opcao_simples)
+      : simples.data_exclusao_simples ? 'Excluído em ' + fmtData(simples.data_exclusao_simples)
+      : 'Não optante'
+  const meiTxt = !simples ? '—'
+    : simples.opcao_mei && !simples.data_exclusao_mei
+      ? 'Optante desde ' + fmtData(simples.data_opcao_mei)
+      : simples.data_exclusao_mei ? 'Excluído em ' + fmtData(simples.data_exclusao_mei)
+      : 'Não optante'
+
+  main.innerHTML = `
+    <a class="back" href="#/empresas">‹ Empresas</a>
+    <div class="head">
+      <h2>${esc(emp.razao_social ?? '—')}</h2>
+      ${matriz ? sitBadge(matriz.situacao_cadastral) : ''}
+      <span class="badge outline">${porte(emp.porte)}</span>
+      ${simples?.opcao_simples && !simples.data_exclusao_simples ? '<span class="badge outline">Simples</span>' : ''}
+      ${simples?.opcao_mei && !simples.data_exclusao_mei ? '<span class="badge outline">MEI</span>' : ''}
+      <div class="muted" style="margin-top:4px">
+        <span class="mono">${fmtCnpj(matriz ? matriz.cnpj : emp.cnpj_basico)}</span>
+        ${matriz?.nome_fantasia ? ' · Fantasia: ' + esc(matriz.nome_fantasia) : ''}
+      </div>
+    </div>
+    <div class="grid">
+      <div><div class="lbl">Natureza jurídica</div>${esc(emp.natureza_desc ?? emp.natureza_juridica ?? '—')}</div>
+      <div><div class="lbl">Capital social</div>${fmtBRL(emp.capital_social)}</div>
+      <div><div class="lbl">Abertura (matriz)</div>${fmtData(matriz?.data_inicio)}</div>
+      <div><div class="lbl">CNAE principal (matriz)</div>${esc(matriz?.cnae_desc ?? matriz?.cnae_principal ?? '—')}</div>
+      <div><div class="lbl">Endereço (matriz)</div>${esc(endereco)}</div>
+      <div><div class="lbl">Contato</div>${esc(fones || '—')}${matriz?.email ? '<br>' + esc(matriz.email.toLowerCase()) : ''}</div>
+      <div><div class="lbl">Simples Nacional</div>${simplesTxt}</div>
+      <div><div class="lbl">MEI</div>${meiTxt}</div>
+    </div>
+
+    <h3>Sócios (${socios.length})</h3>
+    ${socios.length === 0
+      ? '<div class="empty">Nenhum sócio na base (empresário individual / MEI não tem quadro societário).</div>'
+      : `<table><thead><tr>
+          <th>Nome</th><th>CPF/CNPJ</th><th>Tipo</th><th>Qualificação</th>
+          <th>Entrada</th><th>Faixa etária</th><th></th>
+        </tr></thead><tbody>
+        ${socios.map((s) => `<tr>
+          <td><strong>${esc(s.nome_socio ?? '—')}</strong></td>
+          <td class="mono">${esc(s.cpf_cnpj_socio ?? '—')}</td>
+          <td class="muted">${TIPO_SOCIO[s.identificador] ?? '—'}</td>
+          <td class="muted">${esc(s.qualificacao_desc ?? s.qualificacao ?? '—')}</td>
+          <td class="muted">${fmtData(s.data_entrada)}</td>
+          <td class="muted">${FAIXA[s.faixa_etaria] ?? '—'}</td>
+          <td>${s.nome_socio ? `<a href="#/pessoas?${new URLSearchParams({
+            nome: s.nome_socio,
+            ...(s.cpf_cnpj_socio?.startsWith('***') ? { cpf: s.cpf_cnpj_socio.slice(3, 9) } : {}),
+          })}">Empresas desta pessoa</a>` : ''}</td>
+        </tr>`).join('')}
+        </tbody></table>`}
+
+    <h3>Estabelecimentos (${estabs.length})</h3>
+    <table><thead><tr>
+      <th>CNPJ</th><th>Tipo</th><th>Nome fantasia</th><th>Situação</th>
+      <th>Município/UF</th><th>CNAE principal</th><th>Início</th>
+    </tr></thead><tbody>
+    ${estabs.map((e) => `<tr>
+      <td class="mono">${fmtCnpj(e.cnpj)}</td>
+      <td>${e.matriz_filial === 1 ? 'Matriz' : 'Filial'}</td>
+      <td class="muted">${esc(e.nome_fantasia ?? '—')}</td>
+      <td>${sitBadge(e.situacao_cadastral)}</td>
+      <td class="muted">${esc(e.municipio_nome ?? e.cidade_exterior ?? '—')}${e.uf ? '/' + e.uf : ''}</td>
+      <td class="muted">${esc(e.cnae_desc ?? e.cnae_principal ?? '—')}</td>
+      <td class="muted">${fmtData(e.data_inicio)}</td>
+    </tr>`).join('')}
+    </tbody></table>`
+}
+
+// ---------------------------------------------------------------------------
+// Pessoas & sócios
+// ---------------------------------------------------------------------------
+function renderPessoas(main) {
+  const s = state.pes
+  main.innerHTML = `
+    <div class="toolbar">
+      <input id="nome" style="width:280px" placeholder="Nome da pessoa…" value="${esc(s.nome)}">
+      <input id="cpf" style="width:240px" placeholder="CPF (completo ou 6 dígitos do meio)" value="${esc(s.cpf)}">
+    </div>
+    <div id="resultado"></div>`
+  $('#nome').oninput = (e) => { s.nome = e.target.value; debounce(carregarPessoas) }
+  $('#cpf').oninput = (e) => { s.cpf = e.target.value; debounce(carregarPessoas) }
+  carregarPessoas()
+}
+
+async function carregarPessoas() {
+  const s = state.pes
+  const box = $('#resultado')
+  if (!box) return
+  const digits = s.cpf.replace(/\D/g, '')
+  if (s.nome.trim().length < 4 && digits.length !== 6 && digits.length !== 11) {
+    box.innerHTML = `<div class="empty">Busque por nome (mínimo 4 letras) e/ou CPF.<br>
+      <span style="font-size:12px">O CPF nos dados abertos vem mascarado (***123456**) —
+      a busca usa os 6 dígitos do meio.</span></div>`
+    return
+  }
+  box.innerHTML = '<div class="loading">Buscando…</div>'
+  let rows
+  try { rows = await api('/api/pessoas', { nome: s.nome.trim(), cpf: digits }) }
+  catch (e) { box.innerHTML = `<div class="empty">Erro: ${esc(e.message)}</div>`; return }
+  if (rows.length === 0) { box.innerHTML = '<div class="empty">Nenhum sócio encontrado.</div>'; return }
+
+  // Agrupa por pessoa (documento mascarado + nome)
+  const map = new Map()
+  for (const r of rows) {
+    const k = `${r.cpf_cnpj_socio ?? ''}|${r.nome_socio ?? ''}`
+    if (!map.has(k)) map.set(k, { ...r, empresas: [] })
+    map.get(k).empresas.push(r)
+  }
+  const pessoas = [...map.values()].sort((a, b) => b.empresas.length - a.empresas.length)
+
+  box.innerHTML = pessoas.map((p) => `
+    <div class="pessoa">
+      <div class="ph">
+        <span class="n">${esc(p.nome_socio ?? '—')}</span>
+        <span class="mono muted">${esc(p.cpf_cnpj_socio ?? '')}</span>
+        ${p.identificador !== 2 ? `<span class="badge outline">${TIPO_SOCIO[p.identificador] ?? ''}</span>` : ''}
+        <span class="muted" style="font-size:12px">${FAIXA[p.faixa_etaria] ?? ''}</span>
+        <span class="muted" style="margin-left:auto">${p.empresas.length} empresa(s)</span>
+      </div>
+      <table><thead><tr>
+        <th>CNPJ</th><th>Razão social</th><th>Qualificação</th><th>Entrada</th>
+        <th>Situação</th><th>Município/UF</th>
+      </tr></thead><tbody>
+      ${p.empresas.map((e) => `<tr class="click" onclick="location.hash='#/empresa/${e.cnpj_basico}'">
+        <td class="mono">${fmtCnpj(e.cnpj_basico)}</td>
+        <td><strong>${esc(e.razao_social ?? '—')}</strong></td>
+        <td class="muted">${esc(e.qualificacao_desc ?? e.qualificacao ?? '—')}</td>
+        <td class="muted">${fmtData(e.data_entrada)}</td>
+        <td>${sitBadge(e.situacao_matriz)}</td>
+        <td class="muted">${esc(e.municipio_nome ?? '—')}${e.uf ? '/' + e.uf : ''}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`).join('') +
+    (rows.length >= 300 ? '<div class="muted">Resultado truncado em 300 vínculos — refine a busca.</div>' : '')
+}
+
+// ---------------------------------------------------------------------------
+// Status da base no cabeçalho
+// ---------------------------------------------------------------------------
+api('/api/status').then((st) => {
+  $('#status').textContent = st.referencia
+    ? `base ${st.referencia}${st.filtros ? ' · ' + st.filtros : ''} · ${fmtInt(st.empresas)} empresas · ${fmtInt(st.socios)} sócios`
+    : 'base ainda não importada'
+}).catch(() => {})
+
+render()
+</script>
+</body>
+</html>

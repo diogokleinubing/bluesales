@@ -15,6 +15,8 @@
   /* ---- Tema CLARO (fundo branco, bordas finas tipo Attio) ---- */
   --background: #ffffff;
   --foreground: #1a1d21;
+  /* Fundo da área de conteúdo: azul muito leve (cards brancos "saltam"). */
+  --content-bg: #f8fbfe;
 
   --card: #ffffff;
   --card-foreground: #1a1d21;
@@ -74,6 +76,7 @@
 .dark {
   --background: #0a0c11;
   --foreground: #e6e9ef;
+  --content-bg: #0b0e15;
 
   --card: #13161d;
   --card-foreground: #e6e9ef;

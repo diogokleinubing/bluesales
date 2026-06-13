@@ -17,12 +17,15 @@ export function EventosDialog({
   titulo,
   subtitulo,
   eventos,
+  showOrganizador = true,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   titulo: string
   subtitulo?: string
   eventos: CrawledEventRow[]
+  /** Exibe a coluna Organizador (redundante no diálogo de um organizador). */
+  showOrganizador?: boolean
 }) {
   const ordenados = [...eventos].sort((a, b) =>
     (a.data_inicio ?? '').localeCompare(b.data_inicio ?? ''),
@@ -39,7 +42,7 @@ export function EventosDialog({
           <Table>
             <TableHeader><TableRow>
               <TableHead>Evento</TableHead>
-              <TableHead>Organizador</TableHead>
+              {showOrganizador && <TableHead>Organizador</TableHead>}
               <TableHead>Data</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Fonte</TableHead>
@@ -47,13 +50,13 @@ export function EventosDialog({
             </TableRow></TableHeader>
             <TableBody>
               {ordenados.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableRow><TableCell colSpan={showOrganizador ? 6 : 5} className="py-8 text-center text-muted-foreground">
                   Nenhum evento.
                 </TableCell></TableRow>
               ) : ordenados.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="max-w-[420px] truncate font-medium" title={e.nome}>{e.nome}</TableCell>
-                  <TableCell className="max-w-[220px] truncate text-muted-foreground" title={e.organizador_raw ?? undefined}>{e.organizador_raw ?? '—'}</TableCell>
+                  {showOrganizador && <TableCell className="max-w-[220px] truncate text-muted-foreground" title={e.organizador_raw ?? undefined}>{e.organizador_raw ?? '—'}</TableCell>}
                   <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums">
                     {e.gratuito ? 'Grátis' : faixaPreco(e.preco_min, e.preco_max)}

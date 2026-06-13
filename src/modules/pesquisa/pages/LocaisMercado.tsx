@@ -15,15 +15,20 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
+import { EntityAutocomplete, type Lookup } from '@/modules/crm/components/EntityAutocomplete'
+import { LocalDialog, type PlatRel, type LocalInitial } from '@/modules/crm/components/LocalDialog'
+import { usePlatforms } from '@/modules/crm/hooks/useConfigCadastros'
 import { EventosDialog } from '../components/EventosDialog'
+import { CriarOrgVinculadaDialog } from '../components/CriarOrgVinculadaDialog'
 import { StarButton, IgnoreButton } from '../components/StarButton'
 import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
+import { BR_UFS } from '../lib/ufs'
 import {
   useCrawledLocals, useEventosDoLocal, usePromocoes, useCrawlerSources,
   useFavoritos, setFavoritoAgregado, useIgnorados, setIgnoradoAgregado,
-  promoverLocal, useCrmOrgId,
-  type LocalAgg, type LocalAggFilters, type PromoverAggInput,
+  registerLocalPromotion, useCrmOrgId, useEventFacets,
+  type LocalAgg, type LocalAggFilters,
 } from '../hooks/usePesquisa'
 
 export function LocaisMercado() {
@@ -35,11 +40,21 @@ export function LocaisMercado() {
   const [search, setSearch] = useState('')
   const [valorMin, setValorMin] = useState('')
   const [fonte, setFonte] = useState('todas')
+  const [cidade, setCidade] = useState('todas')
+  const [uf, setUf] = useState('')
+  const facets = useEventFacets()
   const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
   const [soFav, setSoFav] = useState(false)
   const [soIgnorados, setSoIgnorados] = useState(false)
   const [sel, setSel] = useState<LocalAgg | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
+  const [busy] = useState<string | null>(null)
+  const platforms = usePlatforms()
+  const [importState, setImportState] = useState<{
+    chave: string; nome: string; cidade: string | null; uf: string | null
+    initial: LocalInitial; plats: PlatRel[]
+  } | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [orgPrompt, setOrgPrompt] = useState<{ localId: string; nome: string; cidade: string | null; uf: string | null } | null>(null)
   const favoritos = useFavoritos('local').data
   const ignorados = useIgnorados('local').data
 
@@ -53,7 +68,21 @@ export function LocaisMercado() {
     valorMin: aplicado.valorMin.trim() !== '' && Number.isFinite(Number(aplicado.valorMin))
       ? Number(aplicado.valorMin) : null,
     fonte,
-  }), [aplicado, fonte])
+    cidade,
+    uf,
+  }), [aplicado, fonte, cidade, uf])
+
+  // Cidades como opções de autocomplete (id = "cidade|uf" usado no filtro).
+  const cidadeOptions: Lookup[] = useMemo(
+    () => (facets.data?.cidades ?? []).map((c) => ({
+      id: `${c.cidade}|${c.uf ?? ''}`,
+      nome: `${c.cidade}${c.uf ? `/${c.uf}` : ''}`,
+    })),
+    [facets.data],
+  )
+  const cidadeValue: Lookup | null = cidade === 'todas'
+    ? null
+    : (cidadeOptions.find((o) => o.id === cidade) ?? { id: cidade, nome: cidade.split('|')[0] })
 
   const { data, isLoading } = useCrawledLocals(filters)
   const rows = useMemo(() => {
@@ -85,30 +114,51 @@ export function LocaisMercado() {
     }
   }
 
-  async function onPromover(a: LocalAgg) {
+  // Plataformas detectadas (fontes) -> ids de plataforma do CRM (casa por nome).
+  function detectarPlats(fontes: string[]): PlatRel[] {
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+    const byNome = new Map((platforms.data ?? []).map((p) => [norm(p.nome), p.id]))
+    const out: PlatRel[] = []
+    for (const f of fontes) {
+      const id = byNome.get(norm(f))
+      if (id && !out.some((x) => x.platform_id === id)) out.push({ platform_id: id, tipo_relacao: null })
+    }
+    return out
+  }
+
+  // Abre o dialog completo do local pré-preenchido (não cria ainda).
+  function onPromover(a: LocalAgg) {
     if (!orgId) return
-    setBusy(a.chave)
+    const obs = [
+      'Adicionado da Pesquisa.',
+      `Faixa de ingressos: ${faixaPreco(a.preco_min, a.preco_max)}`,
+      `Taxa média: ${fmtTaxa(a.taxa_media)}`,
+      `Eventos capturados: ${a.eventos}`,
+      a.fontes.length ? `Fontes: ${a.fontes.join(', ')}` : null,
+    ].filter(Boolean).join('\n')
+    setImportState({
+      chave: a.chave,
+      nome: a.nome,
+      cidade: a.cidade_nome,
+      uf: a.uf,
+      initial: { nome: a.nome, cidade: a.cidade_nome, uf: a.uf, observacoes: obs },
+      plats: detectarPlats(a.fontes),
+    })
+    setImportOpen(true)
+  }
+
+  // Após salvar no dialog: registra a promoção e pergunta sobre a organização.
+  async function onImportSaved(localId: string) {
+    if (!orgId || !importState) return
     try {
-      const input: PromoverAggInput = {
-        chave: a.chave,
-        nome: a.nome,
-        cidade: a.cidade_nome,
-        uf: a.uf,
-        precoMin: a.preco_min,
-        precoMax: a.preco_max,
-        taxaMediaPct: a.taxa_media,
-        eventos: a.eventos,
-        cidades: a.cidade ? [a.cidade] : [],
-        fontes: a.fontes,
-      }
-      await promoverLocal(orgId, input, profile?.id ?? null)
-      await qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes', 'local'] })
+      await registerLocalPromotion(orgId, importState.chave, importState.nome, localId, profile?.id ?? null)
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes', 'local'] })
       qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
-      toast.success('Local promovido ao Comercial', { description: a.nome })
+      qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'locais'] })
+      toast.success('Local adicionado ao Comercial', { description: importState.nome })
+      setOrgPrompt({ localId, nome: importState.nome, cidade: importState.cidade, uf: importState.uf })
     } catch (e) {
-      toast.error('Erro ao promover', { description: (e as Error).message })
-    } finally {
-      setBusy(null)
+      toast.error('Erro', { description: (e as Error).message })
     }
   }
 
@@ -127,6 +177,20 @@ export function LocaisMercado() {
               {(sources.data ?? []).map((s) => <SelectItem key={s.id} value={s.slug}>{s.nome}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={uf || '__todos'} onValueChange={(v) => setUf(v === '__todos' ? '' : v)}>
+            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[140px]`} size="sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__todos">Todos os estados</SelectItem>
+              {BR_UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <EntityAutocomplete
+            className="w-[180px]"
+            placeholder="Cidade…"
+            value={cidadeValue}
+            options={cidadeOptions}
+            onPick={(v) => setCidade(v ? v.id : 'todas')}
+          />
           <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
             placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           <button
@@ -210,6 +274,26 @@ export function LocaisMercado() {
         titulo={sel?.nome ?? ''}
         subtitulo={[sel?.cidade, `${(eventosDoSel ?? []).length} evento(s) capturado(s)`].filter(Boolean).join(' · ')}
         eventos={eventosDoSel ?? []}
+      />
+
+      <LocalDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        orgId={orgId ?? null}
+        editId={null}
+        initial={importState?.initial ?? {}}
+        initialPlatforms={importState?.plats ?? []}
+        saveLabel="Salvar e adicionar"
+        onSaved={onImportSaved}
+      />
+
+      <CriarOrgVinculadaDialog
+        open={!!orgPrompt}
+        onOpenChange={(o) => !o && setOrgPrompt(null)}
+        localId={orgPrompt?.localId ?? null}
+        localNome={orgPrompt?.nome ?? ''}
+        cidade={orgPrompt?.cidade ?? null}
+        uf={orgPrompt?.uf ?? null}
       />
     </ListView>
   )

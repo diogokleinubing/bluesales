@@ -57,10 +57,10 @@ export function OrganizacaoDetalhe() {
       {/* Breadcrumb (linha 100% acima do nome) */}
       <div className="border-b border-border px-6 py-2">
         <button
-          onClick={() => navigate('/comercial/organizacoes')}
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/comercial/organizacoes'))}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="size-3.5" /> Organizações
+          <ArrowLeft className="size-3.5" /> Voltar
         </button>
       </div>
 

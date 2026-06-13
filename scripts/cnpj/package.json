@@ -1,0 +1,15 @@
+{
+  "name": "cnpj-base",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Importador e visualizador web standalone da base de CNPJs da Receita Federal",
+  "scripts": {
+    "import": "node import.mjs",
+    "web": "node serve.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.21.0",
+    "pg-copy-streams": "^7.0.0"
+  }
+}

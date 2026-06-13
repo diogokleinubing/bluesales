@@ -7,7 +7,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
+import { DateTime15 } from './DateTime15'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -39,8 +42,31 @@ function dt(s: string) {
   return `${fmtDate(d)} · ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+// Default da data/hora: hoje às 09:00 (local). Minutos só em passos de 15.
+function defaultDataHora() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}T09:00`
+}
+
+// Arredonda os minutos de um "YYYY-MM-DDTHH:mm" para o múltiplo de 15 mais
+// próximo (o step do input não impede a digitação de minutos quebrados).
+function snap15(v: string): string {
+  if (!v) return v
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return v
+  d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// Nota e Objeção são registros do momento; os demais tipos têm data (e quando
+// futura viram um agendamento).
+const SEM_DATA: Tipo[] = ['Nota', 'Objeção']
+
 export interface AtividadesPanelProps {
-  entityType: 'organization' | 'person' | 'opportunity'
+  entityType: 'organization' | 'person' | 'opportunity' | 'local' | 'evento'
   entityId: string
   organizationId?: string
   opportunityId?: string
@@ -61,14 +87,24 @@ export function AtividadesPanel({
   const [tipo, setTipo] = useState<Tipo>('Nota')
   const [resumo, setResumo] = useState('')
   const [objSel, setObjSel] = useState('')
+  const [dataHora, setDataHora] = useState(defaultDataHora())
+  const [semData, setSemData] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const temData = !SEM_DATA.includes(tipo)
+  // Data futura = agendamento (margem de 1 min para o "agora" do default).
+  const agendamento = temData && !semData && new Date(dataHora).getTime() > Date.now() + 60_000
 
   const acts = useActivities(
     entityType === 'opportunity'
       ? { opportunityId: entityId }
       : entityType === 'person'
         ? { personId: entityId }
-        : { organizationId: entityId },
+        : entityType === 'local'
+          ? { localId: entityId }
+          : entityType === 'evento'
+            ? { crmEventId: entityId }
+            : { organizationId: entityId },
   )
 
   const objs = useQuery({
@@ -87,7 +123,7 @@ export function AtividadesPanel({
 
   const timeline = useMemo(() => {
     const items: {
-      key: string; at: string; tipo: string; icon: LucideIcon
+      key: string; at: string | null; tipo: string; icon: LucideIcon
       titulo: string; resumo?: string | null; author?: string | null
       fileUrl?: string | null; categoria?: string | null
     }[] = []
@@ -106,7 +142,8 @@ export function AtividadesPanel({
         titulo: obj?.titulo ?? 'Objeção', resumo: o.comentario, categoria: obj?.categoria ?? null,
       })
     }
-    return items.sort((a, b) => (a.at < b.at ? 1 : -1))
+    // Sem data (To-Do) primeiro; depois por data desc.
+    return items.sort((a, b) => ((a.at ?? '9999') < (b.at ?? '9999') ? 1 : -1))
   }, [acts.data, objs.data])
 
   function refresh() {
@@ -128,15 +165,17 @@ export function AtividadesPanel({
       } else {
         await createActivity(tenantOrgId, profile.id, {
           tipo,
-          data_hora: new Date().toISOString(),
-          titulo: tipo,
+          data_hora: temData ? (semData ? null : new Date(snap15(dataHora)).toISOString()) : new Date().toISOString(),
+          titulo: agendamento ? `${tipo} (agendada)` : tipo,
           resumo: resumo.trim() || null,
           organization_id: organizationId ?? (entityType === 'organization' ? entityId : null),
           opportunity_id: opportunityId ?? (entityType === 'opportunity' ? entityId : null),
+          local_id: entityType === 'local' ? entityId : null,
+          crm_event_id: entityType === 'evento' ? entityId : null,
           participantIds: [],
         })
       }
-      setResumo(''); setObjSel('')
+      setResumo(''); setObjSel(''); setDataHora(defaultDataHora()); setSemData(false)
       refresh()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -183,6 +222,23 @@ export function AtividadesPanel({
             </Select>
           )}
 
+          {temData && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox checked={semData} onCheckedChange={(v) => setSemData(v === true)} /> Sem data (a fazer)
+              </label>
+              {!semData && (
+                <>
+                  <Label className="text-xs text-muted-foreground">Data/hora</Label>
+                  <DateTime15 value={dataHora} onChange={setDataHora} />
+                  {agendamento && (
+                    <Badge variant="outline" className="border-[var(--warning)] text-[var(--warning)]">Agendamento</Badge>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           <Textarea
             value={resumo}
             onChange={(e) => setResumo(e.target.value)}
@@ -191,7 +247,7 @@ export function AtividadesPanel({
           />
         <div className="flex justify-end">
           <Button size="sm" onClick={registrar} disabled={!canSubmit || saving}>
-            {saving ? 'Registrando…' : `Registrar ${tipo.toLowerCase()}`}
+            {saving ? 'Registrando…' : agendamento ? `Agendar ${tipo.toLowerCase()}` : `Registrar ${tipo.toLowerCase()}`}
           </Button>
         </div>
       </div>
@@ -205,6 +261,7 @@ export function AtividadesPanel({
         <ol className="space-y-3">
           {timeline.map((it) => {
             const Icon = it.icon
+            const futura = !!it.at && new Date(it.at).getTime() > Date.now()
             return (
               <li key={it.key} className="flex gap-3">
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -213,10 +270,11 @@ export function AtividadesPanel({
                 <div className="min-w-0 flex-1 rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium">{it.titulo}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{dt(it.at)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{it.at ? dt(it.at) : 'Sem data'}</span>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     <Badge variant="secondary">{it.tipo}</Badge>
+                    {futura && <Badge variant="outline" className="border-[var(--warning)] text-[var(--warning)]">Agendado</Badge>}
                     {it.categoria && <Badge variant="outline" className="text-xs">{it.categoria}</Badge>}
                     {it.author && <span>· {it.author}</span>}
                     {it.fileUrl && (

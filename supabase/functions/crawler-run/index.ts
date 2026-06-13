@@ -36,6 +36,12 @@ import { zigTicketsScraper } from './sources/zigtickets.ts'
 import { uhuuScraper } from './sources/uhuu.ts'
 import { ticketSportsScraper } from './sources/ticketsports.ts'
 import { bilheteriaExpressScraper } from './sources/bilheteriaexpress.ts'
+import { shotgunScraper } from './sources/shotgun.ts'
+import { clubeDoIngressoScraper } from './sources/clubedoingresso.ts'
+import { ticketCenterScraper } from './sources/ticketcenter.ts'
+import { megaBilheteriaScraper } from './sources/megabilheteria.ts'
+import { sampaIngressosScraper } from './sources/sampaingressos.ts'
+import { minhaEntradaScraper } from './sources/minhaentrada.ts'
 
 const SCRAPERS: Record<string, Scraper> = {
   sympla: symplaScraper,
@@ -53,6 +59,12 @@ const SCRAPERS: Record<string, Scraper> = {
   uhuu: uhuuScraper,
   ticketsports: ticketSportsScraper,
   bilheteriaexpress: bilheteriaExpressScraper,
+  shotgun: shotgunScraper,
+  clubedoingresso: clubeDoIngressoScraper,
+  ticketcenter: ticketCenterScraper,
+  megabilheteria: megaBilheteriaScraper,
+  sampaingressos: sampaIngressosScraper,
+  minhaentrada: minhaEntradaScraper,
 }
 
 interface SourceRow {

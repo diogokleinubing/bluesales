@@ -161,6 +161,14 @@ export interface OrganizerFilters {
   search: string
   valorMin: number | null
   fonte: string // slug | 'todas'
+  cidade: string // 'cidade|uf' | 'todas'
+  uf: string // UF | ''
+}
+
+/** Deriva (cidade, uf) para as RPCs: a UF vem do select ou do sufixo da cidade. */
+function cidadeUfParams(cidade: string, uf: string): { p_cidade: string | null; p_uf: string | null } {
+  const [c = '', u = ''] = cidade !== 'todas' ? cidade.split('|') : []
+  return { p_cidade: c || null, p_uf: uf || u || null }
 }
 
 export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<OrganizerAgg[]> {
@@ -174,6 +182,7 @@ export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
+        ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
       return (data ?? []) as OrganizerAgg[]
@@ -185,6 +194,8 @@ export interface LocalAggFilters {
   search: string
   valorMin: number | null
   fonte: string
+  cidade: string // 'cidade|uf' | 'todas'
+  uf: string // UF | ''
 }
 
 export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<LocalAgg[]> {
@@ -198,6 +209,7 @@ export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<Local
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
+        ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
       return (data ?? []) as LocalAgg[]
@@ -271,6 +283,32 @@ export function useEventosDoLocal(
   })
 }
 
+/** Eventos (não ignorados) de um local pela(s) chave(s) agregada(s). */
+export function useEventosDoLocalChaves(chaves: string[] | null): UseQueryResult<CrawledEventRow[]> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId && !!chaves && chaves.length > 0,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'local-eventos-chaves', orgId, chaves],
+    queryFn: async (): Promise<CrawledEventRow[]> => {
+      const { data, error } = await supabase
+        .from('crawled_events')
+        .select('*, crawler_sources(slug, nome)')
+        .eq('org_id', orgId!)
+        .eq('ignorado', false)
+        .in('local_chave', chaves!)
+        .order('data_inicio', { ascending: true })
+        .limit(1000)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((e: Record<string, unknown>) => ({
+        ...(e as object),
+        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
+        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+      })) as CrawledEventRow[]
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Listagem paginada + filtros no backend (a tabela tem mais de 1000 linhas)
 // ---------------------------------------------------------------------------
@@ -300,6 +338,10 @@ export interface EventFilters {
   favoritos?: boolean
   /** Só eventos com pelo menos um artista vinculado (não removido). */
   comArtista?: boolean
+  /** Eventos cuja data_inicio cai nos próximos N dias (a partir de agora). */
+  proxDias?: number
+  /** Só eventos com dado de vendas (vendidos não nulo — ex.: Bileto). */
+  comVendas?: boolean
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -355,6 +397,12 @@ function applyEventFilters(
   if (f.local) qq = qq.eq('local_raw', f.local)
   if (f.organizador) qq = qq.eq('organizador_raw', f.organizador)
   if (f.favoritos) qq = qq.eq('favorito', true)
+  if (f.comVendas) qq = qq.not('vendidos', 'is', null)
+  if (f.proxDias != null && f.proxDias > 0) {
+    const agora = new Date()
+    const fim = new Date(agora.getTime() + f.proxDias * 86_400_000)
+    qq = qq.gte('data_inicio', agora.toISOString()).lte('data_inicio', fim.toISOString())
+  }
   // Filtro por nome de artista: evento cujo nome contenha algum dos nomes.
   if (f.artistasNomes !== undefined) {
     // Duplas: "Jorge e Mateus" também procura "Jorge & Mateus" (e vice-versa).
@@ -748,6 +796,18 @@ export interface PromoverAggInput {
   eventos: number
   cidades: string[]
   fontes: string[]
+}
+
+/** Registra a promoção (chave -> local_id) depois do local já criado pelo
+ *  dialog. Usado pelo fluxo "adicionar ao CRM" que abre o dialog completo. */
+export async function registerLocalPromotion(
+  orgId: string, chave: string, rotulo: string, localId: string, profileId: string | null,
+): Promise<void> {
+  const { error } = await supabase.from('crawled_promotions').upsert(
+    { org_id: orgId, tipo: 'local', chave, rotulo, local_id: localId, promovido_por: profileId },
+    { onConflict: 'org_id,tipo,chave' },
+  )
+  if (error) throw new Error(error.message)
 }
 
 export interface PromocaoRef {

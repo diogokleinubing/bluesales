@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useOpenItem } from '@/lib/useOpenItem'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,7 +28,7 @@ function statusBadge(resultado: 'Ganho' | 'Perdida' | null) {
 }
 
 export function Oportunidades() {
-  const navigate = useNavigate()
+  const openItem = useOpenItem()
   const { data, isLoading } = useOpportunities()
   const { stages } = useFunnel('oportunidade')
   const [view, setView] = useViewPref('crm:oppView', 'list')
@@ -106,8 +106,8 @@ export function Oportunidades() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhuma oportunidade.</TableCell></TableRow>
             ) : rows.map((o) => (
-              <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/comercial/oportunidades/${o.id}`)}>
-                <TableCell className="font-medium">{o.titulo}</TableCell>
+              <TableRow key={o.id} className="cursor-pointer" onClick={(e) => openItem(e, `/comercial/oportunidades/${o.id}`)}>
+                <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={o.titulo}>{o.titulo}</div></TableCell>
                 <TableCell>{o.orgNome ?? '—'}</TableCell>
                 <TableCell>
                   {o.stageNome ? (

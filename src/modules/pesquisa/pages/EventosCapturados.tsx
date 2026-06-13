@@ -3,10 +3,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Download, RefreshCw, ChevronLeft, ChevronRight, X, Mic2,
+  Download, RefreshCw, ChevronLeft, ChevronRight, X, Mic2, Sparkles, CalendarClock, TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -34,14 +36,11 @@ import {
 } from '../hooks/usePesquisa'
 import { ARTIST_CLASSES } from '@/modules/crm/hooks/useCadastros'
 import { StarButton } from '../components/StarButton'
+import { useDeepAnalyses, runDeepAnalysis, type DeepAnalysis } from '../hooks/useEventDeepAnalysis'
+import { BR_UFS } from '../lib/ufs'
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// UFs do Brasil (lista fixa — evita lixo/valores estrangeiros vindos dos dados).
-const BR_UFS = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
-  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-]
 
 function preco(ev: CrawledEventRow): string {
   if (ev.gratuito) return 'Grátis'
@@ -77,6 +76,8 @@ export function EventosCapturados() {
   const [classes, setClasses] = useState<string[]>([])
   const [favoritos, setFavoritos] = useState(false)
   const [comArtista, setComArtista] = useState(false)
+  const [comVendas, setComVendas] = useState(false)
+  const [proxSeven, setProxSeven] = useState(false)
   const [page, setPage] = useState(0)
   const artistNames = useArtistNamesByClasse(classes)
   const [busy, setBusy] = useState<string | null>(null)
@@ -127,12 +128,14 @@ export function EventosCapturados() {
       artistasNomes: classes.length > 0 ? artistNames.data : undefined,
       favoritos: favoritos || undefined,
       comArtista: comArtista || undefined,
+      comVendas: comVendas || undefined,
+      proxDias: proxSeven ? 7 : undefined,
     }),
-    [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista],
+    [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven],
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven])
 
   const ignoradosLocais = useIgnorados('local')
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
@@ -141,6 +144,41 @@ export function EventosCapturados() {
   const from = total === 0 ? 0 : page * EVENTS_PAGE_SIZE + 1
   const to = Math.min((page + 1) * EVENTS_PAGE_SIZE, total)
   const temProx = (page + 1) * EVENTS_PAGE_SIZE < total
+
+  // Fit Score — análise profunda (IA) dos eventos selecionados.
+  const ids = useMemo(() => rows.map((r) => r.id), [rows])
+  const deep = useDeepAnalyses(ids)
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [running, setRunning] = useState(false)
+  const [verDetalhe, setVerDetalhe] = useState<DeepAnalysis | null>(null)
+  useEffect(() => { setSel(new Set()) }, [page, data])
+  function toggleSel(id: string) {
+    setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  const allSel = rows.length > 0 && rows.every((r) => sel.has(r.id))
+  function toggleAll() { setSel(allSel ? new Set() : new Set(rows.map((r) => r.id))) }
+
+  async function runSelected() {
+    const lista = [...sel]
+    if (lista.length === 0) return
+    setRunning(true)
+    let done = 0, erros = 0
+    toast.loading(`Analisando… 0/${lista.length}`, { id: 'deep' })
+    let i = 0
+    async function worker() {
+      while (i < lista.length) {
+        const id = lista[i++]
+        try { await runDeepAnalysis(id) } catch { erros++ }
+        done++
+        toast.loading(`Analisando… ${done}/${lista.length}`, { id: 'deep' })
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, lista.length) }, () => worker()))
+    toast.success(`Análise concluída — ${lista.length - erros} ok${erros ? `, ${erros} erro(s)` : ''}`, { id: 'deep' })
+    setSel(new Set())
+    qc.invalidateQueries({ queryKey: ['pesquisa', 'deep-analysis'] })
+    setRunning(false)
+  }
 
   async function onIgnorar(ev: CrawledEventRow, ignorar: boolean) {
     setBusy(ev.id)
@@ -230,11 +268,17 @@ export function EventosCapturados() {
   }
 
   return (
+    <>
     <ListView
       title="Eventos capturados"
       count={total ? String(total) : undefined}
       actions={
         <div className="flex items-center gap-2">
+          <Button variant="default" size="sm" onClick={runSelected} disabled={sel.size === 0 || running}
+            title="Re-scrape do evento + site oficial e análise de fit por IA">
+            {running ? <RefreshCw className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            Análise detalhada{sel.size > 0 ? ` (${sel.size})` : ''}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['pesquisa'] })}>
             <RefreshCw className={`size-4 ${isFetching ? 'animate-spin' : ''}`} /> Atualizar
           </Button>
@@ -357,6 +401,28 @@ export function EventosCapturados() {
           >
             <Mic2 className="size-4" /> Com artista
           </button>
+          <button
+            type="button"
+            onClick={() => setProxSeven((v) => !v)}
+            title="Eventos que acontecem nos próximos 7 dias (vendas perto do final)"
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              proxSeven ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <CalendarClock className="size-4" /> Próx. 7 dias
+          </button>
+          <button
+            type="button"
+            onClick={() => setComVendas((v) => !v)}
+            title="Só eventos com dado de vendas capturado (ex.: Bileto)"
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              comVendas ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <TrendingUp className="size-4" /> Com vendas
+          </button>
           {([['Local', local, setLocal], ['Organizador', organizador, setOrganizador]] as const)
             .filter(([, v]) => v)
             .map(([label, v, set]) => (
@@ -370,7 +436,9 @@ export function EventosCapturados() {
     >
       <Table>
         <TableHeader><TableRow>
+          <TableHead className="w-8"><Checkbox checked={allSel} onCheckedChange={() => toggleAll()} aria-label="Selecionar todos" /></TableHead>
           <TableHead>Evento</TableHead>
+          <TableHead>Fit IA</TableHead>
           <TableHead>Fonte</TableHead>
           <TableHead>Data</TableHead>
           <TableHead>Local</TableHead>
@@ -383,16 +451,19 @@ export function EventosCapturados() {
         <TableBody>
           {isLoading ? (
             Array.from({ length: 12 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={11}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
               Nenhum evento encontrado.
             </TableCell></TableRow>
           ) : rows.map((e) => {
             const promovido = !!e.promovido_crm_event_id
             return (
               <TableRow key={e.id} className={e.ignorado ? 'opacity-50' : ''}>
+                <TableCell className="w-8" onClick={(ev) => ev.stopPropagation()}>
+                  <Checkbox checked={sel.has(e.id)} onCheckedChange={() => toggleSel(e.id)} aria-label="Selecionar" />
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     <div className="flex shrink-0 items-center gap-1">
@@ -408,6 +479,7 @@ export function EventosCapturados() {
                     </div>
                   </div>
                 </TableCell>
+                <TableCell><FitIaCell a={deep.data?.get(e.id)} onOpen={setVerDetalhe} /></TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     <Badge variant="outline">{e.source_nome ?? e.source_slug ?? '—'}</Badge>
@@ -441,5 +513,73 @@ export function EventosCapturados() {
         </TableBody>
       </Table>
     </ListView>
+    <DeepDetalheDialog a={verDetalhe} onClose={() => setVerDetalhe(null)} />
+    </>
+  )
+}
+
+const FIT_COR = (s: number) => s >= 70
+  ? 'bg-[var(--success)]/15 text-[var(--success)]'
+  : s >= 40 ? 'bg-[var(--warning)]/15 text-[var(--warning)]' : 'bg-destructive/15 text-destructive'
+
+const REC_LABEL: Record<string, string> = { prospectar: 'Prospectar', avaliar: 'Avaliar', descartar: 'Descartar' }
+
+function FitIaCell({ a, onOpen }: { a?: DeepAnalysis; onOpen: (a: DeepAnalysis) => void }) {
+  if (!a) return <span className="text-muted-foreground">—</span>
+  if (a.status === 'erro' || a.fit_score == null) {
+    return <button onClick={() => onOpen(a)} className="text-xs text-destructive hover:underline" title={a.erro ?? ''}>erro</button>
+  }
+  return (
+    <button onClick={() => onOpen(a)} className="inline-flex items-center gap-1.5 hover:opacity-80" title={a.recomendacao ? REC_LABEL[a.recomendacao] : ''}>
+      <span className={`inline-flex min-w-9 justify-center rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums ${FIT_COR(a.fit_score)}`}>{a.fit_score}</span>
+    </button>
+  )
+}
+
+function DeepDetalheDialog({ a, onClose }: { a: DeepAnalysis | null; onClose: () => void }) {
+  const s = (a?.sinais ?? {}) as Record<string, unknown>
+  const linhas: [string, unknown][] = [
+    ['Lineup / atrações', s.lineup_forca],
+    ['Edição', s.edicao],
+    ['Multi-dia', s.multi_dia === true ? 'Sim' : s.multi_dia === false ? 'Não' : undefined],
+    ['Indícios de venda antecipada', s.indicios_venda_antecipada],
+    ['Preços', s.preco_resumo],
+    ['Público estimado', s.publico_estimado],
+    ['Resumo', s.resumo],
+  ]
+  return (
+    <Dialog open={!!a} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[640px]">
+        <DialogHeader><DialogTitle>Análise detalhada</DialogTitle></DialogHeader>
+        {a && (
+          <div className="space-y-3 text-sm">
+            {a.status === 'erro' ? (
+              <p className="text-destructive">{a.erro ?? 'Falha na análise.'}</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  {a.fit_score != null && (
+                    <span className={`inline-flex min-w-10 justify-center rounded-md px-2 py-1 text-base font-bold tabular-nums ${FIT_COR(a.fit_score)}`}>{a.fit_score}</span>
+                  )}
+                  {a.recomendacao && <Badge variant="outline">{REC_LABEL[a.recomendacao] ?? a.recomendacao}</Badge>}
+                </div>
+                {a.veredito && <p className="text-foreground">{a.veredito}</p>}
+                <dl className="space-y-1.5">
+                  {linhas.filter(([, v]) => v != null && v !== '').map(([k, v]) => (
+                    <div key={k} className="grid grid-cols-[150px_1fr] gap-2">
+                      <dt className="text-muted-foreground">{k}</dt>
+                      <dd>{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {a.official_url && (
+                  <a href={a.official_url} target="_blank" rel="noreferrer" className="inline-block text-primary hover:underline">Site oficial</a>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

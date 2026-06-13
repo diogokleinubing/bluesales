@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { lazy, type ComponentType } from 'react'
 import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppLayout } from '@/modules/shared/AppLayout'
 import { ControlsProvider } from '@/modules/shared/controls-context'
@@ -7,107 +7,154 @@ import { AdminRoute, RoleRoute } from '@/modules/auth/AdminRoute'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { lastRoute } from '@/modules/shared/navigation'
 
+// Carrega rotas lazy com auto-recuperação: se o chunk falhar ao baixar (chunk
+// obsoleto após HMR no dev ou novo deploy em prod — "Failed to fetch
+// dynamically imported module"), recarrega a página uma vez (o que o F5 fazia
+// manualmente). A trava em sessionStorage evita loop de reload.
+function lazyWithRetry<T extends ComponentType<unknown>>(
+  factory: () => Promise<{ default: T }>,
+) {
+  const KEY = 'chunk-reloaded'
+  return lazy(() =>
+    factory().then(
+      (m) => { sessionStorage.removeItem(KEY); return m },
+      (err) => {
+        if (!sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, '1')
+          window.location.reload()
+          return new Promise<{ default: T }>(() => {}) // aguarda o reload, não renderiza erro
+        }
+        throw err
+      },
+    ),
+  )
+}
+
 // --- BI (lazy: mantém Recharts/xlsx fora do bundle inicial) ---
-const DashboardPage = lazy(() =>
+const DashboardPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
-const MensalPage = lazy(() =>
+const MensalPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/MensalPage').then((m) => ({ default: m.MensalPage })),
 )
-const AnalisesPage = lazy(() =>
+const AnalisesPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/AnalisesPage').then((m) => ({ default: m.AnalisesPage })),
 )
-const MeiosPagamentoPage = lazy(() =>
+const MeiosPagamentoPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/MeiosPagamentoPage').then((m) => ({ default: m.MeiosPagamentoPage })),
 )
-const YtdPage = lazy(() =>
+const YtdPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/YtdPage').then((m) => ({ default: m.YtdPage })),
 )
-const ProvisionamentoPage = lazy(() =>
+const ProvisionamentoPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/ProvisionamentoPage').then((m) => ({ default: m.ProvisionamentoPage })),
 )
-const RegrasPage = lazy(() =>
+const RegrasPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/RegrasPage').then((m) => ({ default: m.RegrasPage })),
 )
-const ImportacaoPage = lazy(() =>
+const ImportacaoPage = lazyWithRetry(() =>
   import('@/modules/bi/pages/ImportacaoPage').then((m) => ({ default: m.ImportacaoPage })),
 )
-const BasePage = lazy(() =>
+const BasePage = lazyWithRetry(() =>
   import('@/modules/bi/pages/BasePage').then((m) => ({ default: m.BasePage })),
 )
 
 // --- Comercial (CRM) ---
-const PainelComercial = lazy(() =>
+const PainelComercial = lazyWithRetry(() =>
   import('@/modules/crm/pages/Painel').then((m) => ({ default: m.PainelComercial })),
 )
-const Organizacoes = lazy(() =>
+const Organizacoes = lazyWithRetry(() =>
   import('@/modules/crm/pages/Organizacoes').then((m) => ({ default: m.Organizacoes })),
 )
-const OrganizacaoDetalhe = lazy(() =>
+const Relacionamento = lazyWithRetry(() =>
+  import('@/modules/crm/pages/Relacionamento').then((m) => ({ default: m.Relacionamento })),
+)
+const OrganizacaoDetalhe = lazyWithRetry(() =>
   import('@/modules/crm/pages/OrganizacaoDetalhe').then((m) => ({ default: m.OrganizacaoDetalhe })),
 )
-const Contatos = lazy(() =>
+const Contatos = lazyWithRetry(() =>
   import('@/modules/crm/pages/Contatos').then((m) => ({ default: m.Contatos })),
 )
-const ContatoDetalhe = lazy(() =>
+const ContatoDetalhe = lazyWithRetry(() =>
   import('@/modules/crm/pages/ContatoDetalhe').then((m) => ({ default: m.ContatoDetalhe })),
 )
-const Oportunidades = lazy(() =>
+const Oportunidades = lazyWithRetry(() =>
   import('@/modules/crm/pages/Oportunidades').then((m) => ({ default: m.Oportunidades })),
 )
-const OportunidadeDetalhe = lazy(() =>
+const OportunidadeDetalhe = lazyWithRetry(() =>
   import('@/modules/crm/pages/OportunidadeDetalhe').then((m) => ({ default: m.OportunidadeDetalhe })),
 )
-const Atividades = lazy(() =>
+const Atividades = lazyWithRetry(() =>
   import('@/modules/crm/pages/Atividades').then((m) => ({ default: m.Atividades })),
 )
-const Artistas = lazy(() =>
+const Artistas = lazyWithRetry(() =>
   import('@/modules/crm/pages/Artistas').then((m) => ({ default: m.Artistas })),
 )
-const EventosCrm = lazy(() =>
+const EventosCrm = lazyWithRetry(() =>
   import('@/modules/crm/pages/EventosCrm').then((m) => ({ default: m.EventosCrm })),
 )
-const Locais = lazy(() =>
+const Locais = lazyWithRetry(() =>
   import('@/modules/crm/pages/Locais').then((m) => ({ default: m.Locais })),
 )
-const Logs = lazy(() =>
+const LocalDetalhe = lazyWithRetry(() =>
+  import('@/modules/crm/pages/LocalDetalhe').then((m) => ({ default: m.LocalDetalhe })),
+)
+const EventoDetalhe = lazyWithRetry(() =>
+  import('@/modules/crm/pages/EventoDetalhe').then((m) => ({ default: m.EventoDetalhe })),
+)
+const Logs = lazyWithRetry(() =>
   import('@/modules/crm/pages/Logs').then((m) => ({ default: m.Logs })),
 )
-const FunisConfig = lazy(() =>
+const FunisConfig = lazyWithRetry(() =>
   import('@/modules/crm/pages/config/Funis').then((m) => ({ default: m.FunisConfig })),
 )
-const PlataformasConfig = lazy(() =>
+const PlataformasConfig = lazyWithRetry(() =>
   import('@/modules/crm/pages/config/Plataformas').then((m) => ({ default: m.PlataformasConfig })),
 )
-const ObjecoesConfig = lazy(() =>
+const ObjecoesConfig = lazyWithRetry(() =>
   import('@/modules/crm/pages/config/Objecoes').then((m) => ({ default: m.ObjecoesConfig })),
+)
+const TiposLocalConfig = lazyWithRetry(() =>
+  import('@/modules/crm/pages/config/TiposLocal').then((m) => ({ default: m.TiposLocalConfig })),
+)
+const FitScoreConfig = lazyWithRetry(() =>
+  import('@/modules/crm/pages/config/FitScore').then((m) => ({ default: m.FitScoreConfig })),
+)
+const Apresentacoes = lazyWithRetry(() =>
+  import('@/modules/crm/pages/apresentacoes/Apresentacoes').then((m) => ({ default: m.Apresentacoes })),
+)
+const ApresentacoesBiblioteca = lazyWithRetry(() =>
+  import('@/modules/crm/pages/apresentacoes/Biblioteca').then((m) => ({ default: m.ApresentacoesBiblioteca })),
+)
+const ApresentacaoEditor = lazyWithRetry(() =>
+  import('@/modules/crm/pages/apresentacoes/ApresentacaoEditor').then((m) => ({ default: m.ApresentacaoEditor })),
 )
 
 // --- Módulo Pesquisa ---
-const EventosCapturados = lazy(() =>
+const EventosCapturados = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/EventosCapturados').then((m) => ({ default: m.EventosCapturados })),
 )
-const OrganizadoresMercado = lazy(() =>
+const OrganizadoresMercado = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/OrganizadoresMercado').then((m) => ({ default: m.OrganizadoresMercado })),
 )
-const LocaisMercado = lazy(() =>
+const LocaisMercado = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/LocaisMercado').then((m) => ({ default: m.LocaisMercado })),
 )
-const FontesConfig = lazy(() =>
+const FontesConfig = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/FontesConfig').then((m) => ({ default: m.FontesConfig })),
 )
-const AgendaOficial = lazy(() =>
+const AgendaOficial = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/AgendaOficial').then((m) => ({ default: m.AgendaOficial })),
 )
-const FiltrosConfig = lazy(() =>
+const FiltrosConfig = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/FiltrosConfig').then((m) => ({ default: m.FiltrosConfig })),
 )
-const ExecucoesConfig = lazy(() =>
+const ExecucoesConfig = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/ExecucoesConfig').then((m) => ({ default: m.ExecucoesConfig })),
 )
 
 // --- Ambiente ---
-const ConfiguracoesPage = lazy(() =>
+const ConfiguracoesPage = lazyWithRetry(() =>
   import('@/modules/settings/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })),
 )
 
@@ -173,15 +220,22 @@ export const router = createBrowserRouter([
       // Comercial (stubs)
       { path: 'comercial/painel', element: <PainelComercial /> },
       { path: 'comercial/organizacoes', element: <Organizacoes /> },
+      { path: 'comercial/relacionamento', element: <Relacionamento /> },
       { path: 'comercial/organizacoes/:id', element: <OrganizacaoDetalhe /> },
       { path: 'comercial/contatos', element: <Contatos /> },
       { path: 'comercial/contatos/:id', element: <ContatoDetalhe /> },
       { path: 'comercial/oportunidades', element: <Oportunidades /> },
       { path: 'comercial/oportunidades/:id', element: <OportunidadeDetalhe /> },
       { path: 'comercial/atividades', element: <Atividades /> },
-      { path: 'comercial/artistas', element: <Artistas /> },
+      { path: 'comercial/apresentacoes', element: <Apresentacoes /> },
+      { path: 'comercial/apresentacoes/biblioteca', element: <ApresentacoesBiblioteca /> },
+      { path: 'comercial/apresentacoes/:id', element: <ApresentacaoEditor /> },
+      { path: 'comercial/atracoes', element: <Artistas /> },
+      { path: 'comercial/artistas', element: <Navigate to="/comercial/atracoes" replace /> },
       { path: 'comercial/eventos', element: <EventosCrm /> },
+      { path: 'comercial/eventos/:id', element: <EventoDetalhe /> },
       { path: 'comercial/locais', element: <Locais /> },
+      { path: 'comercial/locais/:id', element: <LocalDetalhe /> },
       {
         path: 'comercial/logs',
         element: (
@@ -193,6 +247,8 @@ export const router = createBrowserRouter([
       { path: 'comercial/configuracao/funis', element: <FunisConfig /> },
       { path: 'comercial/configuracao/plataformas', element: <PlataformasConfig /> },
       { path: 'comercial/configuracao/objecoes', element: <ObjecoesConfig /> },
+      { path: 'comercial/configuracao/tipos-local', element: <TiposLocalConfig /> },
+      { path: 'comercial/configuracao/fit-score', element: <FitScoreConfig /> },
 
       // Módulo Pesquisa
       { path: 'pesquisa/eventos', element: <EventosCapturados /> },

@@ -34,7 +34,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Filtros globais só nas rotas do BI */}
         {isBi && <BiFilters />}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto bg-[var(--content-bg)] p-6">
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
             <Outlet />
           </Suspense>

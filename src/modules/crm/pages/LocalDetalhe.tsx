@@ -1,0 +1,196 @@
+import { useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { ArrowLeft, Plus, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { useCrmOrgId } from '../hooks/useFunnelStages'
+import {
+  useLocais, saveLocal, deleteLocal, replaceLocalPlatforms,
+  RELACAO_PLATAFORMA, CRM_CLASSES, type RelacaoPlataforma, type CrmClasse, type LocalRow,
+} from '../hooks/useCadastros'
+import { usePlatforms, useLocalTipos } from '../hooks/useConfigCadastros'
+import { AtividadesPanel } from '../components/AtividadesPanel'
+import { StageSelector } from '../components/StageSelector'
+import { ClasseBadge } from '../components/ClasseBadge'
+import { DeleteEntityButton } from '../components/DeleteEntityButton'
+import {
+  useDraft, TextField, SelectField, TextareaField, FormActions, toText, toNumber,
+} from '../components/EditFields'
+
+const REL_NONE = '__none__'
+
+export function LocalDetalhe() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { data, isLoading } = useLocais()
+  const local = useMemo(() => (data ?? []).find((l) => l.id === id) ?? null, [data, id])
+
+  if (isLoading) return <div className="-mx-6 -mt-6 p-6"><Skeleton className="h-96 w-full" /></div>
+  if (!local) return <div className="-mx-6 -mt-6 p-6 text-muted-foreground">Local não encontrado.</div>
+
+  return (
+    <div className="-mx-6 -mt-6 flex min-h-[calc(100%+3rem)] flex-col bg-background">
+      <div className="flex items-center gap-2 border-b border-border px-5 py-2.5 text-sm">
+        <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/comercial/locais'))} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-4" /> Voltar
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
+        <h1 className="text-xl font-semibold tracking-tight">{local.nome}</h1>
+        <ClasseBadge classe={local.classificacao} />
+      </div>
+
+      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
+        <div className="min-w-0 border-b border-border p-4 lg:border-b-0 lg:border-r">
+          <AtividadesPanel entityType="local" entityId={local.id} allowObjection={false} />
+        </div>
+        <aside className="space-y-6 p-4">
+          <LocalDetalhesForm local={local} />
+          <LocalPlataformas local={local} />
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Opções</h3>
+            <DeleteEntityButton
+              title="Remover local?"
+              description={`"${local.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
+              onDelete={() => deleteLocal(local.id)}
+              onDeleted={() => navigate('/comercial/locais')}
+              label="Remover local"
+            />
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function LocalDetalhesForm({ local }: { local: LocalRow }) {
+  const orgId = useCrmOrgId()
+  const qc = useQueryClient()
+  const tipos = useLocalTipos()
+  const initial = useMemo(() => ({
+    nome: local.nome,
+    cidade: local.cidade ?? '',
+    uf: local.uf ?? '',
+    capacidade: local.capacidade != null ? String(local.capacidade) : '',
+    tipo_id: local.tipo_id ?? '',
+    site: local.site ?? '',
+    instagram: local.instagram ?? '',
+    classificacao: local.classificacao ?? '',
+    observacoes: local.observacoes ?? '',
+  }), [local])
+  const { draft, set, dirty, reset } = useDraft(initial, local.id + (local.classificacao ?? '') + (local.funil_stage_id ?? ''))
+  const [stage, setStage] = useState<string | null>(local.funil_stage_id)
+  const [saving, setSaving] = useState(false)
+  const changed = dirty || stage !== local.funil_stage_id
+
+  async function salvar() {
+    if (!orgId) return
+    setSaving(true)
+    try {
+      await saveLocal(orgId, {
+        nome: draft.nome.trim() || local.nome,
+        cidade: toText(draft.cidade), uf: toText(draft.uf),
+        capacidade: toNumber(draft.capacidade), tipo_id: toText(draft.tipo_id),
+        site: toText(draft.site), instagram: toText(draft.instagram),
+        observacoes: toText(draft.observacoes),
+        classificacao: (toText(draft.classificacao) as CrmClasse | null),
+        funil_stage_id: stage,
+      }, local.id)
+      qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">Detalhes</h3>
+      <div className="space-y-3">
+        <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField label="Classe" value={draft.classificacao} options={[...CRM_CLASSES]} onChange={(v) => set('classificacao', v)} />
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Estágio</Label>
+            <StageSelector slug="relacionamento" value={stage} onChange={setStage} className="h-8 w-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-[1fr_70px] gap-3">
+          <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
+          <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v.toUpperCase())} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Capacidade" type="number" value={draft.capacidade} onChange={(v) => set('capacidade', v)} />
+          <SelectField label="Tipo" value={draft.tipo_id}
+            options={(tipos.data ?? []).map((t) => ({ value: t.id, label: t.nome }))}
+            onChange={(v) => set('tipo_id', v)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
+          <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
+        </div>
+        <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
+        {changed && <FormActions dirty={changed} saving={saving} onSave={salvar} onCancel={() => { reset(); setStage(local.funil_stage_id) }} />}
+      </div>
+    </div>
+  )
+}
+
+function LocalPlataformas({ local }: { local: LocalRow }) {
+  const orgId = useCrmOrgId()
+  const qc = useQueryClient()
+  const platforms = usePlatforms()
+  const [plats, setPlats] = useState(() => local.platforms.map((p) => ({ platform_id: p.platform_id, tipo_relacao: p.tipo_relacao })))
+  const [newPlat, setNewPlat] = useState('')
+  const platformById = useMemo(() => new Map((platforms.data ?? []).map((p) => [p.id, p.nome])), [platforms.data])
+  const avail = (platforms.data ?? []).filter((p) => !plats.some((x) => x.platform_id === p.id))
+
+  async function persist(next: { platform_id: string; tipo_relacao: RelacaoPlataforma | null }[]) {
+    if (!orgId) return
+    setPlats(next)
+    try {
+      await replaceLocalPlatforms(orgId, local.id, next)
+      qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+  }
+
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">Plataformas de ingressos</h3>
+      <div className="space-y-2 rounded-md border border-border p-3">
+        {plats.length > 0 && (
+          <ul className="space-y-1">
+            {plats.map((pl) => (
+              <li key={pl.platform_id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+                <span className="min-w-0 flex-1 truncate font-medium">{platformById.get(pl.platform_id) ?? '?'}</span>
+                <Select value={pl.tipo_relacao ?? REL_NONE}
+                  onValueChange={(v) => persist(plats.map((x) => x.platform_id === pl.platform_id ? { ...x, tipo_relacao: v === REL_NONE ? null : (v as RelacaoPlataforma) } : x))}>
+                  <SelectTrigger className="h-7 w-32 shrink-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={REL_NONE}>-</SelectItem>
+                    {RELACAO_PLATAFORMA.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <button onClick={() => persist(plats.filter((x) => x.platform_id !== pl.platform_id))} className="shrink-0 text-muted-foreground hover:text-destructive"><X className="size-4" /></button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-end gap-2 border-t border-border pt-2">
+          <Select value={newPlat} onValueChange={setNewPlat}>
+            <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Adicionar plataforma…" /></SelectTrigger>
+            <SelectContent>{avail.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button type="button" size="sm" variant="secondary" disabled={!newPlat}
+            onClick={() => { if (newPlat) { persist([...plats, { platform_id: newPlat, tipo_relacao: null }]); setNewPlat('') } }}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

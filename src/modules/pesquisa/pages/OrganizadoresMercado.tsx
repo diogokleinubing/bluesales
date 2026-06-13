@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Star, Ban } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -15,14 +16,18 @@ import { Input } from '@/components/ui/input'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { cn } from '@/lib/utils'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
+import { EntityAutocomplete, type Lookup } from '@/modules/crm/components/EntityAutocomplete'
+import { useFitRules, pickRule, scoreFit } from '@/modules/crm/hooks/useFitScore'
+import { FitBadge } from '@/modules/crm/components/FitBadge'
 import { EventosDialog } from '../components/EventosDialog'
 import { StarButton, IgnoreButton } from '../components/StarButton'
 import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
+import { BR_UFS } from '../lib/ufs'
 import {
   useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrawlerSources,
   useFavoritos, setFavoritoAgregado, useIgnorados, setIgnoradoAgregado,
-  promoverOrganizador, useCrmOrgId,
+  promoverOrganizador, useCrmOrgId, useEventFacets,
   type OrganizerAgg, type OrganizerFilters, type PromoverAggInput,
 } from '../hooks/usePesquisa'
 
@@ -35,9 +40,15 @@ export function OrganizadoresMercado() {
   const [search, setSearch] = useState('')
   const [valorMin, setValorMin] = useState('')
   const [fonte, setFonte] = useState('todas')
+  const [cidade, setCidade] = useState('todas')
+  const [uf, setUf] = useState('')
+  const facets = useEventFacets()
   const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
   const [soFav, setSoFav] = useState(false)
   const [soIgnorados, setSoIgnorados] = useState(false)
+  const [fitMin, setFitMin] = useState('')
+  const [ordFit, setOrdFit] = useState(false)
+  const fitRules = useFitRules()
   const [sel, setSel] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const favoritos = useFavoritos('organizador').data
@@ -54,7 +65,21 @@ export function OrganizadoresMercado() {
     valorMin: aplicado.valorMin.trim() !== '' && Number.isFinite(Number(aplicado.valorMin))
       ? Number(aplicado.valorMin) : null,
     fonte,
-  }), [aplicado, fonte])
+    cidade,
+    uf,
+  }), [aplicado, fonte, cidade, uf])
+
+  // Cidades como opções de autocomplete (id = "cidade|uf" usado no filtro).
+  const cidadeOptions: Lookup[] = useMemo(
+    () => (facets.data?.cidades ?? []).map((c) => ({
+      id: `${c.cidade}|${c.uf ?? ''}`,
+      nome: `${c.cidade}${c.uf ? `/${c.uf}` : ''}`,
+    })),
+    [facets.data],
+  )
+  const cidadeValue: Lookup | null = cidade === 'todas'
+    ? null
+    : (cidadeOptions.find((o) => o.id === cidade) ?? { id: cidade, nome: cidade.split('|')[0] })
 
   const { data, isLoading } = useCrawledOrganizers(filters)
   const rows = useMemo(() => {
@@ -64,6 +89,21 @@ export function OrganizadoresMercado() {
     if (soFav) r = r.filter((a) => favoritos?.has(a.chave))
     return r
   }, [data, soFav, soIgnorados, favoritos, ignorados])
+  // Fit Score (configurável em Comercial → Configuração → Fit Score).
+  const cfgOrg = useMemo(() => pickRule(fitRules.data ?? [], 'organizador', null), [fitRules.data])
+  const rowsFit = useMemo(() => {
+    const fitMinNum = fitMin.trim() !== '' ? Number(fitMin) : null
+    let out = rows.map((a) => {
+      const ticket = (a.preco_min != null || a.preco_max != null)
+        ? ((a.preco_min ?? a.preco_max!) + (a.preco_max ?? a.preco_min!)) / 2 : null
+      const fit = scoreFit({ ticket_medio: ticket, frequencia: a.eventos, alcance: a.cidades.length }, cfgOrg)
+      return { a, fit }
+    })
+    if (fitMinNum != null) out = out.filter((r) => r.fit.score != null && !r.fit.eliminado && r.fit.score >= fitMinNum)
+    if (ordFit) out = [...out].sort((x, y) => (y.fit.score ?? -1) - (x.fit.score ?? -1))
+    return out
+  }, [rows, cfgOrg, fitMin, ordFit])
+
   const { data: eventosDoSel } = useEventosDoOrganizador(sel, fonte)
 
   async function onFav(a: OrganizerAgg) {
@@ -116,8 +156,8 @@ export function OrganizadoresMercado() {
   return (
     <ListView
       title="Organizadores"
-      count={rows.length ? String(rows.length) : undefined}
-      footer={rows.length ? `${rows.length} organizador(es)` : undefined}
+      count={rowsFit.length ? String(rowsFit.length) : undefined}
+      footer={rowsFit.length ? `${rowsFit.length} organizador(es)` : undefined}
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />
@@ -128,6 +168,20 @@ export function OrganizadoresMercado() {
               {(sources.data ?? []).map((s) => <SelectItem key={s.id} value={s.slug}>{s.nome}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={uf || '__todos'} onValueChange={(v) => setUf(v === '__todos' ? '' : v)}>
+            <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[140px]`} size="sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__todos">Todos os estados</SelectItem>
+              {BR_UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <EntityAutocomplete
+            className="w-[180px]"
+            placeholder="Cidade…"
+            value={cidadeValue}
+            options={cidadeOptions}
+            onPick={(v) => setCidade(v ? v.id : 'todas')}
+          />
           <Input type="number" min={0} value={valorMin} onChange={(e) => setValorMin(e.target.value)}
             placeholder="Valor mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           <button
@@ -150,12 +204,18 @@ export function OrganizadoresMercado() {
           >
             <Ban className="size-4" /> Ignorados
           </button>
+          <Input type="number" min={0} max={100} value={fitMin} onChange={(e) => setFitMin(e.target.value)}
+            placeholder="Fit mín." className={`${TOOLBAR_TRIGGER} w-[110px]`} />
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox checked={ordFit} onCheckedChange={(v) => setOrdFit(v === true)} /> Ordenar por fit
+          </label>
         </div>
       }
     >
       <Table className="table-fixed">
         <colgroup>
           <col />
+          <col className="w-16" />
           <col className="w-16" />
           <col className="w-[16%]" />
           <col className="w-[200px]" />
@@ -165,6 +225,7 @@ export function OrganizadoresMercado() {
         </colgroup>
         <TableHeader><TableRow>
           <TableHead>Organizador</TableHead>
+          <TableHead>Fit</TableHead>
           <TableHead className="text-right">Eventos</TableHead>
           <TableHead>Cidades</TableHead>
           <TableHead className="text-right">Faixa de preço</TableHead>
@@ -175,13 +236,13 @@ export function OrganizadoresMercado() {
         <TableBody>
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
-          ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+          ) : rowsFit.length === 0 ? (
+            <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
               Nenhum organizador encontrado.
             </TableCell></TableRow>
-          ) : rows.map((a) => {
+          ) : rowsFit.map(({ a, fit }) => {
             const promo = promos?.get(a.chave)
             return (
               <TableRow key={a.chave} className="cursor-pointer" onClick={() => setSel(a.nome)}>
@@ -193,6 +254,7 @@ export function OrganizadoresMercado() {
                     <span className="truncate" title={a.nome}>{a.nome}</span>
                   </div>
                 </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}><FitBadge fit={fit} /></TableCell>
                 <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
                 <TableCell className="truncate text-muted-foreground" title={a.cidades.join(', ')}>{a.cidades.slice(0, 3).join(', ')}{a.cidades.length > 3 ? ` +${a.cidades.length - 3}` : ''}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>
@@ -211,6 +273,7 @@ export function OrganizadoresMercado() {
         titulo={sel ?? ''}
         subtitulo={`${(eventosDoSel ?? []).length} evento(s) capturado(s)`}
         eventos={eventosDoSel ?? []}
+        showOrganizador={false}
       />
     </ListView>
   )

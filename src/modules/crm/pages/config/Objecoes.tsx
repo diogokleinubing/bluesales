@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Tags, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -18,11 +18,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { useProfile } from '../../hooks/useProfile'
 import { useCrmOrgId } from '../../hooks/useFunnelStages'
 import {
   useObjectionsBase, saveObjection, deleteObjection,
-  OBJECAO_CATEGORIAS, type Objection, type ObjecaoCategoria,
+  useObjectionCategorias, saveObjectionCategoria, deleteObjectionCategoria,
+  type Objection,
 } from '../../hooks/useConfigCadastros'
 
 const NONE = '__none__'
@@ -30,14 +30,23 @@ const NONE = '__none__'
 export function ObjecoesConfig() {
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
-  const { profile } = useProfile()
-  const editable = profile?.role === 'gestor'
+  const editable = true
   const { data, isLoading } = useObjectionsBase()
+  const cats = useObjectionCategorias()
   const [open, setOpen] = useState(false)
   const [edit, setEdit] = useState<Objection | null>(null)
   const [titulo, setTitulo] = useState('')
   const [categoria, setCategoria] = useState<string>(NONE)
   const [descricao, setDescricao] = useState('')
+  const [catOpen, setCatOpen] = useState(false)
+  const [novaCat, setNovaCat] = useState('')
+
+  // Opções da categoria (inclui a atual do registro editado, mesmo que removida).
+  const categoriaOpts = (() => {
+    const nomes = (cats.data ?? []).map((c) => c.nome)
+    if (categoria !== NONE && !nomes.includes(categoria)) return [categoria, ...nomes]
+    return nomes
+  })()
 
   function openNew() { setEdit(null); setTitulo(''); setCategoria(NONE); setDescricao(''); setOpen(true) }
   function openEdit(o: Objection) {
@@ -49,12 +58,23 @@ export function ObjecoesConfig() {
     try {
       await saveObjection(orgId, {
         titulo: titulo.trim(),
-        categoria: categoria === NONE ? null : (categoria as ObjecaoCategoria),
+        categoria: categoria === NONE ? null : categoria,
         descricao: descricao.trim() || null,
       }, edit?.id)
       qc.invalidateQueries({ queryKey: ['crm', 'objections-base'] })
       setOpen(false)
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+  }
+
+  function refreshCats() { qc.invalidateQueries({ queryKey: ['crm', 'objection-categorias'] }) }
+  async function addCat() {
+    if (!orgId || !novaCat.trim()) return
+    try { await saveObjectionCategoria(orgId, novaCat.trim()); setNovaCat(''); refreshCats() }
+    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+  }
+  async function removeCat(id: string) {
+    try { await deleteObjectionCategoria(id); refreshCats() }
+    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   async function remover(o: Objection) {
@@ -69,7 +89,12 @@ export function ObjecoesConfig() {
           <h1 className="text-2xl font-semibold tracking-tight">Objeções</h1>
           <p className="text-sm text-muted-foreground">Base de objeções por categoria.</p>
         </div>
-        {editable && <Button onClick={openNew}><Plus className="size-4" /> Nova objeção</Button>}
+        {editable && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setCatOpen(true)}><Tags className="size-4" /> Categorias</Button>
+            <Button onClick={openNew}><Plus className="size-4" /> Nova objeção</Button>
+          </div>
+        )}
       </div>
       <Card><CardContent className="p-0">
         <Table>
@@ -114,7 +139,7 @@ export function ObjecoesConfig() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
-                  {OBJECAO_CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {categoriaOpts.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select></div>
             <div className="space-y-1"><Label>Descrição</Label>
@@ -123,6 +148,36 @@ export function ObjecoesConfig() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button onClick={salvar} disabled={!titulo.trim()}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={catOpen} onOpenChange={setCatOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Categorias de objeção</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input value={novaCat} placeholder="Nova categoria…" onChange={(e) => setNovaCat(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addCat()} />
+              <Button onClick={addCat} disabled={!novaCat.trim()}><Plus className="size-4" /></Button>
+            </div>
+            {cats.isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : (cats.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma categoria.</p>
+            ) : (
+              <ul className="space-y-1">
+                {(cats.data ?? []).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+                    <span>{c.nome}</span>
+                    <button onClick={() => removeCat(c.id)} className="text-muted-foreground hover:text-destructive"><X className="size-4" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCatOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

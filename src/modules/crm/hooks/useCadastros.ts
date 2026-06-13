@@ -79,13 +79,12 @@ export async function deleteArtist(id: string) {
 // ---------------------------------------------------------------------------
 // Locais
 // ---------------------------------------------------------------------------
-export const LOCAL_TIPOS = [
-  'Casa de show', 'Teatro', 'Estádio', 'Arena', 'Autódromo', 'Espaço multiuso', 'Outro',
-] as const
-export type LocalTipo = (typeof LOCAL_TIPOS)[number]
 
 export const RELACAO_PLATAFORMA = ['Exclusividade', 'Homologada'] as const
 export type RelacaoPlataforma = (typeof RELACAO_PLATAFORMA)[number]
+
+export const CRM_CLASSES = ['A+', 'A', 'B', 'C'] as const
+export type CrmClasse = (typeof CRM_CLASSES)[number]
 
 export interface Local {
   id: string
@@ -94,8 +93,12 @@ export interface Local {
   cidade: string | null
   uf: string | null
   capacidade: number | null
-  tipo: LocalTipo | null
+  tipo_id: string | null
   observacoes: string | null
+  site: string | null
+  instagram: string | null
+  funil_stage_id: string | null
+  classificacao: CrmClasse | null
 }
 
 export interface LocalPlatform {
@@ -105,6 +108,7 @@ export interface LocalPlatform {
 }
 
 export interface LocalRow extends Local {
+  tipo_nome: string | null
   platforms: LocalPlatform[]
   /** Nº de oportunidades em aberto (resultado nulo) vinculadas ao local via evento. */
   oppAtivas: number
@@ -123,7 +127,7 @@ export function useLocais() {
     queryKey: ['crm', 'locais', orgId],
     queryFn: async (): Promise<LocalRow[]> => {
       const [locs, lps, evs, opps] = await Promise.all([
-        supabase.from('crm_locals').select('*').eq('org_id', orgId!).is('deleted_at', null).order('nome'),
+        supabase.from('crm_locals').select('*, local_types(nome)').eq('org_id', orgId!).is('deleted_at', null).order('nome'),
         supabase
           .from('local_platforms')
           .select('local_id, platform_id, tipo_relacao, platforms(nome)')
@@ -166,6 +170,7 @@ export function useLocais() {
 
       return (locs.data ?? []).map((l) => ({
         ...(l as Local),
+        tipo_nome: (l.local_types as unknown as { nome: string } | null)?.nome ?? null,
         platforms: byLocal.get(l.id) ?? [],
         oppAtivas: oppPorLocal.get(l.id) ?? 0,
         oppStatus: oppStatusPorLocal.get(l.id)?.nome ?? null,
@@ -210,8 +215,12 @@ export async function saveLocal(
     cidade: l.cidade ?? null,
     uf: l.uf ?? null,
     capacidade: l.capacidade ?? null,
-    tipo: l.tipo ?? null,
+    tipo_id: l.tipo_id ?? null,
     observacoes: l.observacoes ?? null,
+    site: l.site ?? null,
+    instagram: l.instagram ?? null,
+    funil_stage_id: l.funil_stage_id ?? null,
+    classificacao: l.classificacao ?? null,
   }
   if (id) {
     const { error } = await supabase.from('crm_locals').update(payload).eq('id', id)
@@ -229,6 +238,16 @@ export async function saveLocal(
 
 export async function deleteLocal(id: string) {
   await softDelete('crm_locals', id)
+}
+
+/** Atualiza em massa campos de vários locais (classe, tipo, estágio). */
+export async function bulkUpdateLocais(
+  ids: string[],
+  patch: { classificacao?: CrmClasse | null; tipo_id?: string | null; funil_stage_id?: string | null },
+) {
+  if (ids.length === 0) return
+  const { error } = await supabase.from('crm_locals').update(patch).in('id', ids)
+  if (error) throw new Error(error.message)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +271,8 @@ export interface CrmEvent {
   bi_event_codigo: string | null
   site: string | null
   instagram: string | null
+  funil_stage_id: string | null
+  classificacao: CrmClasse | null
   created_at: string
 }
 
@@ -345,6 +366,8 @@ export async function saveCrmEvent(
     bi_event_codigo: e.bi_event_codigo ?? null,
     site: e.site ?? null,
     instagram: e.instagram ?? null,
+    funil_stage_id: e.funil_stage_id ?? null,
+    classificacao: e.classificacao ?? null,
   }
   if (id) {
     const { error } = await supabase.from('crm_events').update(payload).eq('id', id)

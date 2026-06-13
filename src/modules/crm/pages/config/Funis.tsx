@@ -29,7 +29,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { useProfile } from '../../hooks/useProfile'
 import {
   addStage,
   reorderStages,
@@ -68,8 +67,7 @@ export function FunisConfig() {
 
 function FunnelEditor({ slug }: { slug: FunnelSlug }) {
   const qc = useQueryClient()
-  const { profile } = useProfile()
-  const editable = profile?.role === 'gestor'
+  const editable = true
   const { type, stages, isLoading } = useFunnel(slug)
 
   const [order, setOrder] = useState<FunnelStage[]>([])

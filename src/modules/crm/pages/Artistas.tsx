@@ -150,9 +150,9 @@ export function Artistas() {
   return (
     <>
       <ListView
-        title="Artistas"
+        title="Atrações"
         count={data ? String(data.length) : undefined}
-        actions={<Button onClick={openNew}><Plus className="size-4" /> Novo artista</Button>}
+        actions={<Button onClick={openNew}><Plus className="size-4" /> Nova atração</Button>}
         footer={data ? `${rows.length} de ${data.length}` : undefined}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
@@ -183,10 +183,10 @@ export function Artistas() {
                 <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhum artista.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhuma atração.</TableCell></TableRow>
             ) : rows.map((a) => (
               <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)} onDoubleClick={() => onRowDouble(a)}>
-                <TableCell className="font-medium">{a.nome}</TableCell>
+                <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={a.nome}>{a.nome}</div></TableCell>
                 <TableCell><ClasseBadge classe={a.classificacao} /></TableCell>
                 <TableCell>{a.genero_nome ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{a.organization_nome ?? '—'}</TableCell>
@@ -205,13 +205,13 @@ export function Artistas() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{edit ? 'Editar artista' : 'Novo artista'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{edit ? 'Editar atração' : 'Nova atração'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><Label>Nome</Label>
               <Input value={nome} autoFocus onChange={(e) => setNome(e.target.value)} /></div>
             <div className="space-y-1"><Label>Nomes alternativos (busca)</Label>
               <Input value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Ex.: Gustavo Lima, Gusttavo" />
-              <p className="text-xs text-muted-foreground">Separe por vírgula. Também usados para detectar este artista nos eventos capturados.</p></div>
+              <p className="text-xs text-muted-foreground">Separe por vírgula. Também usados para detectar esta atração nos eventos capturados.</p></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Gênero</Label>
                 <Select value={generoId} onValueChange={setGeneroId}>
@@ -254,7 +254,7 @@ export function Artistas() {
           <DialogFooter className="sm:justify-between">
             {edit ? (
               <DeleteEntityButton
-                title="Remover artista?"
+                title="Remover atração?"
                 description={`"${edit.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
                 onDelete={() => deleteArtist(edit.id)}
                 onDeleted={() => { qc.invalidateQueries({ queryKey: ['crm', 'artists'] }); setOpen(false) }}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
@@ -33,6 +34,7 @@ function instagramUrl(v: string) {
 
 export function Contatos() {
   const navigate = useNavigate()
+  const openItem = useOpenItem()
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
   const { data, isLoading } = useContacts()
@@ -103,8 +105,8 @@ export function Contatos() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhum contato.</TableCell></TableRow>
             ) : rows.map((p) => (
-              <TableRow key={p.id} className="cursor-pointer" onClick={() => navigate(`/comercial/contatos/${p.id}`)}>
-                <TableCell className="font-medium">{p.nome}</TableCell>
+              <TableRow key={p.id} className="cursor-pointer" onClick={(e) => openItem(e, `/comercial/contatos/${p.id}`)}>
+                <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={p.nome}>{p.nome}</div></TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {p.orgs.length ? p.orgs.map((o, i) => (

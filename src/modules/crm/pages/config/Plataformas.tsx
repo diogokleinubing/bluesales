@@ -14,7 +14,6 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { useProfile } from '../../hooks/useProfile'
 import { useCrmOrgId } from '../../hooks/useFunnelStages'
 import {
   usePlatforms, savePlatform, deletePlatform, type Platform,
@@ -23,8 +22,7 @@ import {
 export function PlataformasConfig() {
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
-  const { profile } = useProfile()
-  const editable = profile?.role === 'gestor'
+  const editable = true
   const { data, isLoading } = usePlatforms()
   const [open, setOpen] = useState(false)
   const [edit, setEdit] = useState<Platform | null>(null)

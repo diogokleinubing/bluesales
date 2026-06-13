@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus, Upload, SlidersHorizontal } from 'lucide-react'
@@ -21,8 +22,8 @@ import {
 import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { useViewPref, usePersistedState } from '../hooks/useViewPref'
-import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
+import { InlineStageSelect, InlineClasseSelect } from '../components/RelacionamentoBits'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { ListView, ToolbarSearch, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
 import { OrgImportWizard } from '../import/OrgImportWizard'
@@ -42,6 +43,7 @@ const CHIP_OFF = 'border-border text-muted-foreground hover:border-primary'
 
 export function Organizacoes() {
   const navigate = useNavigate()
+  const openItem = useOpenItem()
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
   const [params] = useSearchParams()
@@ -233,19 +235,12 @@ export function Organizacoes() {
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhuma organização — adicione a primeira.</TableCell></TableRow>
             ) : rows.map((o) => (
-              <TableRow key={o.id} className="cursor-pointer" onClick={() => navigate(`/comercial/organizacoes/${o.id}`)}>
-                <TableCell className="font-medium">{o.nome}</TableCell>
-                <TableCell><ClasseBadge classe={o.classificacao} /></TableCell>
+              <TableRow key={o.id} className="cursor-pointer" onClick={(e) => openItem(e, `/comercial/organizacoes/${o.id}`)}>
+                <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={o.nome}>{o.nome}</div></TableCell>
+                <TableCell><InlineClasseSelect tipo="org" id={o.id} value={o.classificacao} /></TableCell>
                 <TableCell className="text-muted-foreground">{[o.cidade, o.uf].filter(Boolean).join('/') || '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{o.estrutura ?? '—'}</TableCell>
-                <TableCell>
-                  {o.stageNome ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="size-2 rounded-full" style={{ backgroundColor: o.stageCor ?? 'var(--muted-foreground)' }} />
-                      {o.stageNome}
-                    </span>
-                  ) : <span className="text-muted-foreground">—</span>}
-                </TableCell>
+                <TableCell><InlineStageSelect tipo="org" id={o.id} value={o.funil_stage_id} /></TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusComercialBadge status={o.status_comercial} />

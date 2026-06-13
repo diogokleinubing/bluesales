@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { StageSelector } from '../components/StageSelector'
+import { MarcarPerdidaDialog } from '../components/MarcarPerdidaDialog'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import {
@@ -32,6 +33,7 @@ export function OportunidadeDetalhe() {
   const { profile } = useProfile()
   const { data: o, isLoading } = useOpportunity(id)
   const [histOpen, setHistOpen] = useState(false)
+  const [perdidaOpen, setPerdidaOpen] = useState(false)
 
   async function setOutcome(r: 'Ganho' | 'Perdida' | null) {
     if (!o) return
@@ -104,7 +106,7 @@ export function OportunidadeDetalhe() {
                 >
                   <Trophy className="size-4" /> Ganho
                 </Button>
-                <Button size="sm" variant="destructive" onClick={() => setOutcome('Perdida')}>
+                <Button size="sm" variant="destructive" onClick={() => setPerdidaOpen(true)}>
                   <Ban className="size-4" /> Perdida
                 </Button>
               </>
@@ -176,6 +178,13 @@ export function OportunidadeDetalhe() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <MarcarPerdidaDialog
+        open={perdidaOpen}
+        onOpenChange={setPerdidaOpen}
+        opportunityId={o.id}
+        organizationId={o.organization_id}
+      />
     </div>
   )
 }
