@@ -1,5 +1,7 @@
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -41,6 +43,8 @@ function DeltaCell({ cur, prev }: { cur: number; prev: number | undefined }) {
  * `crmLink` adiciona, por linha, um atalho "Ver no Comercial" (ponte BI->CRM).
  * `compare` exibe colunas de comparativo com o ano anterior (gmvPrev).
  */
+type SortCol = 'label' | 'desde' | 'vendas' | 'gmv' | 'pct' | 'gmvPrev' | 'delta'
+
 export function RankingView({
   title,
   groups,
@@ -50,6 +54,7 @@ export function RankingView({
   topN = 15,
   crmLink = false,
   compare = false,
+  desde,
 }: {
   title: string
   groups: GroupAgg[]
@@ -59,12 +64,60 @@ export function RankingView({
   topN?: number
   crmLink?: boolean
   compare?: boolean
+  /** Resolve o ano "cliente desde" pelo label. Quando definido, exibe a coluna "Desde". */
+  desde?: ((label: string) => number | null) | null
 }) {
   const navigate = useNavigate()
   const totalGmv = groups.reduce((a, g) => a + g.gmv, 0)
   const totalVendas = groups.reduce((a, g) => a + g.vendas, 0)
   const totalGmvPrev = groups.reduce((a, g) => a + (g.gmvPrev ?? 0), 0)
-  const cols = 4 + (compare ? 2 : 0) + (crmLink ? 1 : 0)
+  const showDesde = !!desde
+  const cols = 4 + (showDesde ? 1 : 0) + (compare ? 2 : 0) + (crmLink ? 1 : 0)
+
+  // Ordenação por clique no cabeçalho: asc -> desc -> volta ao padrão (métrica).
+  const [sort, setSort] = useState<{ col: SortCol; dir: 'asc' | 'desc' } | null>(null)
+  const toggleSort = (col: SortCol) =>
+    setSort((s) => (s?.col !== col ? { col, dir: 'desc' } : s.dir === 'desc' ? { col, dir: 'asc' } : null))
+  const deltaOf = (g: GroupAgg) =>
+    g.gmvPrev && g.gmvPrev !== 0 ? (g.gmv - g.gmvPrev) / Math.abs(g.gmvPrev) : -Infinity
+  const sortedGroups = useMemo(() => {
+    if (!sort) return groups
+    const arr = [...groups]
+    arr.sort((a, b) => {
+      let r: number
+      if (sort.col === 'label') r = a.label.localeCompare(b.label)
+      else {
+        const va = sort.col === 'desde' ? (desde?.(a.label) ?? -Infinity)
+          : sort.col === 'vendas' ? a.vendas
+          : sort.col === 'gmvPrev' ? (a.gmvPrev ?? -Infinity)
+          : sort.col === 'delta' ? deltaOf(a)
+          : a.gmv // gmv e pct
+        const vb = sort.col === 'desde' ? (desde?.(b.label) ?? -Infinity)
+          : sort.col === 'vendas' ? b.vendas
+          : sort.col === 'gmvPrev' ? (b.gmvPrev ?? -Infinity)
+          : sort.col === 'delta' ? deltaOf(b)
+          : b.gmv
+        r = va - vb
+      }
+      return sort.dir === 'asc' ? r : -r
+    })
+    return arr
+  }, [groups, sort, desde])
+
+  const SortHead = ({ col, children, right }: { col: SortCol; children: React.ReactNode; right?: boolean }) => (
+    <TableHead className={right ? 'text-right' : undefined}>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className={cn('inline-flex items-center gap-1 hover:text-foreground', sort?.col === col && 'text-foreground font-medium')}
+      >
+        {children}
+        {sort?.col === col
+          ? (sort.dir === 'asc' ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)
+          : <ChevronsUpDown className="size-3 opacity-40" />}
+      </button>
+    </TableHead>
+  )
 
   function drill(label: string) {
     if (label && label !== '—')
@@ -105,14 +158,15 @@ export function RankingView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{title}</TableHead>
-                  <TableHead className="text-right">Vendas</TableHead>
-                  <TableHead className="text-right">GMV</TableHead>
-                  <TableHead className="text-right">% do total</TableHead>
+                  <SortHead col="label">{title}</SortHead>
+                  {showDesde && <SortHead col="desde" right>Desde</SortHead>}
+                  <SortHead col="vendas" right>Vendas</SortHead>
+                  <SortHead col="gmv" right>GMV</SortHead>
+                  <SortHead col="pct" right>% do total</SortHead>
                   {compare && (
                     <>
-                      <TableHead className="text-right">GMV ano ant.</TableHead>
-                      <TableHead className="text-right">Δ%</TableHead>
+                      <SortHead col="gmvPrev" right>GMV ano ant.</SortHead>
+                      <SortHead col="delta" right>Δ%</SortHead>
                     </>
                   )}
                   {crmLink && <TableHead className="text-right">Comercial</TableHead>}
@@ -134,7 +188,7 @@ export function RankingView({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  groups.map((g) => (
+                  sortedGroups.map((g) => (
                     <TableRow key={g.key}>
                       <TableCell>
                         <button
@@ -144,6 +198,11 @@ export function RankingView({
                           {g.label}
                         </button>
                       </TableCell>
+                      {showDesde && (
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {desde?.(g.label) ?? '—'}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums">
                         {fmtInt(g.vendas)}
                       </TableCell>
@@ -179,6 +238,7 @@ export function RankingView({
                 {!loading && groups.length > 0 && (
                   <TableRow className="border-t-2 font-semibold">
                     <TableCell>Total ({groups.length})</TableCell>
+                    {showDesde && <TableCell />}
                     <TableCell className="text-right tabular-nums">
                       {fmtInt(totalVendas)}
                     </TableCell>

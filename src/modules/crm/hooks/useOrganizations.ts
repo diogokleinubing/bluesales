@@ -22,6 +22,7 @@ export interface Organization {
   observacoes: string | null
   parent_id: string | null
   blueticket_code: number | null
+  cliente_desde: number | null
   created_at: string
   updated_at: string
 }

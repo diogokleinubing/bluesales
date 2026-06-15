@@ -69,7 +69,9 @@ export function OrgImportWizard({ open, onOpenChange }: { open: boolean; onOpenC
     try {
       const { rows, ignoradas } = buildOrgRows(sheet, map)
       if (rows.length === 0) { setErro('Nenhuma linha válida (verifique Código e Nome).'); setRunning(false); return }
-      const r = await runOrgImport(orgId, rows, setProgress)
+      const r = await runOrgImport(orgId, rows, setProgress, {
+        setClienteDesde: (map.cliente_desde ?? -1) >= 0,
+      })
       setResult(r)
       qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
       qc.invalidateQueries({ queryKey: ['crm', 'kanban', 'orgs'] })

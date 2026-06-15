@@ -18,6 +18,7 @@ import {
 import { useRules } from '../../hooks/useRules'
 import { useReclassify } from '../../hooks/useReclassify'
 import { useOrgId } from '../../hooks/useBi'
+import { useControls } from '@/modules/shared/controls-context'
 import {
   addKeywordRule,
   fetchEventManuals,
@@ -35,6 +36,7 @@ import { fmtBRL, fmtInt } from '@/lib/format'
 
 export function BiggestEvents() {
   const orgId = useOrgId()
+  const { year } = useControls()
   const qc = useQueryClient()
   const { rules } = useRules()
   const reclassify = useReclassify(orgId)
@@ -60,8 +62,8 @@ export function BiggestEvents() {
   const eventsQ = useQuery({
     enabled: !!orgId,
     staleTime: 60 * 1000,
-    queryKey: ['bi', 'biggest-events', orgId, search],
-    queryFn: () => biBiggestEvents(orgId!, search, 200),
+    queryKey: ['bi', 'biggest-events', orgId, search, year],
+    queryFn: () => biBiggestEvents(orgId!, search, year, 200),
   })
   const visible = useMemo(
     () =>
@@ -186,30 +188,6 @@ export function BiggestEvents() {
           placeholder="Todos os segmentos"
           className="h-9 w-52"
         />
-        <div className="ml-auto flex items-center gap-2">
-          <Badge variant="secondary">{selected.size} selecionados</Badge>
-          <ClassSelect
-            value={bulkSeg}
-            options={segNames}
-            onChange={setBulkSeg}
-            placeholder="Segmento"
-            className="h-9 w-40"
-          />
-          <ClassSelect
-            value={bulkGen}
-            options={genNames}
-            onChange={setBulkGen}
-            placeholder="Gênero"
-            className="h-9 w-40"
-          />
-          <Button
-            variant="secondary"
-            onClick={stageBulk}
-            disabled={selected.size === 0 || (!bulkSeg && !bulkGen)}
-          >
-            Aplicar aos selecionados
-          </Button>
-        </div>
       </div>
 
       <Card>
@@ -310,6 +288,32 @@ export function BiggestEvents() {
           </div>
         </CardContent>
       </Card>
+
+      {selected.size > 0 && (
+        <div className={`fixed ${pending.size > 0 ? 'bottom-20' : 'bottom-6'} left-1/2 z-50 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-full border border-border bg-card px-4 py-2 shadow-lg`}>
+          <Badge variant="secondary">{selected.size} selecionados</Badge>
+          <ClassSelect
+            value={bulkSeg}
+            options={segNames}
+            onChange={setBulkSeg}
+            placeholder="Segmento"
+            className="h-8 w-36"
+          />
+          <ClassSelect
+            value={bulkGen}
+            options={genNames}
+            onChange={setBulkGen}
+            placeholder="Gênero"
+            className="h-8 w-36"
+          />
+          <Button size="sm" variant="secondary" onClick={stageBulk} disabled={!bulkSeg && !bulkGen}>
+            Aplicar aos selecionados
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Limpar
+          </Button>
+        </div>
+      )}
 
       <PendingSaveBar
         count={pending.size}

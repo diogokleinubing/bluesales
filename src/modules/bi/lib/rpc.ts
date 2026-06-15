@@ -179,6 +179,16 @@ export interface BiEventsParams {
   months?: number[]
 }
 
+export interface OrgClienteDesdeRow {
+  key: string
+  cliente_desde: number
+}
+
+/** Ano "cliente desde" por organizador (menor ano do grupo principal+subs). */
+export async function biOrgClienteDesde(orgId: string): Promise<OrgClienteDesdeRow[]> {
+  return rpc<OrgClienteDesdeRow[]>('bi_org_cliente_desde', { p_org: orgId })
+}
+
 export async function biEvents(
   orgId: string,
   year: number,
@@ -227,11 +237,12 @@ export async function biPopularVenues(
 export async function biBiggestEvents(
   orgId: string,
   search: string,
+  year: number | null = null,
   limit = 200,
 ): Promise<EventRow[]> {
   return rpc<EventRow[]>('bi_events', {
     p_org: orgId,
-    p_year: null,
+    p_year: year,
     p_datebase: 'venda',
     p_pdv: null,
     p_search: search || null,

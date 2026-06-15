@@ -10,6 +10,7 @@ export type OrgField =
   | 'telefone'
   | 'relationship_user_code'
   | 'categoria_comercial'
+  | 'cliente_desde'
   | 'cidade'
   | 'uf'
 
@@ -22,6 +23,7 @@ export const ORG_FIELDS: FieldDef<OrgField>[] = [
   { field: 'telefone', label: 'Telefone', required: false, aliases: ['telefone', 'fone', 'celular', 'contato', 'tel'] },
   { field: 'relationship_user_code', label: 'Cód. usuário relacionamento', required: false, aliases: ['codigo_usuario_relacionamento', 'cod_usuario_relacionamento', 'codigo_relacionamento', 'usuario_relacionamento', 'cod_relacionamento'] },
   { field: 'categoria_comercial', label: 'Categoria comercial (classe)', required: false, aliases: ['categoria_comercial', 'categoriacomercial', 'categoria', 'classe', 'classificacao'] },
+  { field: 'cliente_desde', label: 'Cliente desde (ano)', required: false, aliases: ['cliente_desde', 'clientedesde', 'desde', 'ano_cliente', 'anocliente', 'cliente_desde_ano', 'ano_inicio', 'anoinicio', 'inicio_relacionamento', 'data_cadastro', 'datacadastro', 'cadastro'] },
   { field: 'cidade', label: 'Cidade', required: false, aliases: ['cidade', 'municipio'] },
   { field: 'uf', label: 'Estado (UF)', required: false, aliases: ['uf', 'estado'] },
 ]

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Download, RefreshCw, ChevronLeft, ChevronRight, X, Mic2, Sparkles, CalendarClock, TrendingUp,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +33,7 @@ import {
   setEventoIgnorado, setEventoFavorito, promoverEvento,
   detectEventArtists, removeEventArtist, useIgnorados,
   EVENTS_PAGE_SIZE, type CrawledEventRow, type EventFilters, type EventStatusFiltro,
-  type PaisFiltro,
+  type EventSort, type EventSortCol, type PaisFiltro,
 } from '../hooks/usePesquisa'
 import { ARTIST_CLASSES } from '@/modules/crm/hooks/useCadastros'
 import { StarButton } from '../components/StarButton'
@@ -79,6 +80,24 @@ export function EventosCapturados() {
   const [comVendas, setComVendas] = useState(false)
   const [proxSeven, setProxSeven] = useState(false)
   const [page, setPage] = useState(0)
+  const [sort, setSort] = useState<EventSort | null>(null)
+  // Clica no cabeçalho: asc -> desc -> volta ao padrão (recência).
+  const toggleSort = (col: EventSortCol) =>
+    setSort((s) => (s?.col !== col ? { col, dir: 'asc' } : s.dir === 'asc' ? { col, dir: 'desc' } : null))
+  const sortHead = (col: EventSortCol, label: string, right = false) => (
+    <TableHead className={right ? 'text-right' : undefined}>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className={cn('inline-flex items-center gap-1 hover:text-foreground', sort?.col === col && 'text-foreground font-medium')}
+      >
+        {label}
+        {sort?.col === col
+          ? (sort.dir === 'asc' ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)
+          : <ChevronsUpDown className="size-3 opacity-40" />}
+      </button>
+    </TableHead>
+  )
   const artistNames = useArtistNamesByClasse(classes)
   const [busy, setBusy] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -135,10 +154,10 @@ export function EventosCapturados() {
   )
 
   // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven])
+  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, sort])
 
   const ignoradosLocais = useIgnorados('local')
-  const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page)
+  const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page, EVENTS_PAGE_SIZE, sort)
   const rows = data?.rows ?? []
   const total = data?.total ?? 0
   const from = total === 0 ? 0 : page * EVENTS_PAGE_SIZE + 1
@@ -437,24 +456,25 @@ export function EventosCapturados() {
       <Table>
         <TableHeader><TableRow>
           <TableHead className="w-8"><Checkbox checked={allSel} onCheckedChange={() => toggleAll()} aria-label="Selecionar todos" /></TableHead>
-          <TableHead>Evento</TableHead>
+          {sortHead('nome', 'Evento')}
           <TableHead>Fit IA</TableHead>
           <TableHead>Fonte</TableHead>
-          <TableHead>Data</TableHead>
-          <TableHead>Local</TableHead>
-          <TableHead>Cidade</TableHead>
+          {sortHead('data_inicio', 'Data')}
+          {sortHead('local_raw', 'Local')}
+          {sortHead('cidade', 'Cidade')}
           <TableHead>Artistas</TableHead>
-          <TableHead>Categoria</TableHead>
-          <TableHead className="text-right">Preço</TableHead>
-          <TableHead className="text-right">Taxa</TableHead>
+          {sortHead('categoria', 'Categoria')}
+          {sortHead('preco_min', 'Preço', true)}
+          {sortHead('taxa_pct', 'Taxa', true)}
+          {comVendas && sortHead('vendidos', 'Vendidos', true)}
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? (
             Array.from({ length: 12 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={11}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={comVendas ? 12 : 11}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={comVendas ? 12 : 11} className="py-12 text-center text-muted-foreground">
               Nenhum evento encontrado.
             </TableCell></TableRow>
           ) : rows.map((e) => {
@@ -507,6 +527,18 @@ export function EventosCapturados() {
                 <TableCell className="max-w-[160px] truncate text-muted-foreground">{e.categoria ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right">{preco(e)}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{e.taxa_pct != null ? `${e.taxa_pct}%` : '—'}</TableCell>
+                {comVendas && (
+                  <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">
+                    {e.vendidos != null ? (
+                      <>
+                        {e.vendidos.toLocaleString('pt-BR')}
+                        {e.capacidade_total ? (
+                          <span className="ml-1 text-xs">({Math.round((e.vendidos / e.capacidade_total) * 100)}%)</span>
+                        ) : null}
+                      </>
+                    ) : '—'}
+                  </TableCell>
+                )}
               </TableRow>
             )
           })}

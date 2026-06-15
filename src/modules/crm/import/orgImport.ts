@@ -23,6 +23,14 @@ function intOrNull(v: unknown): number | null {
   const n = Number(digits)
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null
 }
+/** Extrai o ano (19xx/20xx) de "2019", "01/03/2019", "2019-05-01"… senão null. */
+function yearOrNull(v: unknown): number | null {
+  if (v == null) return null
+  const m = String(v).match(/(19|20)\d{2}/)
+  if (!m) return null
+  const n = Number(m[0])
+  return n >= 1990 && n <= 2100 ? n : null
+}
 
 export interface OrgRow {
   blueticket_code: number
@@ -33,6 +41,7 @@ export interface OrgRow {
   telefone: string | null
   relationship_user_code: number | null
   categoria_comercial: string | null
+  cliente_desde: number | null
   cidade: string | null
   uf: string | null
 }
@@ -60,6 +69,7 @@ export function buildOrgRows(sheet: SheetData, map: ColumnMap<OrgField>): OrgBui
       telefone: strOrNull(cell(row, map.telefone)),
       relationship_user_code: intOrNull(cell(row, map.relationship_user_code)),
       categoria_comercial: strOrNull(cell(row, map.categoria_comercial)),
+      cliente_desde: yearOrNull(cell(row, map.cliente_desde)),
       cidade: strOrNull(cell(row, map.cidade)),
       uf: uf ? uf.toUpperCase().slice(0, 2) : null,
     })
@@ -87,6 +97,7 @@ export async function runOrgImport(
   orgId: string,
   rows: OrgRow[],
   onProgress?: (p: ImportProgress) => void,
+  opts?: { setClienteDesde?: boolean },
 ): Promise<OrgImportResult> {
   // 1) Quais codes já existem (para contagem novas x atualizadas).
   const codes = rows.map((r) => r.blueticket_code)
@@ -114,6 +125,9 @@ export async function runOrgImport(
       documento: r.documento,
       telefone: r.telefone,
       relationship_user_code: r.relationship_user_code,
+      // Só grava cliente_desde quando a coluna foi mapeada (evita zerar valores
+      // já existentes ao reimportar um arquivo sem essa coluna).
+      ...(opts?.setClienteDesde ? { cliente_desde: r.cliente_desde } : {}),
       cidade: r.cidade,
       uf: r.uf,
       updated_at: new Date().toISOString(),

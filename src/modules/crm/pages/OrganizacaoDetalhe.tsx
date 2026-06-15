@@ -434,6 +434,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
       cidade: org.cidade ?? '',
       uf: org.uf ?? '',
       gmv_anual: org.gmv_anual != null ? String(Math.round(org.gmv_anual)) : '',
+      cliente_desde: org.cliente_desde != null ? String(org.cliente_desde) : '',
       classificacao: org.classificacao ?? '',
       status_comercial: org.status_comercial ?? '',
       origem_lead: org.origem_lead ?? '',
@@ -448,6 +449,8 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['crm', 'organization', org.id] })
     qc.invalidateQueries({ queryKey: ['crm', 'organizations'] })
+    // "Cliente desde" do BI depende de organizations.cliente_desde.
+    qc.invalidateQueries({ queryKey: ['bi', 'org-cliente-desde'] })
   }
 
   async function salvar() {
@@ -458,6 +461,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         cidade: toText(draft.cidade),
         uf: toText(draft.uf),
         gmv_anual: toNumber(draft.gmv_anual),
+        cliente_desde: toNumber(draft.cliente_desde),
         classificacao: toText(draft.classificacao),
         status_comercial: toText(draft.status_comercial),
         origem_lead: toText(draft.origem_lead),
@@ -498,7 +502,10 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <CurrencyField label="GMV anual" value={draft.gmv_anual} onChange={(v) => set('gmv_anual', v)} />
         <SelectField label="Classificação" value={draft.classificacao} options={CLASSES} onChange={(v) => set('classificacao', v)} />
       </div>
-      <SelectField label="Status comercial" value={draft.status_comercial} options={[...STATUS_COMERCIAL]} onChange={(v) => set('status_comercial', v)} />
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField label="Status comercial" value={draft.status_comercial} options={[...STATUS_COMERCIAL]} onChange={(v) => set('status_comercial', v)} />
+        <TextField label="Cliente desde (ano)" value={draft.cliente_desde} onChange={(v) => set('cliente_desde', v)} placeholder="ex.: 2019" />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
         <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />

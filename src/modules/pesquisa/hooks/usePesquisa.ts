@@ -444,10 +444,17 @@ export function useSourceMap(): Record<string, string> {
   }, [sources.data])
 }
 
+/** Coluna do banco para ordenação da listagem (colunas reais de crawled_events). */
+export type EventSortCol =
+  | 'nome' | 'data_inicio' | 'local_raw' | 'cidade' | 'categoria'
+  | 'preco_min' | 'taxa_pct' | 'vendidos'
+export type EventSort = { col: EventSortCol; dir: 'asc' | 'desc' }
+
 export function useCrawledEventsPaged(
   filters: EventFilters,
   page: number,
   pageSize = EVENTS_PAGE_SIZE,
+  sort?: EventSort | null,
 ): UseQueryResult<{ rows: CrawledEventRow[]; total: number }> {
   const orgId = useCrmOrgId()
   const sources = useCrawlerSources()
@@ -457,7 +464,7 @@ export function useCrawledEventsPaged(
   return useQuery({
     enabled: !!orgId && !!sources.data && ignoradosLocais.isSuccess,
     staleTime: 15_000,
-    queryKey: ['pesquisa', 'events-paged', orgId, filters, page, pageSize, excludeLocais],
+    queryKey: ['pesquisa', 'events-paged', orgId, filters, page, pageSize, excludeLocais, sort],
     queryFn: async (): Promise<{ rows: CrawledEventRow[]; total: number }> => {
       const caEmbed = filters.comArtista
         ? 'crawled_event_artists!inner(artist_id, removido, artists(nome))'
@@ -468,10 +475,11 @@ export function useCrawledEventsPaged(
         .eq('org_id', orgId!)
       q = applyEventFilters(q, filters, sourceMap, excludeLocais)
       if (filters.comArtista) q = q.eq('crawled_event_artists.removido', false)
+      // Ordenação escolhida (nulos sempre por último) + desempate estável por recência.
+      if (sort) q = q.order(sort.col, { ascending: sort.dir === 'asc', nullsFirst: false })
+      q = q.order('primeira_vez_visto', { ascending: false })
       const from = page * pageSize
-      const { data, error, count } = await q
-        .order('primeira_vez_visto', { ascending: false })
-        .range(from, from + pageSize - 1)
+      const { data, error, count } = await q.range(from, from + pageSize - 1)
       if (error) throw new Error(error.message)
       return { rows: (data ?? []).map(mapEventRow), total: count ?? 0 }
     },
