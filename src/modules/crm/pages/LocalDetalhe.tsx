@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, Plus, X, CalendarSearch } from 'lucide-react'
+import { useEventosDoLocalNome } from '@/modules/pesquisa/hooks/usePesquisa'
+import { EventosDialog } from '@/modules/pesquisa/components/EventosDialog'
+import { SocialLinks } from '../components/SocialLinks'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,6 +33,9 @@ export function LocalDetalhe() {
   const navigate = useNavigate()
   const { data, isLoading } = useLocais()
   const local = useMemo(() => (data ?? []).find((l) => l.id === id) ?? null, [data, id])
+  const [verEventos, setVerEventos] = useState(false)
+  // Eventos captados pelo módulo Pesquisa para este local (lazy: só ao abrir).
+  const eventosLocal = useEventosDoLocalNome(verEventos && local ? local.nome : null)
 
   if (isLoading) return <div className="-mx-6 -mt-6 p-6"><Skeleton className="h-96 w-full" /></div>
   if (!local) return <div className="-mx-6 -mt-6 p-6 text-muted-foreground">Local não encontrado.</div>
@@ -44,7 +50,23 @@ export function LocalDetalhe() {
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
         <h1 className="text-xl font-semibold tracking-tight">{local.nome}</h1>
         <ClasseBadge classe={local.classificacao} />
+        <SocialLinks site={local.site} instagram={local.instagram} />
+        <button
+          onClick={() => setVerEventos(true)}
+          className="ml-auto inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+          title="Ver eventos captados pelo módulo Pesquisa"
+        >
+          <CalendarSearch className="size-4" /> Ver eventos
+        </button>
       </div>
+
+      <EventosDialog
+        open={verEventos}
+        onOpenChange={setVerEventos}
+        titulo={`Eventos captados — ${local.nome}`}
+        subtitulo={eventosLocal.isLoading ? 'Carregando…' : `${eventosLocal.data?.length ?? 0} evento(s) do módulo Pesquisa`}
+        eventos={eventosLocal.data ?? []}
+      />
 
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 border-b border-border p-4 lg:border-b-0 lg:border-r">

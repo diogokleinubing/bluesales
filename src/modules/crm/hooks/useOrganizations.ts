@@ -19,6 +19,8 @@ export interface Organization {
   status_comercial: string | null
   funil_stage_id: string | null
   bi_organizador: string | null
+  site: string | null
+  instagram: string | null
   observacoes: string | null
   parent_id: string | null
   blueticket_code: number | null

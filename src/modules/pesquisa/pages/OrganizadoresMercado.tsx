@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Star, Ban } from 'lucide-react'
+import { Star, Ban, Link2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -15,6 +16,7 @@ import { fmtDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { cn } from '@/lib/utils'
+import { norm } from '@/modules/bi/lib/classify'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EntityAutocomplete, type Lookup } from '@/modules/crm/components/EntityAutocomplete'
 import { useFitRules, pickRule, scoreFit } from '@/modules/crm/hooks/useFitScore'
@@ -25,14 +27,15 @@ import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 import { BR_UFS } from '../lib/ufs'
 import {
-  useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrawlerSources,
+  useCrawledOrganizers, useEventosDoOrganizador, usePromocoes, useCrmNomes, useCrawlerSources,
   useFavoritos, setFavoritoAgregado, useIgnorados, setIgnoradoAgregado,
-  promoverOrganizador, useCrmOrgId, useEventFacets,
+  promoverOrganizador, conectarPromocoesPorNome, useCrmOrgId, useEventFacets,
   type OrganizerAgg, type OrganizerFilters, type PromoverAggInput,
 } from '../hooks/usePesquisa'
 
 export function OrganizadoresMercado() {
   const promos = usePromocoes('organizador').data
+  const crmNomes = useCrmNomes('organizador').data
   const sources = useCrawlerSources()
   const orgId = useCrmOrgId()
   const { profile } = useProfile()
@@ -153,6 +156,26 @@ export function OrganizadoresMercado() {
     }
   }
 
+  // Conecta (vincula) por nome os organizadores que já existem no CRM mas ainda
+  // não têm vínculo — cria o link durável (chave→id) sobre os nomes atuais.
+  const [conectando, setConectando] = useState(false)
+  async function onConectarPorNome() {
+    if (!orgId || !crmNomes) return
+    const links = (data ?? [])
+      .filter((a) => !promos?.has(a.chave))
+      .map((a) => ({ chave: a.chave, rotulo: a.nome, id: crmNomes.get(norm(a.nome)) }))
+      .filter((l): l is { chave: string; rotulo: string; id: string } => !!l.id)
+    if (!links.length) { toast.info('Nenhum organizador novo casou por nome com o CRM.'); return }
+    setConectando(true)
+    try {
+      const n = await conectarPromocoesPorNome(orgId, 'organizador', links, profile?.id ?? null)
+      await qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes', 'organizador'] })
+      toast.success(`${n} organizador(es) conectados ao CRM por nome.`)
+    } catch (e) {
+      toast.error('Erro ao conectar', { description: (e as Error).message })
+    } finally { setConectando(false) }
+  }
+
   return (
     <ListView
       title="Organizadores"
@@ -161,6 +184,10 @@ export function OrganizadoresMercado() {
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />
+          <Button variant="outline" size="sm" onClick={onConectarPorNome} disabled={conectando || !crmNomes}
+            title="Vincular ao CRM os organizadores que já existem lá (match por nome atual)">
+            <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
+          </Button>
           <Select value={fonte} onValueChange={setFonte}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[160px]`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
             <SelectContent>
@@ -244,13 +271,14 @@ export function OrganizadoresMercado() {
             </TableCell></TableRow>
           ) : rowsFit.map(({ a, fit }) => {
             const promo = promos?.get(a.chave)
+            const noCrm = !promo && !!crmNomes?.has(norm(a.nome))
             return (
               <TableRow key={a.chave} className="cursor-pointer" onClick={() => setSel(a.nome)}>
                 <TableCell className="font-medium">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <StarButton active={!!favoritos?.has(a.chave)} onToggle={() => onFav(a)} />
                     <IgnoreButton ignored={!!ignorados?.has(a.chave)} onToggle={() => onIgnorar(a)} />
-                    <ImportCrmButton imported={!!promo} disabled={busy === a.chave || !orgId} onImport={() => onPromover(a)} />
+                    <ImportCrmButton imported={!!promo} inCrm={noCrm} disabled={busy === a.chave || !orgId} onImport={() => onPromover(a)} />
                     <span className="truncate" title={a.nome}>{a.nome}</span>
                   </div>
                 </TableCell>

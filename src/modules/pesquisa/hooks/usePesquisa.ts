@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useCrmOrgId } from '@/modules/crm/hooks/useFunnelStages'
+import { norm } from '@/modules/bi/lib/classify'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 
 export { useCrmOrgId, useCrmOrgId as usePesquisaOrgId } from '@/modules/crm/hooks/useFunnelStages'
@@ -279,6 +280,36 @@ export function useEventosDoLocal(
         const c = e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : null
         return c === cidade
       })
+    },
+  })
+}
+
+/** Eventos (não ignorados) de um local pelo nome (match por local_raw, sem cidade). */
+export function useEventosDoLocalNome(
+  nome: string | null,
+  fonte?: string | null,
+): UseQueryResult<CrawledEventRow[]> {
+  const orgId = useCrmOrgId()
+  const fonteSlug = fonte && fonte !== 'todas' ? fonte : null
+  return useQuery({
+    enabled: !!orgId && !!nome,
+    staleTime: 30_000,
+    queryKey: ['pesquisa', 'local-eventos-nome', orgId, nome, fonteSlug],
+    queryFn: async (): Promise<CrawledEventRow[]> => {
+      let q = supabase
+        .from('crawled_events')
+        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
+        .eq('org_id', orgId!)
+        .eq('ignorado', false)
+        .ilike('local_raw', nome!)
+      if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
+      const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((e: Record<string, unknown>) => ({
+        ...(e as object),
+        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
+        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
+      })) as CrawledEventRow[]
     },
   })
 }
@@ -906,6 +937,60 @@ export async function promoverLocal(
 }
 
 /** Mapa chave→promoção para um tipo (organizador|local), p/ marcar já promovidos. */
+/**
+ * Nomes (normalizados) já cadastrados no CRM — para sinalizar na Pesquisa os que
+ * JÁ existem no Comercial (inclusive os importados por Excel, que não têm vínculo
+ * em crawled_promotions). Match por nome normalizado (caixa/acento/espaço).
+ */
+export function useCrmNomes(tipo: 'organizador' | 'local'): UseQueryResult<Map<string, string>> {
+  const orgId = useCrmOrgId()
+  return useQuery({
+    enabled: !!orgId,
+    staleTime: 60_000,
+    queryKey: ['pesquisa', 'crm-nomes', tipo, orgId],
+    queryFn: async (): Promise<Map<string, string>> => {
+      const table = tipo === 'organizador' ? 'organizations' : 'crm_locals'
+      const { data, error } = await supabase
+        .from(table).select('id, nome').eq('org_id', orgId!).is('deleted_at', null).limit(100000)
+      if (error) throw new Error(error.message)
+      // nome normalizado -> id do cadastro (primeiro vence em caso de homônimos).
+      const m = new Map<string, string>()
+      for (const r of data ?? []) {
+        const n = norm((r as { nome: string }).nome)
+        if (n && !m.has(n)) m.set(n, (r as { id: string }).id)
+      }
+      return m
+    },
+  })
+}
+
+/**
+ * Conecta (vincula) agregados da Pesquisa a cadastros existentes do CRM criando
+ * registros em crawled_promotions. Vínculo durável por chave→id (sobrevive a
+ * edições de nome). Usado pelo "Conectar por nome" e pelo vínculo manual.
+ */
+export async function conectarPromocoesPorNome(
+  orgId: string,
+  tipo: 'organizador' | 'local',
+  links: { chave: string; rotulo: string; id: string }[],
+  profileId: string | null,
+): Promise<number> {
+  if (!links.length) return 0
+  const rows = links.map((l) => ({
+    org_id: orgId,
+    tipo,
+    chave: l.chave,
+    rotulo: l.rotulo,
+    ...(tipo === 'organizador' ? { organization_id: l.id } : { local_id: l.id }),
+    promovido_por: profileId,
+  }))
+  const { error } = await supabase
+    .from('crawled_promotions')
+    .upsert(rows, { onConflict: 'org_id,tipo,chave' })
+  if (error) throw new Error(error.message)
+  return rows.length
+}
+
 export function usePromocoes(tipo: 'organizador' | 'local'): UseQueryResult<Map<string, PromocaoRef>> {
   const orgId = useCrmOrgId()
   return useQuery({

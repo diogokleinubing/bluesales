@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Star, Ban } from 'lucide-react'
+import { Star, Ban, Link2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -13,6 +14,7 @@ import {
 import { fmtDate } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { norm } from '@/modules/bi/lib/classify'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { ListView, ToolbarSearch, TOOLBAR_TRIGGER } from '@/modules/crm/components/ListView'
 import { EntityAutocomplete, type Lookup } from '@/modules/crm/components/EntityAutocomplete'
@@ -25,14 +27,15 @@ import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
 import { BR_UFS } from '../lib/ufs'
 import {
-  useCrawledLocals, useEventosDoLocal, usePromocoes, useCrawlerSources,
+  useCrawledLocals, useEventosDoLocal, usePromocoes, useCrmNomes, useCrawlerSources,
   useFavoritos, setFavoritoAgregado, useIgnorados, setIgnoradoAgregado,
-  registerLocalPromotion, useCrmOrgId, useEventFacets,
+  registerLocalPromotion, conectarPromocoesPorNome, useCrmOrgId, useEventFacets,
   type LocalAgg, type LocalAggFilters,
 } from '../hooks/usePesquisa'
 
 export function LocaisMercado() {
   const promos = usePromocoes('local').data
+  const crmNomes = useCrmNomes('local').data
   const sources = useCrawlerSources()
   const orgId = useCrmOrgId()
   const { profile } = useProfile()
@@ -162,6 +165,25 @@ export function LocaisMercado() {
     }
   }
 
+  // Vincula por nome os locais que já existem no CRM mas ainda não têm vínculo.
+  const [conectando, setConectando] = useState(false)
+  async function onConectarPorNome() {
+    if (!orgId || !crmNomes) return
+    const links = (data ?? [])
+      .filter((a) => !promos?.has(a.chave))
+      .map((a) => ({ chave: a.chave, rotulo: a.nome, id: crmNomes.get(norm(a.nome)) }))
+      .filter((l): l is { chave: string; rotulo: string; id: string } => !!l.id)
+    if (!links.length) { toast.info('Nenhum local novo casou por nome com o CRM.'); return }
+    setConectando(true)
+    try {
+      const n = await conectarPromocoesPorNome(orgId, 'local', links, profile?.id ?? null)
+      await qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes', 'local'] })
+      toast.success(`${n} local(is) conectados ao CRM por nome.`)
+    } catch (e) {
+      toast.error('Erro ao conectar', { description: (e as Error).message })
+    } finally { setConectando(false) }
+  }
+
   return (
     <ListView
       title="Locais"
@@ -170,6 +192,10 @@ export function LocaisMercado() {
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar local…" />
+          <Button variant="outline" size="sm" onClick={onConectarPorNome} disabled={conectando || !crmNomes}
+            title="Vincular ao CRM os locais que já existem lá (match por nome atual)">
+            <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
+          </Button>
           <Select value={fonte} onValueChange={setFonte}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[160px]`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
             <SelectContent>
@@ -246,13 +272,14 @@ export function LocaisMercado() {
             </TableCell></TableRow>
           ) : rows.map((a) => {
             const promo = promos?.get(a.chave)
+            const noCrm = !promo && !!crmNomes?.has(norm(a.nome))
             return (
               <TableRow key={a.chave} className="cursor-pointer" onClick={() => setSel(a)}>
                 <TableCell className="font-medium">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <StarButton active={!!favoritos?.has(a.chave)} onToggle={() => onFav(a)} />
                     <IgnoreButton ignored={!!ignorados?.has(a.chave)} onToggle={() => onIgnorar(a)} />
-                    <ImportCrmButton imported={!!promo} disabled={busy === a.chave || !orgId} onImport={() => onPromover(a)} />
+                    <ImportCrmButton imported={!!promo} inCrm={noCrm} disabled={busy === a.chave || !orgId} onImport={() => onPromover(a)} />
                     <span className="truncate" title={a.nome}>{a.nome}</span>
                   </div>
                 </TableCell>

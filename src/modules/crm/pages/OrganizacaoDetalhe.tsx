@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History, MapPin } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History, MapPin, CalendarSearch } from 'lucide-react'
+import { useEventosDoOrganizador } from '@/modules/pesquisa/hooks/usePesquisa'
+import { EventosDialog } from '@/modules/pesquisa/components/EventosDialog'
+import { SocialLinks } from '../components/SocialLinks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -48,6 +51,9 @@ export function OrganizacaoDetalhe() {
   const { data: org, isLoading } = useOrganization(id)
   const [oppOpen, setOppOpen] = useState(false)
   const [histOpen, setHistOpen] = useState(false)
+  const [verEventos, setVerEventos] = useState(false)
+  // Eventos captados pelo módulo Pesquisa para este organizador (lazy: só ao abrir).
+  const eventosOrg = useEventosDoOrganizador(verEventos && org ? org.nome : null)
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
   if (!org) return <p className="text-muted-foreground">Organização não encontrada.</p>
@@ -68,7 +74,24 @@ export function OrganizacaoDetalhe() {
       <div className="flex items-center gap-2 border-b border-border px-6 py-3">
         <h1 className="text-xl font-semibold tracking-tight">{org.nome}</h1>
         {org.classificacao && <ClasseBadge classe={org.classificacao} />}
+        <SocialLinks site={org.site} instagram={org.instagram} />
+        <button
+          onClick={() => setVerEventos(true)}
+          className="ml-auto inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+          title="Ver eventos captados pelo módulo Pesquisa"
+        >
+          <CalendarSearch className="size-4" /> Ver eventos
+        </button>
       </div>
+
+      <EventosDialog
+        open={verEventos}
+        onOpenChange={setVerEventos}
+        titulo={`Eventos captados — ${org.nome}`}
+        subtitulo={eventosOrg.isLoading ? 'Carregando…' : `${eventosOrg.data?.length ?? 0} evento(s) do módulo Pesquisa`}
+        eventos={eventosOrg.data ?? []}
+        showOrganizador={false}
+      />
 
       {/* Corpo: principal | divisória | detalhes */}
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
@@ -440,6 +463,8 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
       origem_lead: org.origem_lead ?? '',
       sociedade: org.sociedade ?? '',
       estrutura: org.estrutura ?? '',
+      site: org.site ?? '',
+      instagram: org.instagram ?? '',
       observacoes: org.observacoes ?? '',
     }),
     [org],
@@ -467,6 +492,8 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         origem_lead: toText(draft.origem_lead),
         sociedade: toText(draft.sociedade),
         estrutura: toText(draft.estrutura),
+        site: toText(draft.site),
+        instagram: toText(draft.instagram),
         observacoes: toText(draft.observacoes),
       })
       invalidate()
@@ -511,6 +538,10 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
       </div>
       <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+      <div className="grid grid-cols-2 gap-3">
+        <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
+        <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
+      </div>
       <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
     </section>
