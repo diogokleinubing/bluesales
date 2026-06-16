@@ -10,6 +10,8 @@ import tailwindcss from '@tailwindcss/vite'
  * limpo e do commit publicado -> false (mostra a versão "limpa" do servidor).
  */
 function hasLocalChanges(): boolean {
+  // Em builds de produção/CI (Vercel) é sempre a versão publicada — nunca "-dev".
+  if (process.env.VERCEL || process.env.CI) return false
   try {
     const dirty = execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()

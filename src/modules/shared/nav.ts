@@ -60,6 +60,33 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   {
+    id: 'bi',
+    label: 'BI',
+    icon: BarChart3,
+    home: '/bi/dashboard',
+    groups: [
+      {
+        title: 'Visão geral',
+        items: [
+          { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard, color: '#3b82f6' },
+          { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange, color: '#f97316', requires: 'gestor' },
+          { to: '/bi/analises', label: 'Análises', icon: Layers, color: '#8b5cf6' },
+          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard, color: '#14b8a6' },
+          { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp, color: '#22c55e' },
+          { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet, color: '#f59e0b' },
+          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal, color: '#d946ef' },
+        ],
+      },
+      {
+        title: 'Configuração',
+        items: [
+          { to: '/bi/importacao', label: 'Importação', icon: Upload, color: '#0ea5e9' },
+          { to: '/bi/base', label: 'Base de dados', icon: Database, color: '#64748b', requires: 'admin' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'comercial',
     label: 'Comercial',
     icon: Briefcase,
@@ -111,33 +138,6 @@ export const MODULES: ModuleDef[] = [
           { to: '/comercial/configuracao/segmentos', label: 'Segmentos', icon: SlidersHorizontal, color: '#d946ef' },
           { to: '/comercial/configuracao/generos', label: 'Gêneros', icon: Mic2, color: '#8b5cf6' },
           { to: '/comercial/configuracao/fit-score', label: 'Fit Score', icon: Target, color: '#ef4444' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'bi',
-    label: 'BI',
-    icon: BarChart3,
-    home: '/bi/dashboard',
-    groups: [
-      {
-        title: 'Visão geral',
-        items: [
-          { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard, color: '#3b82f6' },
-          { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange, color: '#f97316', requires: 'gestor' },
-          { to: '/bi/analises', label: 'Análises', icon: Layers, color: '#8b5cf6' },
-          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard, color: '#14b8a6' },
-          { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp, color: '#22c55e' },
-          { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet, color: '#f59e0b' },
-          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal, color: '#d946ef' },
-        ],
-      },
-      {
-        title: 'Configuração',
-        items: [
-          { to: '/bi/importacao', label: 'Importação', icon: Upload, color: '#0ea5e9' },
-          { to: '/bi/base', label: 'Base de dados', icon: Database, color: '#64748b', requires: 'admin' },
         ],
       },
     ],
