@@ -109,6 +109,35 @@ export function RankingView({
     return arr
   }, [groups, sort, desde])
 
+  // Seleção de células de GMV para somatório em tempo real (estilo planilha):
+  // clique = só ela; shift = intervalo a partir da âncora; ctrl/cmd = alterna avulsa.
+  const [selGmv, setSelGmv] = useState<Set<string>>(new Set())
+  const [anchorKey, setAnchorKey] = useState<string | null>(null)
+  function onGmvClick(idx: number, key: string, e: React.MouseEvent) {
+    if (e.shiftKey) {
+      e.preventDefault()
+      const aIdx = anchorKey ? sortedGroups.findIndex((g) => g.key === anchorKey) : -1
+      const start = aIdx >= 0 ? aIdx : idx
+      const lo = Math.min(start, idx)
+      const hi = Math.max(start, idx)
+      setSelGmv(new Set(sortedGroups.slice(lo, hi + 1).map((g) => g.key)))
+      if (aIdx < 0) setAnchorKey(key)
+    } else if (e.metaKey || e.ctrlKey) {
+      setSelGmv((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+      setAnchorKey(key)
+    } else {
+      setSelGmv(new Set([key]))
+      setAnchorKey(key)
+    }
+  }
+  const selRows = sortedGroups.filter((g) => selGmv.has(g.key))
+  const selSum = selRows.reduce((a, g) => a + g.gmv, 0)
+
   const SortHead = ({ col, children, right }: { col: SortCol; children: React.ReactNode; right?: boolean }) => (
     <TableHead className={right ? 'text-right' : undefined}>
       <button
@@ -175,7 +204,7 @@ export function RankingView({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedGroups.map((g) => (
+                  sortedGroups.map((g, idx) => (
                     <TableRow key={g.key}>
                       <TableCell>
                         <button
@@ -199,7 +228,14 @@ export function RankingView({
                       <TableCell className="text-right tabular-nums">
                         {fmtInt(g.eventos)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell
+                        onClick={(e) => onGmvClick(idx, g.key, e)}
+                        className={cn(
+                          'cursor-pointer select-none text-right tabular-nums',
+                          selGmv.has(g.key) && 'bg-primary/15 ring-1 ring-inset ring-primary/40',
+                        )}
+                        title="Clique para somar · Shift = intervalo · Ctrl/Cmd = avulsas"
+                      >
                         {fmtBRL(g.gmv)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -269,6 +305,24 @@ export function RankingView({
       </Card>
 
       <BiEventosDialog dim={drillParam} value={drillSel} onClose={() => setDrillSel(null)} />
+
+      {selRows.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
+          <span className="text-sm text-muted-foreground">
+            {selRows.length} célula(s) · GMV
+          </span>
+          <span className="font-semibold tabular-nums">{fmtBRL(selSum)}</span>
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {fmtPct(totalGmv > 0 ? selSum / totalGmv : 0)} do total
+          </span>
+          <button
+            className="text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => { setSelGmv(new Set()); setAnchorKey(null) }}
+          >
+            Limpar
+          </button>
+        </div>
+      )}
     </div>
   )
 }
