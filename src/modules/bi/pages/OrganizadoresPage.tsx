@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { RankingView } from '../components/RankingView'
+import { OrganizadoresPorAno } from '../components/OrganizadoresPorAno'
 import { CompareToggle } from '../components/CompareToggle'
 import { useGroupAnalysis, useOrgId } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
@@ -12,6 +15,7 @@ export function OrganizadoresPage() {
   const { year, metric } = useControls()
   const orgId = useOrgId()
   const [compare, setCompare] = useState(false)
+  const [porAno, setPorAno] = useState(false)
   const { groups, loading } = useGroupAnalysis('organizador', 'Sem organizador', compare)
 
   // Ano "cliente desde" por organizador (principal). Vem da RPC bi_org_cliente_desde,
@@ -43,18 +47,33 @@ export function OrganizadoresPage() {
             Ranking de {year}. Clique para ver os eventos.
           </p>
         </div>
-        <CompareToggle checked={compare} onChange={setCompare} />
+        <div className="flex flex-wrap items-center gap-4">
+          <Label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-normal text-muted-foreground">
+            <Checkbox checked={porAno} onCheckedChange={(v) => setPorAno(!!v)} />
+            Agrupar por ano (Desde)
+          </Label>
+          {!porAno && <CompareToggle checked={compare} onChange={setCompare} />}
+        </div>
       </div>
-      <RankingView
-        title="Organizador"
-        groups={groups}
-        metricLabel={METRIC_LABELS[metric]}
-        drillParam="organizador"
-        loading={loading}
-        crmLink
-        compare={compare}
-        desde={desdeOf}
-      />
+      {porAno ? (
+        <OrganizadoresPorAno
+          groups={groups}
+          desdeOf={desdeOf}
+          metricLabel={METRIC_LABELS[metric]}
+          loading={loading}
+        />
+      ) : (
+        <RankingView
+          title="Organizador"
+          groups={groups}
+          metricLabel={METRIC_LABELS[metric]}
+          drillParam="organizador"
+          loading={loading}
+          crmLink
+          compare={compare}
+          desde={desdeOf}
+        />
+      )}
     </div>
   )
 }

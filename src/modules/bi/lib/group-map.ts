@@ -20,6 +20,9 @@ export function groupRowsToAgg(
         gmvOnline: Number(r.gmv_online ?? 0),
         receitaBt: Number(r.receita_bt),
         vendas: Number(r.qtd),
+        eventos: Number(r.eventos ?? 0),
+        cidade: r.cidade ?? null,
+        uf: r.uf ?? null,
         gmvPrev: prevByKey?.get(label),
       }
     })

@@ -125,6 +125,11 @@ export interface GroupAgg {
   gmvOnline: number
   receitaBt: number
   vendas: number
+  /** Nº de eventos distintos no grupo. */
+  eventos: number
+  /** Cidade/UF (preenchidos na dimensão local). */
+  cidade?: string | null
+  uf?: string | null
   /** GMV total do mesmo período no ano anterior (quando comparativo ligado). */
   gmvPrev?: number
 }
@@ -136,20 +141,24 @@ export function groupBy(
   fallbackLabel = '—',
 ): GroupAgg[] {
   const map = new Map<string, GroupAgg>()
+  const eventos = new Map<string, Set<string>>()
   for (const s of sales) {
     const raw = keyFn(s)
     const key = raw && raw.trim() ? raw.trim() : fallbackLabel
     let g = map.get(key)
     if (!g) {
-      g = { key, label: key, value: 0, gmv: 0, gmvOnline: 0, receitaBt: 0, vendas: 0 }
+      g = { key, label: key, value: 0, gmv: 0, gmvOnline: 0, receitaBt: 0, vendas: 0, eventos: 0 }
       map.set(key, g)
+      eventos.set(key, new Set())
     }
     g.value += metricValue(s, metric)
     g.gmv += s.gmv
     g.gmvOnline += s.tipo_pdv === 'E' ? s.gmv : 0
     g.receitaBt += s.receita_bt
     g.vendas += 1
+    eventos.get(key)!.add(s.codigo_evento)
   }
+  for (const [key, set] of eventos) map.get(key)!.eventos = set.size
   return [...map.values()].sort((a, b) => b.value - a.value)
 }
 

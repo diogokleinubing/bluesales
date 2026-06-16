@@ -61,6 +61,7 @@ export function LocaisPage() {
             drillParam="local"
             loading={porLocal.loading}
             compare={compare}
+            showCidadeUf
           />
         </TabsContent>
         <TabsContent value="cidade" className="mt-4">

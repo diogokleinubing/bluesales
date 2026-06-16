@@ -102,6 +102,11 @@ export async function biMonthly(
 export interface GroupRow extends MetricSums {
   key: string | null
   qtd: number
+  /** Contagem de eventos distintos no grupo. */
+  eventos: number
+  /** Cidade/UF do local (preenchidos na dimensão 'local'). */
+  cidade?: string | null
+  uf?: string | null
 }
 
 export async function biGroup(

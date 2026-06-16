@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -12,8 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { HorizontalRankBar } from './charts'
 import type { GroupAgg } from '../lib/aggregate'
+import { BiEventosDialog } from './BiEventosDialog'
 import { contaComercialRoute } from '@/modules/shared/navigation'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
@@ -43,7 +43,7 @@ function DeltaCell({ cur, prev }: { cur: number; prev: number | undefined }) {
  * `crmLink` adiciona, por linha, um atalho "Ver no Comercial" (ponte BI->CRM).
  * `compare` exibe colunas de comparativo com o ano anterior (gmvPrev).
  */
-type SortCol = 'label' | 'desde' | 'vendas' | 'gmv' | 'pct' | 'gmvPrev' | 'delta'
+type SortCol = 'label' | 'desde' | 'cidade' | 'uf' | 'eventos' | 'gmv' | 'pct' | 'gmvPrev' | 'delta'
 
 export function RankingView({
   title,
@@ -51,28 +51,31 @@ export function RankingView({
   metricLabel,
   drillParam,
   loading,
-  topN = 15,
   crmLink = false,
   compare = false,
   desde,
+  showCidadeUf = false,
 }: {
   title: string
   groups: GroupAgg[]
   metricLabel: string
   drillParam: string
   loading?: boolean
-  topN?: number
   crmLink?: boolean
   compare?: boolean
   /** Resolve o ano "cliente desde" pelo label. Quando definido, exibe a coluna "Desde". */
   desde?: ((label: string) => number | null) | null
+  /** Exibe colunas Cidade e UF (dimensão local). */
+  showCidadeUf?: boolean
 }) {
   const navigate = useNavigate()
   const totalGmv = groups.reduce((a, g) => a + g.gmv, 0)
-  const totalVendas = groups.reduce((a, g) => a + g.vendas, 0)
+  const totalEventos = groups.reduce((a, g) => a + g.eventos, 0)
   const totalGmvPrev = groups.reduce((a, g) => a + (g.gmvPrev ?? 0), 0)
+  const maxValue = groups.reduce((m, g) => Math.max(m, g.value), 0)
   const showDesde = !!desde
-  const cols = 4 + (showDesde ? 1 : 0) + (compare ? 2 : 0) + (crmLink ? 1 : 0)
+  const cols =
+    5 + (showDesde ? 1 : 0) + (showCidadeUf ? 2 : 0) + (compare ? 2 : 0) + (crmLink ? 1 : 0)
 
   // Ordenação por clique no cabeçalho: asc -> desc -> volta ao padrão (métrica).
   const [sort, setSort] = useState<{ col: SortCol; dir: 'asc' | 'desc' } | null>(null)
@@ -86,14 +89,16 @@ export function RankingView({
     arr.sort((a, b) => {
       let r: number
       if (sort.col === 'label') r = a.label.localeCompare(b.label)
+      else if (sort.col === 'cidade') r = (a.cidade ?? '').localeCompare(b.cidade ?? '')
+      else if (sort.col === 'uf') r = (a.uf ?? '').localeCompare(b.uf ?? '')
       else {
         const va = sort.col === 'desde' ? (desde?.(a.label) ?? -Infinity)
-          : sort.col === 'vendas' ? a.vendas
+          : sort.col === 'eventos' ? a.eventos
           : sort.col === 'gmvPrev' ? (a.gmvPrev ?? -Infinity)
           : sort.col === 'delta' ? deltaOf(a)
           : a.gmv // gmv e pct
         const vb = sort.col === 'desde' ? (desde?.(b.label) ?? -Infinity)
-          : sort.col === 'vendas' ? b.vendas
+          : sort.col === 'eventos' ? b.eventos
           : sort.col === 'gmvPrev' ? (b.gmvPrev ?? -Infinity)
           : sort.col === 'delta' ? deltaOf(b)
           : b.gmv
@@ -119,9 +124,10 @@ export function RankingView({
     </TableHead>
   )
 
+  // Abre os eventos do item clicado num dialog (antes ia para /bi/eventos).
+  const [drillSel, setDrillSel] = useState<string | null>(null)
   function drill(label: string) {
-    if (label && label !== '—')
-      navigate(`/bi/eventos?${drillParam}=${encodeURIComponent(label)}`)
+    if (label && label !== '—') setDrillSel(label)
   }
 
   function openCrm(label: string) {
@@ -131,38 +137,19 @@ export function RankingView({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {title} · {metricLabel} (top {topN})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-80 w-full" />
-          ) : (
-            <HorizontalRankBar
-              data={groups.slice(0, topN).map((g) => ({
-                label: g.label,
-                value: g.value,
-              }))}
-              onClickBar={drill}
-              height={Math.max(240, Math.min(topN, groups.length) * 26)}
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <SortHead col="label">{title}</SortHead>
+                  {showCidadeUf && <SortHead col="cidade">Cidade</SortHead>}
+                  {showCidadeUf && <SortHead col="uf">UF</SortHead>}
                   {showDesde && <SortHead col="desde" right>Desde</SortHead>}
-                  <SortHead col="vendas" right>Vendas</SortHead>
+                  <SortHead col="eventos" right>Eventos</SortHead>
                   <SortHead col="gmv" right>GMV</SortHead>
                   <SortHead col="pct" right>% do total</SortHead>
+                  <TableHead className="w-[250px]">Proporção</TableHead>
                   {compare && (
                     <>
                       <SortHead col="gmvPrev" right>GMV ano ant.</SortHead>
@@ -198,19 +185,32 @@ export function RankingView({
                           {g.label}
                         </button>
                       </TableCell>
+                      {showCidadeUf && (
+                        <TableCell className="text-muted-foreground">{g.cidade ?? '—'}</TableCell>
+                      )}
+                      {showCidadeUf && (
+                        <TableCell className="text-muted-foreground">{g.uf ?? '—'}</TableCell>
+                      )}
                       {showDesde && (
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {desde?.(g.label) ?? '—'}
                         </TableCell>
                       )}
                       <TableCell className="text-right tabular-nums">
-                        {fmtInt(g.vendas)}
+                        {fmtInt(g.eventos)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {fmtBRL(g.gmv)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {fmtPct(totalGmv > 0 ? g.gmv / totalGmv : 0)}
+                      </TableCell>
+                      <TableCell className="w-[250px]">
+                        <div
+                          className="h-2.5 rounded-sm bg-primary"
+                          title={`${metricLabel}: ${fmtBRL(g.value)}`}
+                          style={{ width: `${maxValue > 0 ? Math.max(2, (g.value / maxValue) * 250) : 0}px` }}
+                        />
                       </TableCell>
                       {compare && (
                         <>
@@ -238,9 +238,11 @@ export function RankingView({
                 {!loading && groups.length > 0 && (
                   <TableRow className="border-t-2 font-semibold">
                     <TableCell>Total ({groups.length})</TableCell>
+                    {showCidadeUf && <TableCell />}
+                    {showCidadeUf && <TableCell />}
                     {showDesde && <TableCell />}
                     <TableCell className="text-right tabular-nums">
-                      {fmtInt(totalVendas)}
+                      {fmtInt(totalEventos)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtBRL(totalGmv)}
@@ -248,6 +250,7 @@ export function RankingView({
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {fmtPct(1)}
                     </TableCell>
+                    <TableCell />
                     {compare && (
                       <>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -264,6 +267,8 @@ export function RankingView({
           </div>
         </CardContent>
       </Card>
+
+      <BiEventosDialog dim={drillParam} value={drillSel} onClose={() => setDrillSel(null)} />
     </div>
   )
 }

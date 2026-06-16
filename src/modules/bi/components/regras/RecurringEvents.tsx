@@ -55,8 +55,23 @@ export function hasYearInTitle(nome: string | null): boolean {
   return /\b(20(2\d|30))\b/.test(nome)
 }
 
-/** Não sugerir: shows, validações, cópias, ou eventos da própria Blueticket. */
-const EXCLUDE_WORDS = ['show', 'validacao', 'copia']
+/** Título tem uma data completa (dd/mm/aaaa, dd.mm.aaaa, dd-mm-aaaa)?
+ *  Eventos com data fechada no nome são pontuais — não entram em recorrência. */
+export function hasFullDateInTitle(nome: string | null): boolean {
+  if (!nome) return false
+  return /\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b/.test(nome)
+}
+
+/** Turnês não são eventos recorrentes — ocultas da listagem e das sugestões.
+ *  norm() remove acento, então "turne" cobre "turnê". */
+const TURNE_WORDS = ['tour', 'turne']
+function isTurne(nome: string | null): boolean {
+  const n = norm(nome)
+  return TURNE_WORDS.some((w) => n.includes(w))
+}
+
+/** Não sugerir: shows, validações, cópias, turnês ou eventos da própria Blueticket. */
+const EXCLUDE_WORDS = ['show', 'validacao', 'copia', ...TURNE_WORDS]
 function isExcludedFromSuggestion(e: {
   nome: string | null
   organizador: string | null
@@ -125,7 +140,7 @@ export function RecurringEvents() {
     queryFn: async (): Promise<EvRow[]> => {
       const [evs, rev] = await Promise.all([
         fetchEventsBase(orgId!),
-        biBiggestEvents(orgId!, '', 10000),
+        biBiggestEvents(orgId!, '', null, 10000),
       ])
       const gmvMap = new Map(
         rev.map((r) => [r.codigo_evento, Number(r.gmv)]),
@@ -141,6 +156,10 @@ export function RecurringEvents() {
   const visible = useMemo(() => {
     const q = norm(search)
     return events
+      // Eventos com data completa no título (ex.: 25/12/2025) são pontuais.
+      .filter((e) => !hasFullDateInTitle(e.nome))
+      // Turnês ("tour"/"turnê") não são recorrentes.
+      .filter((e) => !isTurne(e.nome))
       .filter((e) => (showAll ? true : hasYearInTitle(e.nome)))
       .filter((e) => (onlyUngrouped ? !e.familia : true))
       .filter((e) => (segFilter ? e.segmento === segFilter : true))
@@ -180,6 +199,8 @@ export function RecurringEvents() {
       if (e.familia) continue
       // Só sugere eventos que têm o ano no nome (candidatos a recorrência).
       if (!hasYearInTitle(e.nome)) continue
+      // Data completa no título (ex.: 25/12/2025) = evento pontual, não recorrente.
+      if (hasFullDateInTitle(e.nome)) continue
       // Exclui shows, validações, cópias e eventos da própria Blueticket.
       if (isExcludedFromSuggestion(e)) continue
       const cand = familiaFromName(e.nome)
@@ -300,7 +321,9 @@ export function RecurringEvents() {
       }
       if (criouRegra) {
         await qc.invalidateQueries({ queryKey: ['rules'] })
-        await reclassify.mutateAsync('all')
+        // Só reclassifica os eventos agrupados agora, não a base inteira.
+        const codigos = groups.flatMap((g) => g.codigos)
+        await reclassify.mutateAsync({ codigos })
       }
       await qc.invalidateQueries({ queryKey: ['bi'] })
       setSuggestOpen(false)
@@ -377,8 +400,10 @@ export function RecurringEvents() {
           })
         }
         await qc.invalidateQueries({ queryKey: ['rules'] })
-        await reclassify.mutateAsync('all')
-        ruleMsg = ' Regra de classificação salva e eventos reclassificados.'
+        // Aplica a classificação APENAS aos eventos selecionados — não varre a
+        // base inteira atrás do termo da família.
+        await reclassify.mutateAsync({ codigos })
+        ruleMsg = ' Regra de classificação salva e selecionados reclassificados.'
       }
 
       setSelected(new Set())

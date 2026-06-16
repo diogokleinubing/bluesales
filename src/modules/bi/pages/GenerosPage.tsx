@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MultiLineChart } from '../components/charts'
@@ -9,13 +8,11 @@ import { useGroupAnalysis, useBiMonthlyByGroup } from '../hooks/useBi'
 import { useControls } from '@/modules/shared/controls-context'
 import { metricOf } from '../lib/rpc'
 import { METRIC_LABELS } from '../lib/controls'
-import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
 const FALLBACK = 'Sem gênero'
 
 export function GenerosPage() {
   const { year, metric } = useControls()
-  const navigate = useNavigate()
   const [compare, setCompare] = useState(false)
   const { groups, loading: isLoading } = useGroupAnalysis('genero', FALLBACK, compare)
 
@@ -37,7 +34,6 @@ export function GenerosPage() {
   }, [monthlyQ.data, topNames, metric])
 
   const metricLabel = METRIC_LABELS[metric]
-  const total = groups.reduce((a, g) => a + g.value, 0)
 
   return (
     <div className="space-y-4">
@@ -49,33 +45,6 @@ export function GenerosPage() {
           </p>
         </div>
         <CompareToggle checked={compare} onChange={setCompare} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {isLoading
-          ? Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))
-          : groups.slice(0, 8).map((g) => (
-              <button
-                key={g.key}
-                onClick={() =>
-                  navigate(`/bi/eventos?genero=${encodeURIComponent(g.label)}`)
-                }
-                className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary"
-              >
-                <div className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {g.label}
-                </div>
-                <div className="mt-1 text-xl font-semibold tabular-nums">
-                  {fmtBRL(g.value)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {fmtInt(g.vendas)} vendas ·{' '}
-                  {fmtPct(total > 0 ? g.value / total : 0)}
-                </div>
-              </button>
-            ))}
       </div>
 
       <Card>
@@ -99,7 +68,6 @@ export function GenerosPage() {
         metricLabel={metricLabel}
         drillParam="genero"
         loading={isLoading}
-        topN={20}
         compare={compare}
       />
     </div>
