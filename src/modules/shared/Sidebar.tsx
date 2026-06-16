@@ -7,7 +7,7 @@ import { getModule, moduleFromPath, type NavItem } from './nav'
 import { ModuleDropdown } from './ModuleDropdown'
 import { GlobalSearch } from '@/modules/crm/components/GlobalSearch'
 import { UserMenu } from './UserMenu'
-import { APP_VERSION } from '@/lib/version'
+import { DISPLAY_VERSION } from '@/lib/version'
 
 const CONFIG_TITLE = 'Configuração'
 const COLLAPSE_KEY = 'bs-sidebar-collapsed'
@@ -151,7 +151,7 @@ export function Sidebar() {
 
       {!collapsed && (
         <div className="px-4 pb-1 pt-1 text-center text-[11px] text-muted-foreground">
-          Versão {APP_VERSION}
+          Versão {DISPLAY_VERSION}
         </div>
       )}
 
