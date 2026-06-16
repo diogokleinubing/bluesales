@@ -1,36 +1,28 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
 import { Plus, Pencil, ChevronUp, ChevronDown, ChevronsUpDown, CalendarDays, ExternalLink } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
 import { useArtistUnifiedAgenda } from '@/modules/pesquisa/hooks/useAgenda'
 import { CopyUrlButton } from '@/modules/pesquisa/components/CopyUrlButton'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useGeneroOptions, useOrgOptions, useSegmentOptions } from '../hooks/useCrmLookups'
-import { usePlatforms } from '../hooks/useConfigCadastros'
 import {
-  useArtists, saveArtist, deleteArtist, ARTIST_CLASSES,
+  useArtists, ARTIST_CLASSES,
   type ArtistRow, type ArtistClasse,
 } from '../hooks/useCadastros'
 import { ListView, ToolbarSearch } from '../components/ListView'
 import { ClasseBadge } from '../components/ClasseBadge'
-import { DeleteEntityButton } from '../components/DeleteEntityButton'
+import { AtracaoDialog } from '../components/AtracaoDialog'
 
 const NONE = '__none__'
 
@@ -48,27 +40,13 @@ function sortVal(a: ArtistRow, k: SortKey): string | number {
 }
 
 export function Artistas() {
-  const qc = useQueryClient()
-  const orgId = useCrmOrgId()
   const { data, isLoading } = useArtists()
-  const generos = useGeneroOptions()
-  const segmentos = useSegmentOptions()
-  const orgs = useOrgOptions()
-  const platforms = usePlatforms()
   const [search, setSearch] = useState('')
   const [classeFiltro, setClasseFiltro] = useState<string>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' })
   const [open, setOpen] = useState(false)
   const [agenda, setAgenda] = useState<ArtistRow | null>(null)
   const [edit, setEdit] = useState<ArtistRow | null>(null)
-  const [nome, setNome] = useState('')
-  const [generoId, setGeneroId] = useState(NONE)
-  const [segmentoSel, setSegmentoSel] = useState(NONE)
-  const [classe, setClasse] = useState<string>(NONE)
-  const [orgSel, setOrgSel] = useState(NONE)
-  const [platSel, setPlatSel] = useState(NONE)
-  const [obs, setObs] = useState('')
-  const [aliases, setAliases] = useState('')
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -121,34 +99,8 @@ export function Artistas() {
     )
   }
 
-  function openNew() {
-    setEdit(null); setNome(''); setGeneroId(NONE); setSegmentoSel(NONE); setClasse(NONE); setOrgSel(NONE)
-    setPlatSel(NONE); setObs(''); setAliases(''); setOpen(true)
-  }
-  function openEdit(a: ArtistRow) {
-    setEdit(a); setNome(a.nome); setGeneroId(a.genero_id ?? NONE); setSegmentoSel(a.segmento ?? NONE)
-    setClasse(a.classificacao ?? NONE); setOrgSel(a.organization_id ?? NONE)
-    setPlatSel(a.platform_id ?? NONE); setObs(a.observacoes ?? ''); setAliases(a.aliases ?? ''); setOpen(true)
-  }
-
-  async function salvar() {
-    if (!orgId || !nome.trim()) return
-    try {
-      await saveArtist(orgId, {
-        nome: nome.trim(),
-        genero_id: generoId === NONE ? null : generoId,
-        segmento: segmentoSel === NONE ? null : segmentoSel,
-        classificacao: classe === NONE ? null : (classe as ArtistClasse),
-        organization_id: orgSel === NONE ? null : orgSel,
-        platform_id: platSel === NONE ? null : platSel,
-        observacoes: obs.trim() || null,
-        aliases: aliases.trim() || null,
-      }, edit?.id)
-      qc.invalidateQueries({ queryKey: ['crm', 'artists'] })
-      setOpen(false)
-    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
-  }
-
+  function openNew() { setEdit(null); setOpen(true) }
+  function openEdit(a: ArtistRow) { setEdit(a); setOpen(true) }
 
   return (
     <>
@@ -206,80 +158,7 @@ export function Artistas() {
         </Table>
       </ListView>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{edit ? 'Editar atração' : 'Nova atração'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><Label>Nome</Label>
-              <Input value={nome} autoFocus onChange={(e) => setNome(e.target.value)} /></div>
-            <div className="space-y-1"><Label>Nomes alternativos (busca)</Label>
-              <Input value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Ex.: Gustavo Lima, Gusttavo" />
-              <p className="text-xs text-muted-foreground">Separe por vírgula. Também usados para detectar esta atração nos eventos capturados.</p></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Gênero</Label>
-                <Select value={generoId} onValueChange={setGeneroId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {(generos.data ?? []).map((g) => <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
-              <div className="space-y-1"><Label>Classificação</Label>
-                <Select value={classe} onValueChange={setClasse}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {ARTIST_CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
-            </div>
-            <div className="space-y-1"><Label>Segmento Padrão</Label>
-              <Select value={segmentoSel} onValueChange={setSegmentoSel}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>—</SelectItem>
-                  {(segmentos.data ?? []).map((s) => <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Usado para classificar automaticamente eventos desta atração.</p></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Organização</Label>
-                <Select value={orgSel} onValueChange={setOrgSel}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {(orgs.data ?? []).map((o) => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
-              <div className="space-y-1"><Label>Plataforma</Label>
-                <Select value={platSel} onValueChange={setPlatSel}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>—</SelectItem>
-                    {(platforms.data ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
-            </div>
-            <div className="space-y-1"><Label>Observações</Label>
-              <Textarea value={obs} onChange={(e) => setObs(e.target.value)} /></div>
-          </div>
-          <DialogFooter className="sm:justify-between">
-            {edit ? (
-              <DeleteEntityButton
-                title="Remover atração?"
-                description={`"${edit.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}
-                onDelete={() => deleteArtist(edit.id)}
-                onDeleted={() => { qc.invalidateQueries({ queryKey: ['crm', 'artists'] }); setOpen(false) }}
-                label="Remover"
-              />
-            ) : <span />}
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={salvar} disabled={!nome.trim()}>Salvar</Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AtracaoDialog open={open} onOpenChange={setOpen} edit={edit} />
 
       <AgendaArtistaDialog artist={agenda} onClose={() => setAgenda(null)} />
     </>

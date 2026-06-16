@@ -7,8 +7,10 @@ export type ReclassifyScope =
   | { codigos: string[] }
 
 export interface ReclassifyResult {
+  /** Eventos cujo segmento/gênero calculado mudou (e foram gravados). */
   updated: number
-  skipped: number
+  /** Eventos que já estavam corretos (não houve gravação). */
+  unchanged: number
 }
 
 interface EventRowForClass {
@@ -16,11 +18,14 @@ interface EventRowForClass {
   codigo_evento: string
   nome: string | null
   local: string | null
+  segmento: string | null
+  genero: string | null
   segmento_manual: string | null
   genero_manual: string | null
 }
 
-const SELECT = 'id, codigo_evento, nome, local, segmento_manual, genero_manual'
+const SELECT =
+  'id, codigo_evento, nome, local, segmento, genero, segmento_manual, genero_manual'
 
 async function fetchScope(
   orgId: string,
@@ -80,7 +85,7 @@ export async function reclassifyEvents(
   const results = classifyMany(events, rules)
 
   let updated = 0
-  let skipped = 0
+  let unchanged = 0
 
   type Patch = { segmento: string | null; genero: string | null }
   const groups = new Map<string, { patch: Patch; ids: string[] }>()
@@ -88,13 +93,17 @@ export async function reclassifyEvents(
   for (let i = 0; i < events.length; i++) {
     const e = events[i]
     const r = results[i]
-    const hasManual =
-      !!(e.segmento_manual && e.segmento_manual.trim()) ||
-      !!(e.genero_manual && e.genero_manual.trim())
-    if (hasManual) skipped++
+    const novoSeg = r.segmento ?? null
+    const novoGen = r.genero ?? null
 
-    const patch: Patch = { segmento: r.segmento, genero: r.genero }
-    const key = `${patch.segmento ?? ' '}|${patch.genero ?? ' '}`
+    // Só grava (e conta) o que realmente mudou em relação ao cache atual.
+    if ((e.segmento ?? null) === novoSeg && (e.genero ?? null) === novoGen) {
+      unchanged++
+      continue
+    }
+
+    const patch: Patch = { segmento: novoSeg, genero: novoGen }
+    const key = `${novoSeg ?? ' '}|${novoGen ?? ' '}`
     const g = groups.get(key) ?? { patch, ids: [] }
     g.ids.push(e.id)
     groups.set(key, g)
@@ -112,5 +121,5 @@ export async function reclassifyEvents(
     }
   }
 
-  return { updated, skipped }
+  return { updated, unchanged }
 }

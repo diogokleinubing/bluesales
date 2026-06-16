@@ -33,6 +33,7 @@ import {
   type AttractionClassRow,
 } from '../../lib/rules-api'
 import { ClassSelect } from './ClassSelect'
+import { AtracaoDialog } from '@/modules/crm/components/AtracaoDialog'
 import type { GeneroRow, KeywordRuleRow, VenueSegmentMapRow } from '@/lib/database.types'
 
 export function RulesEditor() {
@@ -138,6 +139,7 @@ function AttractionsCard({
   afterChange: () => void
 }) {
   const [search, setSearch] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
   const genNames = useMemo(() => generos.map((g) => g.nome), [generos])
   const idByGenero = useMemo(
     () => new Map(generos.map((g) => [g.nome, g.id])),
@@ -164,14 +166,22 @@ function AttractionsCard({
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Atrações</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Base de atrações do Comercial. Ative para usar na classificação
-          automática e defina segmento e gênero — aplicados quando o nome (ou
-          alias) da atração aparece no nome do evento.
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm">Atrações</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Base de atrações do Comercial. Ative para usar na classificação
+              automática e defina segmento e gênero — aplicados quando o nome (ou
+              alias) da atração aparece no nome do evento.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="size-4" /> Adicionar Atração
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 p-3">
         <div className="relative max-w-xs">
@@ -236,6 +246,8 @@ function AttractionsCard({
         </div>
       </CardContent>
     </Card>
+    <AtracaoDialog open={addOpen} onOpenChange={setAddOpen} onSaved={() => afterChange()} />
+    </>
   )
 }
 
@@ -265,6 +277,11 @@ function KeywordRuleCard({
   const [segmento, setSegmento] = useState<string | null>(null)
   const [genero, setGenero] = useState<string | null>(null)
   const [ignorarComAno, setIgnorarComAno] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const sorted = useMemo(
+    () => [...rows].sort((a, b) => a.keyword.localeCompare(b.keyword, 'pt-BR')),
+    [rows],
+  )
 
   async function add() {
     if (!orgId || !keyword.trim() || (!segmento && !genero)) {
@@ -310,8 +327,15 @@ function KeywordRuleCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{title}</CardTitle>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm">{title}</CardTitle>
+            <p className="text-xs text-muted-foreground">{hint}</p>
+          </div>
+          <Button size="sm" onClick={() => setAdding((v) => !v)}>
+            <Plus className="size-4" /> {adding ? 'Fechar' : 'Adicionar'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
@@ -340,16 +364,48 @@ function KeywordRuleCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.length === 0 && (
+            {/* Linha de adição (topo), exibida ao clicar em "Adicionar" */}
+            {adding && (
+              <TableRow className="bg-muted/30">
+                <TableCell>
+                  <Input
+                    placeholder="novo termo"
+                    className="h-8"
+                    autoFocus
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && add()}
+                  />
+                </TableCell>
+                <TableCell>
+                  <ClassSelect value={segmento} options={segNames} onChange={setSegmento} />
+                </TableCell>
+                <TableCell>
+                  <ClassSelect value={genero} options={genNames} onChange={setGenero} />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Checkbox
+                    checked={ignorarComAno}
+                    onCheckedChange={(v) => setIgnorarComAno(v === true)}
+                  />
+                </TableCell>
+                <TableCell colSpan={2}>
+                  <Button size="sm" variant="secondary" onClick={add}>
+                    <Plus className="size-4" /> Adicionar
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+            {sorted.length === 0 && !adding && (
               <TableRow>
                 <TableCell colSpan={6} className="py-4 text-center text-muted-foreground">
                   Nenhum termo.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map((r) => (
+            {sorted.map((r) => (
               <TableRow key={r.id}>
-                <TableCell className="font-mono text-xs">{r.keyword}</TableCell>
+                <TableCell className="font-medium">{r.keyword}</TableCell>
                 <TableCell>
                   <ClassSelect
                     value={r.segmento}
@@ -382,35 +438,6 @@ function KeywordRuleCard({
                 </TableCell>
               </TableRow>
             ))}
-            {/* Linha de adição */}
-            <TableRow>
-              <TableCell>
-                <Input
-                  placeholder="novo termo"
-                  className="h-8"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && add()}
-                />
-              </TableCell>
-              <TableCell>
-                <ClassSelect value={segmento} options={segNames} onChange={setSegmento} />
-              </TableCell>
-              <TableCell>
-                <ClassSelect value={genero} options={genNames} onChange={setGenero} />
-              </TableCell>
-              <TableCell className="text-center">
-                <Checkbox
-                  checked={ignorarComAno}
-                  onCheckedChange={(v) => setIgnorarComAno(v === true)}
-                />
-              </TableCell>
-              <TableCell colSpan={2}>
-                <Button size="sm" variant="secondary" onClick={add}>
-                  <Plus className="size-4" /> Adicionar
-                </Button>
-              </TableCell>
-            </TableRow>
           </TableBody>
         </Table>
       </CardContent>

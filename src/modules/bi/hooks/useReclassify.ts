@@ -15,13 +15,15 @@ export function useReclassify(orgId: string | undefined) {
       const rules = toClassificationRules(await fetchRules(orgId))
       return reclassifyEvents(scope, rules, orgId)
     },
-    onSuccess: ({ updated, skipped }) => {
+    onSuccess: ({ updated, unchanged }) => {
       // Reclassificar muda events.segmento/genero (join na leitura), não o rollup.
       qc.invalidateQueries({ queryKey: ['bi'] })
       qc.invalidateQueries({ queryKey: ['rules'] })
-      const extra = skipped > 0 ? ` (${skipped} manuais preservados)` : ''
       toast.success('Reclassificação concluída', {
-        description: `${updated} eventos atualizados${extra}.`,
+        description:
+          updated > 0
+            ? `${updated} evento(s) atualizado(s).`
+            : `Nenhum evento precisou de atualização (${unchanged} já corretos).`,
       })
     },
     onError: (e) =>

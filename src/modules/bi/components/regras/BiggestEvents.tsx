@@ -32,6 +32,7 @@ import {
 } from '../../lib/rules-api'
 import { biBiggestEvents, biEventOptions } from '../../lib/rpc'
 import { norm } from '../../lib/classify'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { ClassSelect } from './ClassSelect'
 import { ConvertToRuleDialog } from './ConvertToRuleDialog'
 import { DimensionCell } from '../DimensionCell'
@@ -53,6 +54,8 @@ export function BiggestEvents() {
   const [params, setParams] = useSearchParams()
 
   const search = params.get('q') ?? ''
+  // Input/URL atualizam na hora; a consulta ao servidor só roda após o debounce.
+  const searchDebounced = useDebouncedValue(search, 350)
   const codigo = params.get('codigo') ?? ''
   const filters = useMemo(
     () => Object.fromEntries(FILTER_KEYS.map((k) => [k, params.get(k) ?? ''])) as Record<FilterKey, string>,
@@ -90,9 +93,9 @@ export function BiggestEvents() {
   const eventsQ = useQuery({
     enabled: !!orgId,
     staleTime: 60 * 1000,
-    queryKey: ['bi', 'biggest-events', orgId, year, search, codigo, filters],
+    queryKey: ['bi', 'biggest-events', orgId, year, searchDebounced, codigo, filters],
     queryFn: () =>
-      biBiggestEvents(orgId!, search, year, 200, {
+      biBiggestEvents(orgId!, searchDebounced, year, 200, {
         ...filters,
         codigo,
       }),

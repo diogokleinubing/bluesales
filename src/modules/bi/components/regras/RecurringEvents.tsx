@@ -36,6 +36,7 @@ import {
 import { addKeywordRule, updateKeywordRule } from '../../lib/rules-api'
 import { suggestFamily, familiaFromName } from '../../lib/family'
 import { norm } from '../../lib/classify'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { ClassSelect } from './ClassSelect'
 import { fmtBRL, fmtInt } from '@/lib/format'
 
@@ -153,8 +154,9 @@ export function RecurringEvents() {
 
   const events = baseQ.data ?? []
 
+  const searchDebounced = useDebouncedValue(search, 350)
   const visible = useMemo(() => {
-    const q = norm(search)
+    const q = norm(searchDebounced)
     return events
       // Eventos com data completa no título (ex.: 25/12/2025) são pontuais.
       .filter((e) => !hasFullDateInTitle(e.nome))
@@ -171,7 +173,7 @@ export function RecurringEvents() {
           e.codigo_evento.includes(q),
       )
       .slice(0, 500)
-  }, [events, search, showAll, onlyUngrouped, segFilter])
+  }, [events, searchDebounced, showAll, onlyUngrouped, segFilter])
 
   const resumo = useMemo(() => {
     const counts = new Map<string, number>()

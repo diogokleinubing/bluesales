@@ -68,12 +68,14 @@ export interface ClassificationResult {
   generoSource: ClassSource
 }
 
-/** Normaliza texto para comparação (sem acento, minúsculo, espaços). */
+/** Normaliza texto para comparação (sem acento, minúsculo, espaços).
+ *  "&" e "+" viram " e " (ex.: "Maiara & Maraisa" == "Maiara e Maraisa"). */
 export function normalize(text: string | null | undefined): string {
   return (text ?? '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/\s*[&+]\s*/g, ' e ')
     .replace(/[-_\s]+/g, ' ')
     .trim()
 }
