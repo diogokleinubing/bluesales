@@ -169,6 +169,16 @@ function AnalisesRedirect({ view }: { view: string }) {
   return <Navigate to={`/bi/analises/${view}${search}`} replace />
 }
 
+/**
+ * A antiga tela de Eventos virou a aba "Maiores eventos" em Regras. Redireciona
+ * os drill-downs (ex.: /bi/eventos?organizador=X) preservando a querystring.
+ */
+function RegrasEventosRedirect() {
+  const { search } = useLocation()
+  const qs = search ? `${search}&tab=eventos` : '?tab=eventos'
+  return <Navigate to={`/bi/regras${qs}`} replace />
+}
+
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   {
@@ -195,6 +205,8 @@ export const router = createBrowserRouter([
       },
       // Análises unificadas (abas internas).
       { path: 'bi/analises', element: <Navigate to="/bi/analises/segmentos" replace /> },
+      // A antiga aba "Eventos" foi movida para Regras → Maiores eventos.
+      { path: 'bi/analises/eventos', element: <RegrasEventosRedirect /> },
       { path: 'bi/analises/:view', element: <AnalisesPage /> },
       // Compatibilidade: rotas antigas redirecionam para a aba correspondente
       // preservando a querystring (drill-downs continuam funcionando).
@@ -202,7 +214,7 @@ export const router = createBrowserRouter([
       { path: 'bi/generos', element: <AnalisesRedirect view="generos" /> },
       { path: 'bi/organizadores', element: <AnalisesRedirect view="organizadores" /> },
       { path: 'bi/locais', element: <AnalisesRedirect view="locais" /> },
-      { path: 'bi/eventos', element: <AnalisesRedirect view="eventos" /> },
+      { path: 'bi/eventos', element: <RegrasEventosRedirect /> },
       { path: 'bi/meios-pagamento', element: <MeiosPagamentoPage /> },
       { path: 'bi/ytd', element: <YtdPage /> },
       { path: 'bi/provisionamento', element: <ProvisionamentoPage /> },

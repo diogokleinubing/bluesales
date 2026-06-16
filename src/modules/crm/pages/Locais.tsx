@@ -130,7 +130,7 @@ export function Locais() {
   }, [rows, matchMap, fitRules.data, fitMin, ordFit])
 
   // Eventos capturados (Pesquisa) do local selecionado para o dialog.
-  const { data: localEventos } = useEventosDoLocalChaves(eventsLocal?.chaves ?? null)
+  const { data: localEventos, isLoading: localEventosLoading } = useEventosDoLocalChaves(eventsLocal?.chaves ?? null)
 
   function invalidarLocais() {
     qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
@@ -367,7 +367,8 @@ export function Locais() {
         open={!!eventsLocal}
         onOpenChange={(o) => !o && setEventsLocal(null)}
         titulo={eventsLocal?.row.nome ?? ''}
-        subtitulo={`${(localEventos ?? []).length} evento(s) capturado(s)`}
+        subtitulo={localEventosLoading ? 'Carregando…' : `${(localEventos ?? []).length} evento(s) capturado(s)`}
+        loading={localEventosLoading}
         eventos={localEventos ?? []}
       />
 

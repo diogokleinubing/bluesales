@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, X, CalendarSearch } from 'lucide-react'
+import { ArrowLeft, Plus, X, CalendarSearch, Building2, Trash2 } from 'lucide-react'
 import { useEventosDoLocalNome } from '@/modules/pesquisa/hooks/usePesquisa'
 import { EventosDialog } from '@/modules/pesquisa/components/EventosDialog'
 import { SocialLinks } from '../components/SocialLinks'
@@ -15,8 +15,11 @@ import {
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import {
   useLocais, saveLocal, deleteLocal, replaceLocalPlatforms,
+  useLocalOrgs, linkLocalToOrg, unlinkOrgLocal,
   RELACAO_PLATAFORMA, CRM_CLASSES, type RelacaoPlataforma, type CrmClasse, type LocalRow,
 } from '../hooks/useCadastros'
+import { useOrganizations } from '../hooks/useOrganizations'
+import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplete'
 import { usePlatforms, useLocalTipos } from '../hooks/useConfigCadastros'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { StageSelector } from '../components/StageSelector'
@@ -65,6 +68,7 @@ export function LocalDetalhe() {
         onOpenChange={setVerEventos}
         titulo={`Eventos captados — ${local.nome}`}
         subtitulo={eventosLocal.isLoading ? 'Carregando…' : `${eventosLocal.data?.length ?? 0} evento(s) do módulo Pesquisa`}
+        loading={eventosLocal.isLoading}
         eventos={eventosLocal.data ?? []}
       />
 
@@ -75,6 +79,10 @@ export function LocalDetalhe() {
         <aside className="space-y-6 p-4">
           <LocalDetalhesForm local={local} />
           <LocalPlataformas local={local} />
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Organizações vinculadas</h3>
+            <LocalOrganizacoes localId={local.id} />
+          </div>
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
             <DeleteEntityButton
@@ -157,6 +165,83 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
         </div>
         <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
         {changed && <FormActions dirty={changed} saving={saving} onSave={salvar} onCancel={() => { reset(); setStage(local.funil_stage_id) }} />}
+      </div>
+    </div>
+  )
+}
+
+function LocalOrganizacoes({ localId }: { localId: string }) {
+  const qc = useQueryClient()
+  const tenantOrgId = useCrmOrgId()
+  const { data: vinculos, isLoading } = useLocalOrgs(localId)
+  const { data: orgs } = useOrganizations()
+  const [pick, setPick] = useState<Lookup | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const jaVinculadas = new Set((vinculos ?? []).map((v) => v.organization_id))
+  const options: Lookup[] = (orgs ?? [])
+    .filter((o) => !jaVinculadas.has(o.id))
+    .map((o) => ({ id: o.id, nome: o.cidade ? `${o.nome} — ${o.cidade}${o.uf ? `/${o.uf}` : ''}` : o.nome }))
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'local-orgs', localId] })
+
+  async function vincular() {
+    if (!pick || !tenantOrgId) return
+    setSaving(true)
+    try {
+      await linkLocalToOrg(tenantOrgId, pick.id, localId)
+      setPick(null)
+      refresh()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remover(linkId: string) {
+    try {
+      await unlinkOrgLocal(linkId)
+      refresh()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  if (isLoading) return <Skeleton className="h-24 w-full" />
+
+  return (
+    <div className="space-y-3">
+      {(vinculos ?? []).length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhuma organização vinculada.</p>
+      )}
+      {(vinculos ?? []).map((v) => (
+        <div key={v.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 font-medium">
+              <Building2 className="size-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{v.nome}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {v.cidade ? `${v.cidade}${v.uf ? `/${v.uf}` : ''}` : '—'}
+            </div>
+          </div>
+          <button onClick={() => remover(v.id)} className="shrink-0 text-muted-foreground hover:text-destructive" title="Remover vínculo">
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <EntityAutocomplete
+          className="w-56"
+          value={pick}
+          onPick={setPick}
+          options={options}
+          placeholder="Buscar organização…"
+        />
+        <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
+          <Plus className="size-4" /> Vincular
+        </Button>
       </div>
     </div>
   )

@@ -453,6 +453,40 @@ export function useOrgLocais(organizationId: string | undefined) {
   })
 }
 
+export interface LocalOrgRow {
+  id: string // id do vínculo (organization_locals)
+  organization_id: string
+  nome: string
+  cidade: string | null
+  uf: string | null
+}
+
+/** Organizações vinculadas a um local (lado inverso de useOrgLocais). */
+export function useLocalOrgs(localId: string | undefined) {
+  return useQuery({
+    enabled: !!localId,
+    staleTime: 30 * 1000,
+    queryKey: ['crm', 'local-orgs', localId],
+    queryFn: async (): Promise<LocalOrgRow[]> => {
+      const { data, error } = await supabase
+        .from('organization_locals')
+        .select('id, organization_id, organizations(nome, cidade, uf)')
+        .eq('local_id', localId!)
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((r) => {
+        const o = r.organizations as unknown as { nome: string; cidade: string | null; uf: string | null } | null
+        return {
+          id: r.id as string,
+          organization_id: r.organization_id as string,
+          nome: o?.nome ?? '?',
+          cidade: o?.cidade ?? null,
+          uf: o?.uf ?? null,
+        }
+      }).sort((a, b) => a.nome.localeCompare(b.nome))
+    },
+  })
+}
+
 /** Vincula um local existente a uma organização. */
 export async function linkLocalToOrg(orgId: string, organizationId: string, localId: string) {
   const { error } = await supabase

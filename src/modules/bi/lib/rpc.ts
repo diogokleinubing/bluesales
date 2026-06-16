@@ -233,12 +233,18 @@ export async function biPopularVenues(
   })
 }
 
-/** Maiores eventos por GMV em toda a base (year=null). */
+export type BiggestEventsFilters = Pick<
+  BiEventsParams,
+  'segmento' | 'genero' | 'organizador' | 'local' | 'cidade' | 'uf' | 'codigo'
+>
+
+/** Maiores eventos por GMV (year=null = toda a base), com filtros opcionais. */
 export async function biBiggestEvents(
   orgId: string,
   search: string,
   year: number | null = null,
   limit = 200,
+  filters: BiggestEventsFilters = {},
 ): Promise<EventRow[]> {
   return rpc<EventRow[]>('bi_events', {
     p_org: orgId,
@@ -246,13 +252,13 @@ export async function biBiggestEvents(
     p_datebase: 'venda',
     p_pdv: null,
     p_search: search || null,
-    p_segmento: null,
-    p_genero: null,
-    p_organizador: null,
-    p_local: null,
-    p_cidade: null,
-    p_uf: null,
-    p_codigo: null,
+    p_segmento: filters.segmento || null,
+    p_genero: filters.genero || null,
+    p_organizador: filters.organizador || null,
+    p_local: filters.local || null,
+    p_cidade: filters.cidade || null,
+    p_uf: filters.uf || null,
+    p_codigo: filters.codigo || null,
     p_order: 'gmv',
     p_limit: limit,
     p_offset: 0,

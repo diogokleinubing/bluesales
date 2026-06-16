@@ -129,12 +129,12 @@ export const MODULES: ModuleDef[] = [
           { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard, color: '#14b8a6' },
           { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp, color: '#22c55e' },
           { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet, color: '#f59e0b' },
+          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal, color: '#d946ef' },
         ],
       },
       {
         title: 'Configuração',
         items: [
-          { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal, color: '#d946ef' },
           { to: '/bi/importacao', label: 'Importação', icon: Upload, color: '#0ea5e9' },
           { to: '/bi/base', label: 'Base de dados', icon: Database, color: '#64748b', requires: 'admin' },
         ],

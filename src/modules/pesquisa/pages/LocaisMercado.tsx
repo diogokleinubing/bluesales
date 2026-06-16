@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Star, Ban, Link2 } from 'lucide-react'
+import { Star, Ban, Link2, MoreVertical } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -21,7 +24,6 @@ import { EntityAutocomplete, type Lookup } from '@/modules/crm/components/Entity
 import { LocalDialog, type PlatRel, type LocalInitial } from '@/modules/crm/components/LocalDialog'
 import { usePlatforms } from '@/modules/crm/hooks/useConfigCadastros'
 import { EventosDialog } from '../components/EventosDialog'
-import { CriarOrgVinculadaDialog } from '../components/CriarOrgVinculadaDialog'
 import { StarButton, IgnoreButton } from '../components/StarButton'
 import { ImportCrmButton } from '../components/ImportCrmButton'
 import { faixaPreco, fmtTaxa } from '../lib/preco'
@@ -57,7 +59,6 @@ export function LocaisMercado() {
     initial: LocalInitial; plats: PlatRel[]
   } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
-  const [orgPrompt, setOrgPrompt] = useState<{ localId: string; nome: string; cidade: string | null; uf: string | null } | null>(null)
   const favoritos = useFavoritos('local').data
   const ignorados = useIgnorados('local').data
 
@@ -95,7 +96,7 @@ export function LocaisMercado() {
     if (soFav) r = r.filter((a) => favoritos?.has(a.chave))
     return r
   }, [data, soFav, soIgnorados, favoritos, ignorados])
-  const { data: eventosDoSel } = useEventosDoLocal(sel?.nome ?? null, sel?.cidade ?? null, fonte)
+  const { data: eventosDoSel, isLoading: eventosDoSelLoading } = useEventosDoLocal(sel?.nome ?? null, sel?.cidade ?? null, fonte)
 
   async function onFav(a: LocalAgg) {
     if (!orgId) return
@@ -150,7 +151,7 @@ export function LocaisMercado() {
     setImportOpen(true)
   }
 
-  // Após salvar no dialog: registra a promoção e pergunta sobre a organização.
+  // Após salvar no dialog: registra a promoção (vínculo com o módulo Pesquisa).
   async function onImportSaved(localId: string) {
     if (!orgId || !importState) return
     try {
@@ -159,7 +160,6 @@ export function LocaisMercado() {
       qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
       qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'locais'] })
       toast.success('Local adicionado ao Comercial', { description: importState.nome })
-      setOrgPrompt({ localId, nome: importState.nome, cidade: importState.cidade, uf: importState.uf })
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
     }
@@ -189,13 +189,23 @@ export function LocaisMercado() {
       title="Locais"
       count={rows.length ? String(rows.length) : undefined}
       footer={rows.length ? `${rows.length} local(is)` : undefined}
+      actions={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="size-8" title="Opções">
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onConectarPorNome} disabled={conectando || !crmNomes}>
+              <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar local…" />
-          <Button variant="outline" size="sm" onClick={onConectarPorNome} disabled={conectando || !crmNomes}
-            title="Vincular ao CRM os locais que já existem lá (match por nome atual)">
-            <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
-          </Button>
           <Select value={fonte} onValueChange={setFonte}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[160px]`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
             <SelectContent>
@@ -299,7 +309,8 @@ export function LocaisMercado() {
         open={!!sel}
         onOpenChange={(o) => !o && setSel(null)}
         titulo={sel?.nome ?? ''}
-        subtitulo={[sel?.cidade, `${(eventosDoSel ?? []).length} evento(s) capturado(s)`].filter(Boolean).join(' · ')}
+        subtitulo={[sel?.cidade, eventosDoSelLoading ? 'Carregando…' : `${(eventosDoSel ?? []).length} evento(s) capturado(s)`].filter(Boolean).join(' · ')}
+        loading={eventosDoSelLoading}
         eventos={eventosDoSel ?? []}
       />
 
@@ -312,15 +323,6 @@ export function LocaisMercado() {
         initialPlatforms={importState?.plats ?? []}
         saveLabel="Salvar e adicionar"
         onSaved={onImportSaved}
-      />
-
-      <CriarOrgVinculadaDialog
-        open={!!orgPrompt}
-        onOpenChange={(o) => !o && setOrgPrompt(null)}
-        localId={orgPrompt?.localId ?? null}
-        localNome={orgPrompt?.nome ?? ''}
-        cidade={orgPrompt?.cidade ?? null}
-        uf={orgPrompt?.uf ?? null}
       />
     </ListView>
   )

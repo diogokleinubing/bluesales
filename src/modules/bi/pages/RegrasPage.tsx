@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RulesEditor } from '../components/regras/RulesEditor'
 import { PopularVenues } from '../components/regras/PopularVenues'
@@ -5,7 +6,19 @@ import { BiggestEvents } from '../components/regras/BiggestEvents'
 import { RecurringEvents } from '../components/regras/RecurringEvents'
 import { TaxonomyPanel } from '../components/regras/TaxonomyPanel'
 
+const TABS = ['classificacao', 'segmentos', 'generos', 'locais', 'eventos', 'recorrentes']
+
 export function RegrasPage() {
+  const [params, setParams] = useSearchParams()
+  const tabParam = params.get('tab')
+  const tab = tabParam && TABS.includes(tabParam) ? tabParam : 'classificacao'
+
+  function onTabChange(v: string) {
+    const next = new URLSearchParams(params)
+    next.set('tab', v)
+    setParams(next, { replace: true })
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -16,7 +29,7 @@ export function RegrasPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="classificacao">
+      <Tabs value={tab} onValueChange={onTabChange}>
         <TabsList>
           <TabsTrigger value="classificacao">Classificação</TabsTrigger>
           <TabsTrigger value="segmentos">Segmentos</TabsTrigger>

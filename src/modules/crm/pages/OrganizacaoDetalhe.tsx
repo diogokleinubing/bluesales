@@ -89,6 +89,7 @@ export function OrganizacaoDetalhe() {
         onOpenChange={setVerEventos}
         titulo={`Eventos captados — ${org.nome}`}
         subtitulo={eventosOrg.isLoading ? 'Carregando…' : `${eventosOrg.data?.length ?? 0} evento(s) do módulo Pesquisa`}
+        loading={eventosOrg.isLoading}
         eventos={eventosOrg.data ?? []}
         showOrganizador={false}
       />

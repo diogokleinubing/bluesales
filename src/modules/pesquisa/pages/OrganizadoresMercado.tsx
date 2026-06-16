@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Star, Ban, Link2 } from 'lucide-react'
+import { Star, Ban, Link2, MoreVertical } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -107,7 +110,7 @@ export function OrganizadoresMercado() {
     return out
   }, [rows, cfgOrg, fitMin, ordFit])
 
-  const { data: eventosDoSel } = useEventosDoOrganizador(sel, fonte)
+  const { data: eventosDoSel, isLoading: eventosDoSelLoading } = useEventosDoOrganizador(sel, fonte)
 
   async function onFav(a: OrganizerAgg) {
     if (!orgId) return
@@ -181,13 +184,23 @@ export function OrganizadoresMercado() {
       title="Organizadores"
       count={rowsFit.length ? String(rowsFit.length) : undefined}
       footer={rowsFit.length ? `${rowsFit.length} organizador(es)` : undefined}
+      actions={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="size-8" title="Opções">
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onConectarPorNome} disabled={conectando || !crmNomes}>
+              <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
       toolbar={
         <div className="flex flex-wrap items-center gap-2">
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar organizador…" />
-          <Button variant="outline" size="sm" onClick={onConectarPorNome} disabled={conectando || !crmNomes}
-            title="Vincular ao CRM os organizadores que já existem lá (match por nome atual)">
-            <Link2 className="size-4" /> {conectando ? 'Conectando…' : 'Conectar por nome'}
-          </Button>
           <Select value={fonte} onValueChange={setFonte}>
             <SelectTrigger className={`${TOOLBAR_TRIGGER} w-[160px]`} size="sm"><SelectValue placeholder="Plataforma" /></SelectTrigger>
             <SelectContent>
@@ -299,7 +312,8 @@ export function OrganizadoresMercado() {
         open={!!sel}
         onOpenChange={(o) => !o && setSel(null)}
         titulo={sel ?? ''}
-        subtitulo={`${(eventosDoSel ?? []).length} evento(s) capturado(s)`}
+        subtitulo={eventosDoSelLoading ? 'Carregando…' : `${(eventosDoSel ?? []).length} evento(s) capturado(s)`}
+        loading={eventosDoSelLoading}
         eventos={eventosDoSel ?? []}
         showOrganizador={false}
       />
