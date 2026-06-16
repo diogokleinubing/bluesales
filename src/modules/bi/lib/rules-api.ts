@@ -8,20 +8,38 @@ import type {
   VenueSegmentMapRow,
 } from '@/lib/database.types'
 
+/** Atração com os campos usados na classificação automática. */
+export interface AttractionClassRow {
+  id: string
+  nome: string
+  aliases: string | null
+  segmento: string | null
+  genero_id: string | null
+  genero_nome: string | null
+  classificar: boolean
+}
+
 export interface RulesBundle {
   segments: SegmentRow[]
   generos: GeneroRow[]
   keywordRules: KeywordRuleRow[]
+  attractions: AttractionClassRow[]
   venueRules: VenueRuleRow[]
   venueMap: VenueSegmentMapRow[]
 }
 
 export async function fetchRules(orgId: string): Promise<RulesBundle> {
-  const [segments, generos, keywordRules, venueRules, venueMap] =
+  const [segments, generos, keywordRules, attractions, venueRules, venueMap] =
     await Promise.all([
       supabase.from('segments').select('*').eq('org_id', orgId).order('nome'),
       supabase.from('generos').select('*').eq('org_id', orgId).order('nome'),
       supabase.from('keyword_rules').select('*').eq('org_id', orgId).order('ordem'),
+      supabase
+        .from('artists')
+        .select('id, nome, aliases, segmento, genero_id, classificar, generos(nome)')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .order('nome'),
       supabase.from('venue_rules').select('*').eq('org_id', orgId).order('ordem'),
       supabase.from('venue_segment_map').select('*').eq('org_id', orgId),
     ])
@@ -29,6 +47,7 @@ export async function fetchRules(orgId: string): Promise<RulesBundle> {
     segments.error ||
     generos.error ||
     keywordRules.error ||
+    attractions.error ||
     venueRules.error ||
     venueMap.error
   if (err) throw new Error(err.message)
@@ -36,6 +55,15 @@ export async function fetchRules(orgId: string): Promise<RulesBundle> {
     segments: (segments.data ?? []) as SegmentRow[],
     generos: (generos.data ?? []) as GeneroRow[],
     keywordRules: (keywordRules.data ?? []) as KeywordRuleRow[],
+    attractions: (attractions.data ?? []).map((a) => ({
+      id: a.id as string,
+      nome: a.nome as string,
+      aliases: (a.aliases as string | null) ?? null,
+      segmento: (a.segmento as string | null) ?? null,
+      genero_id: (a.genero_id as string | null) ?? null,
+      genero_nome: (a.generos as unknown as { nome: string } | null)?.nome ?? null,
+      classificar: (a.classificar as boolean | null) ?? true,
+    })),
     venueRules: (venueRules.data ?? []) as VenueRuleRow[],
     venueMap: (venueMap.data ?? []) as VenueSegmentMapRow[],
   }
@@ -43,7 +71,20 @@ export async function fetchRules(orgId: string): Promise<RulesBundle> {
 
 /** Converte o bundle para o formato do motor de classificação. */
 export function toClassificationRules(bundle: RulesBundle): ClassificationRules {
+  // Atrações ativas com classificação viram "termos" (nome + cada alias).
+  const attractions: ClassificationRules['attractions'] = []
+  for (const a of bundle.attractions) {
+    if (!a.classificar) continue
+    if (!a.segmento && !a.genero_nome) continue
+    const keys = [a.nome, ...(a.aliases ? a.aliases.split(',') : [])]
+      .map((s) => s.trim())
+      .filter(Boolean)
+    for (const keyword of keys) {
+      attractions.push({ keyword, segmento: a.segmento, genero: a.genero_nome })
+    }
+  }
   return {
+    attractions,
     keywordRules: bundle.keywordRules.map((k) => ({
       keyword: k.keyword,
       segmento: k.segmento,
@@ -153,6 +194,17 @@ export async function setVenueClassification(
 }
 export async function deleteVenueClassification(id: string) {
   const { error } = await supabase.from('venue_segment_map').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// ----------------------------------------------------------------------------
+// Classificação por atração (artists.segmento / genero_id / classificar)
+// ----------------------------------------------------------------------------
+export async function setArtistClassification(
+  id: string,
+  patch: { segmento?: string | null; genero_id?: string | null; classificar?: boolean },
+) {
+  const { error } = await supabase.from('artists').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
 }
 

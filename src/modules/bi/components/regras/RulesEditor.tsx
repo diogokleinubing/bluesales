@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Tooltip,
   TooltipContent,
@@ -25,11 +27,13 @@ import {
   addKeywordRule,
   deleteKeywordRule,
   deleteVenueClassification,
+  setArtistClassification,
   setVenueClassification,
   updateKeywordRule,
+  type AttractionClassRow,
 } from '../../lib/rules-api'
 import { ClassSelect } from './ClassSelect'
-import type { KeywordRuleRow, VenueSegmentMapRow } from '@/lib/database.types'
+import type { GeneroRow, KeywordRuleRow, VenueSegmentMapRow } from '@/lib/database.types'
 
 export function RulesEditor() {
   const { rules, orgId } = useRules()
@@ -54,33 +58,52 @@ export function RulesEditor() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Cada termo ou local pode classificar segmento, gênero, ou os dois. As
-        alterações são salvas na hora; clique em{' '}
-        <strong>Reclassificar eventos</strong> para aplicá-las à base
-        (definições manuais são preservadas).
+        A classificação automática segue a ordem <strong>Termos → Atrações →
+        Local</strong> (o primeiro que casar vence). As alterações são salvas na
+        hora; clique em <strong>Reclassificar eventos</strong> para aplicá-las à
+        base (definições manuais são preservadas).
       </p>
 
-      {/* Termos no NOME do evento */}
-      <KeywordRuleCard
-        title="Termos no nome do evento"
-        hint='Aplicados ao nome do evento (ex.: artista). "Segmento só sem ano": o segmento não é aplicado quando o nome tem ano (festival); o gênero continua valendo.'
-        table="keyword_rules"
-        rows={rules.keywordRules}
-        segNames={segNames}
-        genNames={genNames}
-        orgId={orgId}
-        afterChange={markDirty}
-      />
+      <Tabs defaultValue="atracoes">
+        <TabsList>
+          <TabsTrigger value="atracoes">Atrações</TabsTrigger>
+          <TabsTrigger value="termos">Termos</TabsTrigger>
+          <TabsTrigger value="locais">Locais</TabsTrigger>
+        </TabsList>
 
-      {/* Locais (venue_segment_map) */}
-      <VenueMapCard
-        rows={rules.venueMap}
-        segNames={segNames}
-        genNames={genNames}
-        orgId={orgId}
-        onReclassifyLocal={markDirty}
-        refreshRules={refreshRules}
-      />
+        <TabsContent value="atracoes" className="mt-4">
+          <AttractionsCard
+            rows={rules.attractions}
+            segNames={segNames}
+            generos={rules.generos}
+            afterChange={markDirty}
+          />
+        </TabsContent>
+
+        <TabsContent value="termos" className="mt-4">
+          <KeywordRuleCard
+            title="Termos no nome do evento"
+            hint='Aplicados ao nome do evento (ex.: artista). "Segmento só sem ano": o segmento não é aplicado quando o nome tem ano (festival); o gênero continua valendo.'
+            table="keyword_rules"
+            rows={rules.keywordRules}
+            segNames={segNames}
+            genNames={genNames}
+            orgId={orgId}
+            afterChange={markDirty}
+          />
+        </TabsContent>
+
+        <TabsContent value="locais" className="mt-4">
+          <VenueMapCard
+            rows={rules.venueMap}
+            segNames={segNames}
+            genNames={genNames}
+            orgId={orgId}
+            onReclassifyLocal={markDirty}
+            refreshRules={refreshRules}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Barra flutuante: aplicar (reclassificar) as alterações de regras */}
       {(dirty || reclassify.isPending) && (
@@ -97,6 +120,122 @@ export function RulesEditor() {
         </div>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Atrações (artists.segmento / genero_id / classificar)
+// ---------------------------------------------------------------------------
+function AttractionsCard({
+  rows,
+  segNames,
+  generos,
+  afterChange,
+}: {
+  rows: AttractionClassRow[]
+  segNames: string[]
+  generos: GeneroRow[]
+  afterChange: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const genNames = useMemo(() => generos.map((g) => g.nome), [generos])
+  const idByGenero = useMemo(
+    () => new Map(generos.map((g) => [g.nome, g.id])),
+    [generos],
+  )
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter(
+      (a) =>
+        a.nome.toLowerCase().includes(q) ||
+        (a.aliases ?? '').toLowerCase().includes(q),
+    )
+  }, [rows, search])
+
+  async function save(id: string, patch: Parameters<typeof setArtistClassification>[1]) {
+    try {
+      await setArtistClassification(id, patch)
+      afterChange()
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Atrações</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Base de atrações do Comercial. Ative para usar na classificação
+          automática e defina segmento e gênero — aplicados quando o nome (ou
+          alias) da atração aparece no nome do evento.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2 p-3">
+        <div className="relative max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar atração…"
+            className="h-9 pl-8"
+          />
+        </div>
+        <div className="max-h-[55vh] overflow-auto rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-20 text-center">Ativo</TableHead>
+                <TableHead>Atração</TableHead>
+                <TableHead className="w-48">Segmento</TableHead>
+                <TableHead className="w-48">Gênero musical</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-4 text-center text-muted-foreground">
+                    Nenhuma atração.
+                  </TableCell>
+                </TableRow>
+              )}
+              {filtered.map((a) => (
+                <TableRow key={a.id} className={a.classificar ? '' : 'opacity-60'}>
+                  <TableCell className="text-center">
+                    <Switch
+                      checked={a.classificar}
+                      onCheckedChange={(v) => save(a.id, { classificar: v })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{a.nome}</div>
+                    {a.aliases && (
+                      <div className="text-xs text-muted-foreground">{a.aliases}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <ClassSelect
+                      value={a.segmento}
+                      options={segNames}
+                      onChange={(v) => save(a.id, { segmento: v })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <ClassSelect
+                      value={a.genero_nome}
+                      options={genNames}
+                      onChange={(v) => save(a.id, { genero_id: v ? (idByGenero.get(v) ?? null) : null })}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

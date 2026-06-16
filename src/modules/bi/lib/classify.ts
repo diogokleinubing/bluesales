@@ -7,9 +7,9 @@
 //
 // Hierarquia (por dimensão):
 //   1. campo manual do evento (segmento_manual / genero_manual)
-//   2. venue_segment_map: match exato no `local`
-//   3. keyword_rules: keyword no NOME do evento (menor `ordem` vence)
-//   4. venue_rules: keyword no `local` (menor `ordem` vence)
+//   2. keyword_rules: keyword no NOME do evento (menor `ordem` vence) — "Termos"
+//   3. atrações: nome/alias da atração no NOME do evento — "Atrações"
+//   4. local: venue_segment_map (match exato) e venue_rules (keyword no local)
 //   5. fallback: segmento = "Outros"; gênero = null
 
 export const SEGMENTO_PADRAO = 'Outros'
@@ -19,8 +19,9 @@ export const GENERO_DIVERSOS = 'Diversos'
 
 export type ClassSource =
   | 'manual'
-  | 'venue_map'
   | 'keyword'
+  | 'attraction'
+  | 'venue_map'
   | 'venue_rule'
   | 'fallback'
   | null
@@ -47,6 +48,8 @@ export interface VenueMapEntry {
 
 export interface ClassificationRules {
   keywordRules: KeywordRule[]
+  /** Atrações ativas: keyword = nome/alias da atração (match no nome do evento). */
+  attractions: KeywordRule[]
   venueRules: KeywordRule[]
   venueMap: VenueMapEntry[]
 }
@@ -131,6 +134,7 @@ export function classifyEvent(
 ): ClassificationResult {
   return classifyWithIndex(event, {
     keywordRules: sortByOrder(rules.keywordRules),
+    attractions: sortByOrder(rules.attractions),
     venueRules: sortByOrder(rules.venueRules),
     venueIndex: buildVenueMapIndex(rules.venueMap),
   })
@@ -138,6 +142,7 @@ export function classifyEvent(
 
 interface IndexedRules {
   keywordRules: KeywordRule[] // já ordenadas
+  attractions: KeywordRule[] // já ordenadas
   venueRules: KeywordRule[] // já ordenadas
   venueIndex: Map<string, VenueMapEntry>
 }
@@ -165,22 +170,7 @@ function classifyWithIndex(
     generoSource = 'manual'
   }
 
-  // 2. venue_segment_map (match exato no local).
-  if ((segmento == null || genero == null) && localNorm) {
-    const entry = idx.venueIndex.get(localNorm)
-    if (entry) {
-      if (segmento == null && entry.segmento) {
-        segmento = entry.segmento
-        segmentoSource = 'venue_map'
-      }
-      if (genero == null && entry.genero) {
-        genero = entry.genero
-        generoSource = 'venue_map'
-      }
-    }
-  }
-
-  // 3. keyword_rules (no nome).
+  // 2. keyword_rules (no nome) — "Termos".
   //    segmento: a primeira regra que casa (menor ordem) vence.
   //    genero: junta TODOS os gêneros que casam no nome; se houver mais de um
   //    distinto (line-up com artistas de estilos diferentes) -> "Diversos".
@@ -203,7 +193,40 @@ function classifyWithIndex(
     }
   }
 
-  // 4. venue_rules (no local). Mesma lógica de "Diversos" para o gênero.
+  // 3. Atrações (nome/alias da atração no nome do evento) — mesma lógica de Termos.
+  if (segmento == null || genero == null) {
+    const generosAtr = new Set<string>()
+    for (const r of idx.attractions) {
+      const kw = normalize(r.keyword)
+      if (!matchesKeyword(nomeNorm, kw)) continue
+      if (segmento == null && r.segmento) {
+        segmento = r.segmento
+        segmentoSource = 'attraction'
+      }
+      if (genero == null && r.genero) generosAtr.add(r.genero)
+    }
+    if (genero == null && generosAtr.size > 0) {
+      genero = generosAtr.size === 1 ? [...generosAtr][0] : GENERO_DIVERSOS
+      generoSource = 'attraction'
+    }
+  }
+
+  // 4a. venue_segment_map (match exato no local) — "Local".
+  if ((segmento == null || genero == null) && localNorm) {
+    const entry = idx.venueIndex.get(localNorm)
+    if (entry) {
+      if (segmento == null && entry.segmento) {
+        segmento = entry.segmento
+        segmentoSource = 'venue_map'
+      }
+      if (genero == null && entry.genero) {
+        genero = entry.genero
+        generoSource = 'venue_map'
+      }
+    }
+  }
+
+  // 4b. venue_rules (no local). Mesma lógica de "Diversos" para o gênero.
   if ((segmento == null || genero == null) && localNorm) {
     const generosLocal = new Set<string>()
     for (const r of idx.venueRules) {
@@ -238,6 +261,7 @@ export function classifyMany(
 ): ClassificationResult[] {
   const idx: IndexedRules = {
     keywordRules: sortByOrder(rules.keywordRules),
+    attractions: sortByOrder(rules.attractions),
     venueRules: sortByOrder(rules.venueRules),
     venueIndex: buildVenueMapIndex(rules.venueMap),
   }

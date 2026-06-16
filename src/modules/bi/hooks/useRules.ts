@@ -14,6 +14,7 @@ export function useRules() {
     segments: [],
     generos: [],
     keywordRules: [],
+    attractions: [],
     venueRules: [],
     venueMap: [],
   }

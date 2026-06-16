@@ -120,6 +120,12 @@ const TiposLocalConfig = lazyWithRetry(() =>
 const FitScoreConfig = lazyWithRetry(() =>
   import('@/modules/crm/pages/config/FitScore').then((m) => ({ default: m.FitScoreConfig })),
 )
+const SegmentosConfig = lazyWithRetry(() =>
+  import('@/modules/crm/pages/config/Segmentos').then((m) => ({ default: m.SegmentosConfig })),
+)
+const GenerosConfig = lazyWithRetry(() =>
+  import('@/modules/crm/pages/config/Generos').then((m) => ({ default: m.GenerosConfig })),
+)
 const Apresentacoes = lazyWithRetry(() =>
   import('@/modules/crm/pages/apresentacoes/Apresentacoes').then((m) => ({ default: m.Apresentacoes })),
 )
@@ -260,6 +266,8 @@ export const router = createBrowserRouter([
       { path: 'comercial/configuracao/plataformas', element: <PlataformasConfig /> },
       { path: 'comercial/configuracao/objecoes', element: <ObjecoesConfig /> },
       { path: 'comercial/configuracao/tipos-local', element: <TiposLocalConfig /> },
+      { path: 'comercial/configuracao/segmentos', element: <SegmentosConfig /> },
+      { path: 'comercial/configuracao/generos', element: <GenerosConfig /> },
       { path: 'comercial/configuracao/fit-score', element: <FitScoreConfig /> },
 
       // Módulo Pesquisa

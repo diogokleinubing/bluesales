@@ -17,6 +17,8 @@ export interface Artist {
   org_id: string
   nome: string
   genero_id: string | null
+  /** Segmento Padrão usado na classificação automática de eventos. */
+  segmento: string | null
   escalao: Escalao | null
   classificacao: ArtistClasse | null
   organization_id: string | null
@@ -59,6 +61,7 @@ export async function saveArtist(orgId: string, a: Partial<Artist> & { nome: str
   const payload = {
     nome: a.nome,
     genero_id: a.genero_id ?? null,
+    segmento: a.segmento ?? null,
     escalao: a.escalao ?? null,
     classificacao: a.classificacao ?? null,
     organization_id: a.organization_id ?? null,

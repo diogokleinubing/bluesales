@@ -22,7 +22,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useGeneroOptions, useOrgOptions } from '../hooks/useCrmLookups'
+import { useGeneroOptions, useOrgOptions, useSegmentOptions } from '../hooks/useCrmLookups'
 import { usePlatforms } from '../hooks/useConfigCadastros'
 import {
   useArtists, saveArtist, deleteArtist, ARTIST_CLASSES,
@@ -52,6 +52,7 @@ export function Artistas() {
   const orgId = useCrmOrgId()
   const { data, isLoading } = useArtists()
   const generos = useGeneroOptions()
+  const segmentos = useSegmentOptions()
   const orgs = useOrgOptions()
   const platforms = usePlatforms()
   const [search, setSearch] = useState('')
@@ -62,6 +63,7 @@ export function Artistas() {
   const [edit, setEdit] = useState<ArtistRow | null>(null)
   const [nome, setNome] = useState('')
   const [generoId, setGeneroId] = useState(NONE)
+  const [segmentoSel, setSegmentoSel] = useState(NONE)
   const [classe, setClasse] = useState<string>(NONE)
   const [orgSel, setOrgSel] = useState(NONE)
   const [platSel, setPlatSel] = useState(NONE)
@@ -120,11 +122,11 @@ export function Artistas() {
   }
 
   function openNew() {
-    setEdit(null); setNome(''); setGeneroId(NONE); setClasse(NONE); setOrgSel(NONE)
+    setEdit(null); setNome(''); setGeneroId(NONE); setSegmentoSel(NONE); setClasse(NONE); setOrgSel(NONE)
     setPlatSel(NONE); setObs(''); setAliases(''); setOpen(true)
   }
   function openEdit(a: ArtistRow) {
-    setEdit(a); setNome(a.nome); setGeneroId(a.genero_id ?? NONE)
+    setEdit(a); setNome(a.nome); setGeneroId(a.genero_id ?? NONE); setSegmentoSel(a.segmento ?? NONE)
     setClasse(a.classificacao ?? NONE); setOrgSel(a.organization_id ?? NONE)
     setPlatSel(a.platform_id ?? NONE); setObs(a.observacoes ?? ''); setAliases(a.aliases ?? ''); setOpen(true)
   }
@@ -135,6 +137,7 @@ export function Artistas() {
       await saveArtist(orgId, {
         nome: nome.trim(),
         genero_id: generoId === NONE ? null : generoId,
+        segmento: segmentoSel === NONE ? null : segmentoSel,
         classificacao: classe === NONE ? null : (classe as ArtistClasse),
         organization_id: orgSel === NONE ? null : orgSel,
         platform_id: platSel === NONE ? null : platSel,
@@ -230,6 +233,15 @@ export function Artistas() {
                   </SelectContent>
                 </Select></div>
             </div>
+            <div className="space-y-1"><Label>Segmento Padrão</Label>
+              <Select value={segmentoSel} onValueChange={setSegmentoSel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>—</SelectItem>
+                  {(segmentos.data ?? []).map((s) => <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Usado para classificar automaticamente eventos desta atração.</p></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Organização</Label>
                 <Select value={orgSel} onValueChange={setOrgSel}>
