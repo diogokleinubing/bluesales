@@ -71,7 +71,7 @@ export const MODULES: ModuleDef[] = [
           { to: '/bi/dashboard', label: 'Dashboard', icon: LayoutDashboard, color: '#3b82f6' },
           { to: '/bi/mensal', label: 'Mensal', icon: CalendarRange, color: '#f97316', requires: 'gestor' },
           { to: '/bi/analises', label: 'Análises', icon: Layers, color: '#8b5cf6' },
-          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard, color: '#14b8a6' },
+          { to: '/bi/meios-pagamento', label: 'Meios de pagamento', icon: CreditCard, color: '#14b8a6', requires: 'gestor' },
           { to: '/bi/ytd', label: 'YTD comparativo', icon: TrendingUp, color: '#22c55e' },
           { to: '/bi/provisionamento', label: 'Provisionamento', icon: Wallet, color: '#f59e0b' },
           { to: '/bi/regras', label: 'Regras', icon: SlidersHorizontal, color: '#d946ef' },

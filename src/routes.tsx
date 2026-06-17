@@ -221,7 +221,14 @@ export const router = createBrowserRouter([
       { path: 'bi/organizadores', element: <AnalisesRedirect view="organizadores" /> },
       { path: 'bi/locais', element: <AnalisesRedirect view="locais" /> },
       { path: 'bi/eventos', element: <RegrasEventosRedirect /> },
-      { path: 'bi/meios-pagamento', element: <MeiosPagamentoPage /> },
+      {
+        path: 'bi/meios-pagamento',
+        element: (
+          <RoleRoute role="gestor">
+            <MeiosPagamentoPage />
+          </RoleRoute>
+        ),
+      },
       { path: 'bi/ytd', element: <YtdPage /> },
       { path: 'bi/provisionamento', element: <ProvisionamentoPage /> },
       { path: 'bi/regras', element: <RegrasPage /> },
