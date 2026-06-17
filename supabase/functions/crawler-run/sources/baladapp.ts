@@ -47,20 +47,28 @@ function parseCidadeUf(cidadeEstado?: string): { cidade: string | null; uf: stri
 }
 
 const eventoUrl = (a: Anuncio) => `${SITE}/pt-BR/eventos/${a.uri}/${a.id}`
+const idDaUrl = (url: string) => url.split('/').pop() ?? ''
 
-async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>> {
-  const set = new Set<string>()
+/** Mapa id-do-anúncio → url_evento já gravada. O id (final da URL) é estável; o
+ *  slug (uri) muda quando editam o título — por isso deduplicamos pelo id, e não
+ *  pela URL inteira, evitando recadastrar o mesmo evento. */
+async function getKnown(db: ReturnType<typeof adminClient>): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
   try {
     const { data } = await db
       .from('crawled_events')
       .select('url_evento')
       .ilike('url_evento', '%baladapp.com.br%')
       .limit(100000)
-    for (const r of data ?? []) set.add(String(r.url_evento))
+    for (const r of data ?? []) {
+      const url = String(r.url_evento)
+      const id = idDaUrl(url)
+      if (id) map.set(id, url)
+    }
   } catch (e) {
     console.error('[baladapp] getKnown falhou', String(e))
   }
-  return set
+  return map
 }
 
 /** Instagram da produção a partir do HTML do detalhe (bloco "Contato da produção"). */
@@ -142,7 +150,9 @@ export const baladAppScraper: Scraper = async (ctx) => {
   const db = adminClient()
   const cfg = await getCfg(db)
   const cap = Math.max(1, Number(cfg.detalhes_por_run ?? MAX_DET))
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
+  const idToUrl = await getKnown(db) // sempre do banco: mantém a URL estável por id
+  const skipIds = ctx.reprocessar ? new Set<string>() : new Set(idToUrl.keys())
+  const urlDe = (a: Anuncio) => idToUrl.get(String(a.id)) ?? eventoUrl(a)
 
   let anuncios: Anuncio[] = []
   try {
@@ -161,8 +171,8 @@ export const baladAppScraper: Scraper = async (ctx) => {
     return []
   }
 
-  // Novos (skip-forever): id + uri + título e ainda não coletados.
-  const novos = anuncios.filter((a) => a?.id && a?.uri && a.evento?.titulo && !known.has(eventoUrl(a)))
+  // Novos (skip-forever): id + uri + título e ainda não coletados (por id).
+  const novos = anuncios.filter((a) => a?.id && a?.uri && a.evento?.titulo && !skipIds.has(String(a.id)))
 
   // Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços de
   // `cap`, até o fim → volta a 0) e emite só o pedaço (preços frescos). Coleta
@@ -191,8 +201,8 @@ export const baladAppScraper: Scraper = async (ctx) => {
   for (let i = 0; i < aDetalhar.length; i += BATCH) {
     const slice = aDetalhar.slice(i, i + BATCH)
     await Promise.all(slice.map(async (a) => {
-      const url = eventoUrl(a)
-      const [insta, precos] = await Promise.all([fetchInstagram(url), fetchPrecos(a.id)])
+      const url = urlDe(a)
+      const [insta, precos] = await Promise.all([fetchInstagram(eventoUrl(a)), fetchPrecos(a.id)])
       instaByUrl.set(url, insta)
       precoByUrl.set(url, precos)
     }))
@@ -200,7 +210,7 @@ export const baladAppScraper: Scraper = async (ctx) => {
 
   const out: RawEvent[] = []
   for (const a of emitir) {
-    const url = eventoUrl(a)
+    const url = urlDe(a)
     const ev = a.evento ?? {}
     const loc = ev.local ?? {}
     const { cidade, uf } = parseCidadeUf(loc?.cidade_estado)
