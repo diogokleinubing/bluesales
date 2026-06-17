@@ -1,6 +1,6 @@
 // Versão do app exibida no rodapé do menu. Incrementada a cada deploy para
 // produção via `npm run version:bump` (scripts/bump-version.mjs).
-export const APP_VERSION = '1.31'
+export const APP_VERSION = '1.32'
 
 // Injetado pelo Vite (vite.config.ts): true quando o build local tem mudanças
 // ainda não publicadas (working tree sujo ou commits à frente do origin/main).

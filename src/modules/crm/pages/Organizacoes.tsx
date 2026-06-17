@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -21,7 +22,6 @@ import {
 } from '@/components/ui/dialog'
 import { useOrganizations, createOrganization, STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useViewPref, usePersistedState } from '../hooks/useViewPref'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { InlineStageSelect, InlineClasseSelect } from '../components/RelacionamentoBits'
 import { KanbanBoard } from '../components/KanbanBoard'
@@ -46,18 +46,32 @@ export function Organizacoes() {
   const openItem = useOpenItem()
   const qc = useQueryClient()
   const orgId = useCrmOrgId()
-  const [params] = useSearchParams()
+  const [params, setSearchParams] = useSearchParams()
   const biOrganizador = params.get('bi_organizador') ?? ''
 
   const { data, isLoading } = useOrganizations()
-  const [view, setView] = useViewPref('crm:orgView', 'list')
-  const [search, setSearch] = useState(biOrganizador)
-  const [classesSel, setClassesSel] = usePersistedState<string[]>('crm:org:classes', ['A+', 'A', 'B'])
-  const [statusSel, setStatusSel] = usePersistedState<string[]>('crm:org:status', ['Eventual', 'Inativo'])
-  const [gmvMin, setGmvMin] = useState('')
-  const [estagiosInativos, setEstagiosInativos] = usePersistedState<boolean>('crm:org:estagiosInativos', false)
-  const [showCidade, setShowCidade] = usePersistedState<boolean>('crm:org:cardCidade', true)
-  const [showGmv, setShowGmv] = usePersistedState<boolean>('crm:org:cardGmv', true)
+  const ORG_CLASSES_DEF = ['A+', 'A', 'B']
+  const ORG_STATUS_DEF = ['Eventual', 'Inativo']
+  const [view, setView] = useState<'kanban' | 'list'>(() => (readStr(params, 'view', 'list') === 'kanban' ? 'kanban' : 'list'))
+  const [search, setSearch] = useState(() => readStr(params, 'search') || biOrganizador)
+  const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes', ORG_CLASSES_DEF))
+  const [statusSel, setStatusSel] = useState<string[]>(() => readArr(params, 'status', ORG_STATUS_DEF))
+  const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
+  const [estagiosInativos, setEstagiosInativos] = useState<boolean>(() => readBool(params, 'includeInactive'))
+  const [showCidade, setShowCidade] = useState<boolean>(() => readBool(params, 'showCity', true))
+  const [showGmv, setShowGmv] = useState<boolean>(() => readBool(params, 'showGmv', true))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'view', v: view, def: 'list' },
+      { k: 'search', v: search },
+      { k: 'classes', v: classesSel, always: true },
+      { k: 'status', v: statusSel, always: true },
+      { k: 'gmvMin', v: gmvMin },
+      { k: 'includeInactive', v: estagiosInativos },
+      { k: 'showCity', v: showCidade, def: true },
+      { k: 'showGmv', v: showGmv, def: true },
+    ]), { replace: true })
+  }, [view, search, classesSel, statusSel, gmvMin, estagiosInativos, showCidade, showGmv, setSearchParams])
   const [novoOpen, setNovoOpen] = useState(false)
   const [novoNome, setNovoNome] = useState('')
   const [importOpen, setImportOpen] = useState(false)

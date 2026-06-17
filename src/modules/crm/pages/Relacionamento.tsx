@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { SlidersHorizontal } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -11,7 +13,6 @@ import {
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { useViewPref, usePersistedState } from '../hooks/useViewPref'
 import { useRelacionamento } from '../hooks/useRelacionamento'
 import { STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { ClasseBadge } from '../components/ClasseBadge'
@@ -28,14 +29,27 @@ export function Relacionamento() {
   const openItem = useOpenItem()
   const { data, isLoading } = useRelacionamento()
   const stageMap = useRelStageMap()
-  const [view, setView] = useViewPref('crm:relView', 'kanban')
-  const [search, setSearch] = useState('')
-  const [classesSel, setClassesSel] = usePersistedState<string[]>('crm:rel:classes', [])
-  const [statusSel, setStatusSel] = usePersistedState<string[]>('crm:rel:status', [])
-  const [gmvMin, setGmvMin] = useState('')
-  const [estagiosInativos, setEstagiosInativos] = usePersistedState<boolean>('crm:rel:estagiosInativos', false)
-  const [showCidade, setShowCidade] = usePersistedState<boolean>('crm:rel:cardCidade', true)
-  const [showGmv, setShowGmv] = usePersistedState<boolean>('crm:rel:cardGmv', true)
+  const [params, setSearchParams] = useSearchParams()
+  const [view, setView] = useState<'kanban' | 'list'>(() => (readStr(params, 'view', 'kanban') === 'list' ? 'list' : 'kanban'))
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
+  const [statusSel, setStatusSel] = useState<string[]>(() => readArr(params, 'status'))
+  const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
+  const [estagiosInativos, setEstagiosInativos] = useState<boolean>(() => readBool(params, 'includeInactive'))
+  const [showCidade, setShowCidade] = useState<boolean>(() => readBool(params, 'showCity', true))
+  const [showGmv, setShowGmv] = useState<boolean>(() => readBool(params, 'showGmv', true))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'view', v: view, def: 'kanban' },
+      { k: 'search', v: search },
+      { k: 'classes', v: classesSel },
+      { k: 'status', v: statusSel },
+      { k: 'gmvMin', v: gmvMin },
+      { k: 'includeInactive', v: estagiosInativos },
+      { k: 'showCity', v: showCidade, def: true },
+      { k: 'showGmv', v: showGmv, def: true },
+    ]), { replace: true })
+  }, [view, search, classesSel, statusSel, gmvMin, estagiosInativos, showCidade, showGmv, setSearchParams])
 
   function toggleStatus(s: string) {
     setStatusSel(statusSel.includes(s) ? statusSel.filter((x) => x !== s) : [...statusSel, s])
