@@ -88,8 +88,9 @@ async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>
   return s
 }
 
-/** Varredura por faixa de ID (uma vez por invocação); avança o cursor. */
-async function runScan(): Promise<Scanned[]> {
+/** Varredura por faixa de ID (uma vez por invocação); avança o cursor.
+ *  reprocessar=true: recoleta os já conhecidos (atualiza), em vez de pular. */
+async function runScan(reprocessar: boolean): Promise<Scanned[]> {
   if (scanCache) return scanCache
   scanCache = []
   const db = adminClient()
@@ -104,7 +105,8 @@ async function runScan(): Promise<Scanned[]> {
   const maxScan = Number(cfg.scan ?? MAX_SCAN)
   const topo = Number(cfg.id_topo ?? 122500) // recomeço (acima da fronteira atual)
   const minId = Number(cfg.id_min ?? 1)
-  const known = await getKnown(db)
+  // Reprocessar: não pula os conhecidos (recoleta/atualiza); o cursor avança igual.
+  const known = reprocessar ? new Set<string>() : await getKnown(db)
 
   // Varredura DESCENDENTE a partir do cursor de baixo, pulando os já coletados
   // (rápido) e capturando os de IDs menores. Cobre toda a faixa ao longo das
@@ -193,7 +195,7 @@ function mapBileto(ev: BiletoEvent): RawEvent | null {
 
 export const biletoScraper: Scraper = async (ctx: ScrapeContext) => {
   const { cidade } = ctx
-  const events = await runScan()
+  const events = await runScan(ctx.reprocessar)
 
   const semCidade = !cidade // fonte sem cidades -> não filtra por cidade
   const out: RawEvent[] = []

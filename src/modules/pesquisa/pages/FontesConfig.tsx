@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Play, Pencil, Loader2, RefreshCw, BarChart3, Repeat, Square } from 'lucide-react'
+import { Play, Pencil, Loader2, RefreshCw, BarChart3, Timer, Square } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -212,9 +212,9 @@ export function FontesConfig() {
                         disabled={running !== null || batchAtivo} onClick={() => executar(s.slug)}>
                         {running === s.slug ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Rodar em lote (vários ciclos)"
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Rodar em lote (vários ciclos com intervalo)"
                         disabled={running !== null || batchAtivo} onClick={() => { setCiclos('20'); setIntervalo('60'); setLoteCfg(s) }}>
-                        <Repeat className="size-4" />
+                        <Timer className="size-4" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Reprocessar (atualiza os já coletados)"
                         disabled={running !== null || batchAtivo} onClick={() => executar(s.slug, true)}>
