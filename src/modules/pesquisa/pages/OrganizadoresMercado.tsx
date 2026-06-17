@@ -3,8 +3,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Star, Ban, Link2, MoreVertical, Mic2 } from 'lucide-react'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu'
+import { ARTIST_CLASSES } from '@/modules/crm/hooks/useCadastros'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -52,7 +53,7 @@ export function OrganizadoresMercado() {
   const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
   const [soFav, setSoFav] = useState(false)
   const [soIgnorados, setSoIgnorados] = useState(false)
-  const [comArtista, setComArtista] = useState(false)
+  const [classes, setClasses] = useState<string[]>([])
   const [fitMin, setFitMin] = useState('')
   const [ordFit, setOrdFit] = useState(false)
   const fitRules = useFitRules()
@@ -74,8 +75,8 @@ export function OrganizadoresMercado() {
     fonte,
     cidade,
     uf,
-    comArtista,
-  }), [aplicado, fonte, cidade, uf, comArtista])
+    classes,
+  }), [aplicado, fonte, cidade, uf, classes])
 
   // Cidades como opções de autocomplete (id = "cidade|uf" usado no filtro).
   const cidadeOptions: Lookup[] = useMemo(
@@ -246,17 +247,34 @@ export function OrganizadoresMercado() {
           >
             <Ban className="size-4" /> Ignorados
           </button>
-          <button
-            type="button"
-            onClick={() => setComArtista((v) => !v)}
-            title="Apenas com eventos que têm artista mapeado"
-            className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
-              comArtista ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary',
-            )}
-          >
-            <Mic2 className="size-4" /> Com Artista
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title="Filtrar por classe de artista mapeado"
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+                  classes.length ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary',
+                )}
+              >
+                <Mic2 className="size-4" /> {classes.length ? `Artistas: ${classes.join(', ')}` : 'Artistas'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {ARTIST_CLASSES.map((c) => (
+                <DropdownMenuCheckboxItem
+                  key={c}
+                  checked={classes.includes(c)}
+                  onSelect={(e) => e.preventDefault()}
+                  onCheckedChange={(v) =>
+                    setClasses((prev) => (v ? [...prev, c] : prev.filter((x) => x !== c)))
+                  }
+                >
+                  {c}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Input type="number" min={0} max={100} value={fitMin} onChange={(e) => setFitMin(e.target.value)}
             placeholder="Fit mín." className={`${TOOLBAR_TRIGGER} w-[110px]`} />
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
@@ -279,7 +297,7 @@ export function OrganizadoresMercado() {
         <TableHeader><TableRow>
           <TableHead>Organizador</TableHead>
           <TableHead>Fit</TableHead>
-          <TableHead className="text-right">Eventos</TableHead>
+          <TableHead className="text-right">{classes.length ? 'Artistas' : 'Eventos'}</TableHead>
           <TableHead>Cidades</TableHead>
           <TableHead className="text-right">Faixa de preço</TableHead>
           <TableHead className="text-right">Taxa</TableHead>
@@ -309,7 +327,7 @@ export function OrganizadoresMercado() {
                   </div>
                 </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}><FitBadge fit={fit} /></TableCell>
-                <TableCell className="text-right tabular-nums">{a.eventos}</TableCell>
+                <TableCell className="text-right tabular-nums">{classes.length ? a.artistas : a.eventos}</TableCell>
                 <TableCell className="truncate text-muted-foreground" title={a.cidades.join(', ')}>{a.cidades.slice(0, 3).join(', ')}{a.cidades.length > 3 ? ` +${a.cidades.length - 3}` : ''}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">{faixaPreco(a.preco_min, a.preco_max)}</TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">{fmtTaxa(a.taxa_media)}</TableCell>

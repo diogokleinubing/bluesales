@@ -134,6 +134,8 @@ export interface OrganizerAgg {
   chave: string
   nome: string
   eventos: number
+  /** Nº de artistas distintos das classes filtradas encontrados no grupo. */
+  artistas: number
   preco_min: number | null
   preco_max: number | null
   taxa_media: number | null
@@ -151,6 +153,8 @@ export interface LocalAgg {
   cidade_nome: string | null
   uf: string | null
   eventos: number
+  /** Nº de artistas distintos das classes filtradas encontrados no grupo. */
+  artistas: number
   preco_min: number | null
   preco_max: number | null
   taxa_media: number | null
@@ -164,7 +168,7 @@ export interface OrganizerFilters {
   fonte: string // slug | 'todas'
   cidade: string // 'cidade|uf' | 'todas'
   uf: string // UF | ''
-  comArtista?: boolean // só os que têm eventos com artista mapeado
+  classes?: string[] // só os com artistas mapeados nessas classes (A+/A/B/C)
 }
 
 /** Deriva (cidade, uf) para as RPCs: a UF vem do select ou do sufixo da cidade. */
@@ -184,7 +188,7 @@ export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
-        p_com_artista: filters.comArtista ? true : null,
+        p_classes: filters.classes && filters.classes.length > 0 ? filters.classes : null,
         ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
@@ -199,7 +203,7 @@ export interface LocalAggFilters {
   fonte: string
   cidade: string // 'cidade|uf' | 'todas'
   uf: string // UF | ''
-  comArtista?: boolean // só os que têm eventos com artista mapeado
+  classes?: string[] // só os com artistas mapeados nessas classes (A+/A/B/C)
 }
 
 export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<LocalAgg[]> {
@@ -213,7 +217,7 @@ export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<Local
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
-        p_com_artista: filters.comArtista ? true : null,
+        p_classes: filters.classes && filters.classes.length > 0 ? filters.classes : null,
         ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
