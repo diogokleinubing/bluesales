@@ -111,7 +111,18 @@ async function fetchPrecos(slug: string, s: Sessao): Promise<{ min: number | nul
   if (!r || r.status !== 200) return { min: null, max: null }
   let view = ''
   try { view = (JSON.parse(r.text) as { view?: string }).view ?? '' } catch { return { min: null, max: null } }
-  const nums = [...view.matchAll(/R\$\s*([\d.]*\d,\d{2})/g)].map((m) => brMoney(m[1])).filter((n) => n > 0)
+  // O HTML lista "R$ <valor> + R$ <taxa> Taxa de ingresso". A taxa NÃO é preço
+  // de ingresso: um R$ é taxa se, até o próximo R$, aparecer "taxa".
+  const text = view.replace(/<[^>]+>/g, ' ')
+  const matches = [...text.matchAll(/R\$\s*([\d.]*\d,\d{2})/g)]
+  const nums: number[] = []
+  for (let i = 0; i < matches.length; i++) {
+    const start = (matches[i].index ?? 0) + matches[i][0].length
+    const end = i + 1 < matches.length ? (matches[i + 1].index ?? text.length) : Math.min(text.length, start + 40)
+    if (/taxa/i.test(text.slice(start, end))) continue // é a taxa de ingresso
+    const v = brMoney(matches[i][1])
+    if (v > 0) nums.push(v)
+  }
   if (!nums.length) return { min: null, max: null }
   return { min: Math.min(...nums), max: Math.max(...nums) }
 }
