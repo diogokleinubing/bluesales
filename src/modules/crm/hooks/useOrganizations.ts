@@ -21,6 +21,7 @@ export interface Organization {
   bi_organizador: string | null
   site: string | null
   instagram: string | null
+  aliases: string | null
   observacoes: string | null
   parent_id: string | null
   blueticket_code: number | null

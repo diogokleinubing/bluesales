@@ -320,7 +320,9 @@ function ParcelamentoTable({ dim }: { dim: ParcelamentoDim }) {
               ) : (
                 sortedRows.map((r, i) => (
                   <TableRow key={`${r.nome}-${i}`}>
-                    <TableCell className="max-w-[420px] truncate font-medium" title={r.nome}>{r.nome}</TableCell>
+                    <TableCell className="max-w-[420px] truncate font-medium" title={r.nome}>
+                      <EventoNome nome={r.nome} codigo={r.codigo} />
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.parcelas_media != null ? Number(r.parcelas_media).toFixed(1).replace('.', ',') : '—'}
                     </TableCell>
@@ -348,6 +350,23 @@ function ParcelamentoTable({ dim }: { dim: ParcelamentoDim }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/** Nome do evento com link para o painel da Blueticket (nova aba). */
+function EventoNome({ nome, codigo }: { nome: string; codigo: string | null }) {
+  if (!codigo) return <>{nome}</>
+  return (
+    <a
+      href={`https://painel.blueticket.com.br/event/${encodeURIComponent(codigo)}/report-v2`}
+      target="_blank"
+      rel="noreferrer"
+      className="hover:text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+      title="Abrir no painel da Blueticket"
+    >
+      {nome}
+    </a>
   )
 }
 
@@ -399,7 +418,9 @@ function ParcelamentoChildRows({ dim, parent, sort }: { dim: 'organizador' | 'uf
     <>
       {evs.map((ev, i) => (
         <TableRow key={`${ev.nome}-${i}`}>
-          <TableCell className="truncate pl-10 text-muted-foreground" title={ev.nome}>{ev.nome}</TableCell>
+          <TableCell className="truncate pl-10 text-muted-foreground" title={ev.nome}>
+            <EventoNome nome={ev.nome} codigo={ev.codigo} />
+          </TableCell>
           <ParcelMetricCells r={ev} />
         </TableRow>
       ))}

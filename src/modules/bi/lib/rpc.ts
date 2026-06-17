@@ -508,6 +508,8 @@ export type ParcelamentoDim = 'organizador' | 'uf' | 'evento'
 
 export interface ParcelamentoRow {
   nome: string
+  /** Código do evento (só nas linhas de evento) — para link ao painel. */
+  codigo: string | null
   parcelas_media: number | null
   receita_juros: number
   gmv: number

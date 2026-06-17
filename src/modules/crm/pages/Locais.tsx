@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -66,16 +68,31 @@ export function Locais() {
     }
     return m
   }, [crawled.data])
-  const [search, setSearch] = useState('')
-  const [platFilter, setPlatFilter] = useState<string>(ALL)
-  const [tipoFilter, setTipoFilter] = useState<string>(ALL)
-  const [ufFilter, setUfFilter] = useState<string>(ALL)
-  const [classesSel, setClassesSel] = useState<string[]>([])
-  const [stageFilter, setStageFilter] = useState<string>(STAGE_ATIVOS)
-  const [gmvMin, setGmvMin] = useState('')
-  const [capMin, setCapMin] = useState('')
-  const [fitMin, setFitMin] = useState('')
-  const [ordFit, setOrdFit] = useState(false)
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [platFilter, setPlatFilter] = useState<string>(() => readStr(params, 'platform', ALL))
+  const [tipoFilter, setTipoFilter] = useState<string>(() => readStr(params, 'type', ALL))
+  const [ufFilter, setUfFilter] = useState<string>(() => readStr(params, 'state', ALL))
+  const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
+  const [stageFilter, setStageFilter] = useState<string>(() => readStr(params, 'stage', STAGE_ATIVOS))
+  const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
+  const [capMin, setCapMin] = useState(() => readStr(params, 'capMin'))
+  const [fitMin, setFitMin] = useState(() => readStr(params, 'fitMin'))
+  const [ordFit, setOrdFit] = useState(() => readBool(params, 'sortByFit'))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'search', v: search },
+      { k: 'platform', v: platFilter, def: ALL },
+      { k: 'type', v: tipoFilter, def: ALL },
+      { k: 'state', v: ufFilter, def: ALL },
+      { k: 'classes', v: classesSel },
+      { k: 'stage', v: stageFilter, def: STAGE_ATIVOS },
+      { k: 'gmvMin', v: gmvMin },
+      { k: 'capMin', v: capMin },
+      { k: 'fitMin', v: fitMin },
+      { k: 'sortByFit', v: ordFit },
+    ]), { replace: true })
+  }, [search, platFilter, tipoFilter, ufFilter, classesSel, stageFilter, gmvMin, capMin, fitMin, ordFit, setSearchParams])
   const [oppFrom, setOppFrom] = useState<LocalRow | null>(null)
   const [eventsLocal, setEventsLocal] = useState<{ row: LocalRow; chaves: string[] } | null>(null)
   const [importOpen, setImportOpen] = useState(false)

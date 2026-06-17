@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { readStr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,9 +34,17 @@ export function Oportunidades() {
   const { data, isLoading } = useOpportunities()
   const { stages } = useFunnel('oportunidade')
   const [view, setView] = useViewPref('crm:oppView', 'list')
-  const [search, setSearch] = useState('')
-  const [stageF, setStageF] = useState(ALL)
-  const [statusF, setStatusF] = useState(ALL)
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [stageF, setStageF] = useState(() => readStr(params, 'stage', ALL))
+  const [statusF, setStatusF] = useState(() => readStr(params, 'result', ALL))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'search', v: search },
+      { k: 'stage', v: stageF, def: ALL },
+      { k: 'result', v: statusF, def: ALL },
+    ]), { replace: true })
+  }, [search, stageF, statusF, setSearchParams])
   const [open, setOpen] = useState(false)
 
   const rows = useMemo(() => {

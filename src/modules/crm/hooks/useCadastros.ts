@@ -100,6 +100,7 @@ export interface Local {
   observacoes: string | null
   site: string | null
   instagram: string | null
+  aliases: string | null
   funil_stage_id: string | null
   classificacao: CrmClasse | null
 }
@@ -222,6 +223,7 @@ export async function saveLocal(
     observacoes: l.observacoes ?? null,
     site: l.site ?? null,
     instagram: l.instagram ?? null,
+    aliases: l.aliases ?? null,
     funil_stage_id: l.funil_stage_id ?? null,
     classificacao: l.classificacao ?? null,
   }

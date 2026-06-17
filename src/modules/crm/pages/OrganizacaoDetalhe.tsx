@@ -466,6 +466,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
       estrutura: org.estrutura ?? '',
       site: org.site ?? '',
       instagram: org.instagram ?? '',
+      aliases: org.aliases ?? '',
       observacoes: org.observacoes ?? '',
     }),
     [org],
@@ -495,6 +496,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         estrutura: toText(draft.estrutura),
         site: toText(draft.site),
         instagram: toText(draft.instagram),
+        aliases: toText(draft.aliases),
         observacoes: toText(draft.observacoes),
       })
       invalidate()
@@ -543,6 +545,7 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
         <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
       </div>
+      <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
       <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
     </section>

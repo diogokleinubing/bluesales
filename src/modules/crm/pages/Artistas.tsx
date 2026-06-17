@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { readStr, buildSearchParams } from '@/lib/urlState'
 import { Plus, Pencil, ChevronUp, ChevronDown, ChevronsUpDown, CalendarDays, ExternalLink } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
 import { useArtistUnifiedAgenda } from '@/modules/pesquisa/hooks/useAgenda'
@@ -52,11 +54,25 @@ export function Artistas() {
   const { data, isLoading } = useArtists()
   const generos = useGeneroOptions()
   const segmentos = useSegmentOptions()
-  const [search, setSearch] = useState('')
-  const [classeFiltro, setClasseFiltro] = useState<string>('all')
-  const [segmentoFiltro, setSegmentoFiltro] = useState<string>('all')
-  const [generoFiltro, setGeneroFiltro] = useState<string>('all')
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' })
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [classeFiltro, setClasseFiltro] = useState<string>(() => readStr(params, 'class', 'all'))
+  const [segmentoFiltro, setSegmentoFiltro] = useState<string>(() => readStr(params, 'segment', 'all'))
+  const [generoFiltro, setGeneroFiltro] = useState<string>(() => readStr(params, 'genre', 'all'))
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>(() => ({
+    key: readStr(params, 'sortBy', 'nome') as SortKey,
+    dir: readStr(params, 'sortDir', 'asc') === 'desc' ? 'desc' : 'asc',
+  }))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'search', v: search },
+      { k: 'class', v: classeFiltro, def: 'all' },
+      { k: 'segment', v: segmentoFiltro, def: 'all' },
+      { k: 'genre', v: generoFiltro, def: 'all' },
+      { k: 'sortBy', v: sort.key, def: 'nome' },
+      { k: 'sortDir', v: sort.dir, def: 'asc' },
+    ]), { replace: true })
+  }, [search, classeFiltro, segmentoFiltro, generoFiltro, sort, setSearchParams])
   const [open, setOpen] = useState(false)
   const [agenda, setAgenda] = useState<ArtistRow | null>(null)
   const [edit, setEdit] = useState<ArtistRow | null>(null)

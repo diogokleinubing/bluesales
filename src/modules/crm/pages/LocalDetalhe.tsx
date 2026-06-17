@@ -111,6 +111,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
     tipo_id: local.tipo_id ?? '',
     site: local.site ?? '',
     instagram: local.instagram ?? '',
+    aliases: local.aliases ?? '',
     classificacao: local.classificacao ?? '',
     observacoes: local.observacoes ?? '',
   }), [local])
@@ -128,6 +129,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
         cidade: toText(draft.cidade), uf: toText(draft.uf),
         capacidade: toNumber(draft.capacidade), tipo_id: toText(draft.tipo_id),
         site: toText(draft.site), instagram: toText(draft.instagram),
+        aliases: toText(draft.aliases),
         observacoes: toText(draft.observacoes),
         classificacao: (toText(draft.classificacao) as CrmClasse | null),
         funil_stage_id: stage,
@@ -163,6 +165,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
           <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
           <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
         </div>
+        <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
         <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
         {changed && <FormActions dirty={changed} saving={saving} onSave={salvar} onCancel={() => { reset(); setStage(local.funil_stage_id) }} />}
       </div>

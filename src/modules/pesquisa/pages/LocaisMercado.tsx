@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Star, Ban, Link2, MoreVertical, Mic2 } from 'lucide-react'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,16 +45,17 @@ export function LocaisMercado() {
   const orgId = useCrmOrgId()
   const { profile } = useProfile()
   const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [valorMin, setValorMin] = useState('')
-  const [fonte, setFonte] = useState('todas')
-  const [cidade, setCidade] = useState('todas')
-  const [uf, setUf] = useState('')
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'q'))
+  const [valorMin, setValorMin] = useState(() => readStr(params, 'valorMin'))
+  const [fonte, setFonte] = useState(() => readStr(params, 'fonte', 'todas'))
+  const [cidade, setCidade] = useState(() => readStr(params, 'cidade', 'todas'))
+  const [uf, setUf] = useState(() => readStr(params, 'uf'))
   const facets = useEventFacets()
-  const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
-  const [soFav, setSoFav] = useState(false)
-  const [soIgnorados, setSoIgnorados] = useState(false)
-  const [classes, setClasses] = useState<string[]>([])
+  const [aplicado, setAplicado] = useState(() => ({ search: readStr(params, 'q'), valorMin: readStr(params, 'valorMin') }))
+  const [soFav, setSoFav] = useState(() => readBool(params, 'fav'))
+  const [soIgnorados, setSoIgnorados] = useState(() => readBool(params, 'ign'))
+  const [classes, setClasses] = useState<string[]>(() => readArr(params, 'classes'))
   const [sel, setSel] = useState<LocalAgg | null>(null)
   const [busy] = useState<string | null>(null)
   const platforms = usePlatforms()
@@ -68,6 +71,20 @@ export function LocaisMercado() {
     const t = setTimeout(() => setAplicado({ search, valorMin }), 400)
     return () => clearTimeout(t)
   }, [search, valorMin])
+
+  // Filtros viram parâmetros na URL (voltar/F5 mantêm os filtros).
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'q', v: aplicado.search },
+      { k: 'valorMin', v: aplicado.valorMin },
+      { k: 'fonte', v: fonte, def: 'todas' },
+      { k: 'cidade', v: cidade, def: 'todas' },
+      { k: 'uf', v: uf },
+      { k: 'fav', v: soFav },
+      { k: 'ign', v: soIgnorados },
+      { k: 'classes', v: classes },
+    ]), { replace: true })
+  }, [aplicado, fonte, cidade, uf, soFav, soIgnorados, classes, setSearchParams])
 
   const filters: LocalAggFilters = useMemo(() => ({
     search: aplicado.search,

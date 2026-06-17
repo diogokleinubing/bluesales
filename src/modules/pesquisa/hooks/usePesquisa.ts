@@ -949,13 +949,17 @@ export function useCrmNomes(tipo: 'organizador' | 'local'): UseQueryResult<Map<s
     queryFn: async (): Promise<Map<string, string>> => {
       const table = tipo === 'organizador' ? 'organizations' : 'crm_locals'
       const { data, error } = await supabase
-        .from(table).select('id, nome').eq('org_id', orgId!).is('deleted_at', null).limit(100000)
+        .from(table).select('id, nome, aliases').eq('org_id', orgId!).is('deleted_at', null).limit(100000)
       if (error) throw new Error(error.message)
-      // nome normalizado -> id do cadastro (primeiro vence em caso de homônimos).
+      // nome (e aliases) normalizados -> id do cadastro (primeiro vence em homônimos).
       const m = new Map<string, string>()
       for (const r of data ?? []) {
-        const n = norm((r as { nome: string }).nome)
-        if (n && !m.has(n)) m.set(n, (r as { id: string }).id)
+        const row = r as { id: string; nome: string; aliases: string | null }
+        const nomes = [row.nome, ...(row.aliases ? row.aliases.split(',') : [])]
+        for (const raw of nomes) {
+          const n = norm(raw)
+          if (n && !m.has(n)) m.set(n, row.id)
+        }
       }
       return m
     },

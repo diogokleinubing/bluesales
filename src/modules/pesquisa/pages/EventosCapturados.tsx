@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import {
   Download, RefreshCw, ChevronLeft, ChevronRight, X, Mic2, Sparkles, CalendarClock, TrendingUp,
   ChevronUp, ChevronDown, ChevronsUpDown,
@@ -60,27 +61,31 @@ export function EventosCapturados() {
   const sources = useCrawlerSources()
   const sourceMap = useSourceMap()
   const facets = useEventFacets()
+  const [params, setSearchParams] = useSearchParams()
 
-  const [search, setSearch] = useState('')
-  const [searchAplicada, setSearchAplicada] = useState('')
-  const [fonte, setFonte] = useState('todas')
-  const [status, setStatus] = useState<EventStatusFiltro>('ativos')
-  const [cidade, setCidade] = useState('todas')
-  const [categoria, setCategoria] = useState('')
-  const [categoriaAplicada, setCategoriaAplicada] = useState('')
-  const [valorMin, setValorMin] = useState('')
-  const [valorMinAplicado, setValorMinAplicado] = useState('')
-  const [pais, setPais] = useState<PaisFiltro>('brasil')
-  const [uf, setUf] = useState('')
-  const [local, setLocal] = useState('')
-  const [organizador, setOrganizador] = useState('')
-  const [classes, setClasses] = useState<string[]>([])
-  const [favoritos, setFavoritos] = useState(false)
-  const [comArtista, setComArtista] = useState(false)
-  const [comVendas, setComVendas] = useState(false)
-  const [proxSeven, setProxSeven] = useState(false)
-  const [page, setPage] = useState(0)
-  const [sort, setSort] = useState<EventSort | null>(null)
+  const [search, setSearch] = useState(() => readStr(params, 'q'))
+  const [searchAplicada, setSearchAplicada] = useState(() => readStr(params, 'q'))
+  const [fonte, setFonte] = useState(() => readStr(params, 'fonte', 'todas'))
+  const [status, setStatus] = useState<EventStatusFiltro>(() => readStr(params, 'status', 'ativos') as EventStatusFiltro)
+  const [cidade, setCidade] = useState(() => readStr(params, 'cidade', 'todas'))
+  const [categoria, setCategoria] = useState(() => readStr(params, 'categoria'))
+  const [categoriaAplicada, setCategoriaAplicada] = useState(() => readStr(params, 'categoria'))
+  const [valorMin, setValorMin] = useState(() => readStr(params, 'valorMin'))
+  const [valorMinAplicado, setValorMinAplicado] = useState(() => readStr(params, 'valorMin'))
+  const [pais, setPais] = useState<PaisFiltro>(() => readStr(params, 'pais', 'brasil') as PaisFiltro)
+  const [uf, setUf] = useState(() => readStr(params, 'uf'))
+  const [local, setLocal] = useState(() => readStr(params, 'local'))
+  const [organizador, setOrganizador] = useState(() => readStr(params, 'organizador'))
+  const [classes, setClasses] = useState<string[]>(() => readArr(params, 'classes'))
+  const [favoritos, setFavoritos] = useState(() => readBool(params, 'fav'))
+  const [comArtista, setComArtista] = useState(() => readBool(params, 'art'))
+  const [comVendas, setComVendas] = useState(() => readBool(params, 'vendas'))
+  const [proxSeven, setProxSeven] = useState(() => readBool(params, 'prox7'))
+  const [page, setPage] = useState(() => Number(readStr(params, 'page', '0')) || 0)
+  const [sort, setSort] = useState<EventSort | null>(() => {
+    const col = readStr(params, 'sortCol')
+    return col ? { col: col as EventSortCol, dir: readStr(params, 'sortDir', 'asc') === 'desc' ? 'desc' : 'asc' } : null
+  })
   // Clica no cabeçalho: asc -> desc -> volta ao padrão (recência).
   const toggleSort = (col: EventSortCol) =>
     setSort((s) => (s?.col !== col ? { col, dir: 'asc' } : s.dir === 'asc' ? { col, dir: 'desc' } : null))
@@ -103,16 +108,30 @@ export function EventosCapturados() {
   const [exporting, setExporting] = useState(false)
   const [detecting, setDetecting] = useState(false)
 
-  // Deep-link a partir do relatório de uma fonte (?fonte=&uf=&cidade=&local=&organizador=).
-  const [params] = useSearchParams()
+  // Filtros viram parâmetros na URL (voltar/F5 mantêm os filtros). Também cobre
+  // o deep-link de relatórios (?fonte=&uf=&cidade=&local=&organizador=).
   useEffect(() => {
-    if (params.get('fonte')) setFonte(params.get('fonte')!)
-    if (params.get('cidade')) setCidade(params.get('cidade')!)
-    setUf(params.get('uf') ?? '')
-    setLocal(params.get('local') ?? '')
-    setOrganizador(params.get('organizador') ?? '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params])
+    setSearchParams(buildSearchParams([
+      { k: 'q', v: searchAplicada },
+      { k: 'fonte', v: fonte, def: 'todas' },
+      { k: 'status', v: status, def: 'ativos' },
+      { k: 'cidade', v: cidade, def: 'todas' },
+      { k: 'categoria', v: categoriaAplicada },
+      { k: 'valorMin', v: valorMinAplicado },
+      { k: 'pais', v: pais, def: 'brasil' },
+      { k: 'uf', v: uf },
+      { k: 'local', v: local },
+      { k: 'organizador', v: organizador },
+      { k: 'classes', v: classes },
+      { k: 'fav', v: favoritos },
+      { k: 'art', v: comArtista },
+      { k: 'vendas', v: comVendas },
+      { k: 'prox7', v: proxSeven },
+      { k: 'sortCol', v: sort?.col ?? '' },
+      { k: 'sortDir', v: sort?.dir ?? '' },
+      { k: 'page', v: page > 0 ? String(page) : '' },
+    ]), { replace: true })
+  }, [searchAplicada, fonte, status, cidade, categoriaAplicada, valorMinAplicado, pais, uf, local, organizador, classes, favoritos, comArtista, comVendas, proxSeven, sort, page, setSearchParams])
 
   // Debounce da busca (evita 1 query por tecla).
   useEffect(() => {
@@ -153,8 +172,13 @@ export function EventosCapturados() {
     [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven],
   )
 
-  // Qualquer mudança de filtro volta pra primeira página.
-  useEffect(() => { setPage(0) }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, sort])
+  // Qualquer mudança de filtro volta pra primeira página (exceto na 1ª render,
+  // para preservar a página vinda da URL).
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return }
+    setPage(0)
+  }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, sort])
 
   const ignoradosLocais = useIgnorados('local')
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page, EVENTS_PAGE_SIZE, sort)

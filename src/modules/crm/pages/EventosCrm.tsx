@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { readStr, readArr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -72,12 +74,23 @@ export function EventosCrm() {
     [platforms.data],
   )
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('todos')
-  const [oppFilter, setOppFilter] = useState<string>('todos')
-  const [classesSel, setClassesSel] = useState<string[]>([])
-  const [stageFilter, setStageFilter] = useState<string>(ALL)
-  const [gmvMin, setGmvMin] = useState('')
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [statusFilter, setStatusFilter] = useState<string>(() => readStr(params, 'status', 'todos'))
+  const [oppFilter, setOppFilter] = useState<string>(() => readStr(params, 'opportunity', 'todos'))
+  const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
+  const [stageFilter, setStageFilter] = useState<string>(() => readStr(params, 'stage', ALL))
+  const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'search', v: search },
+      { k: 'status', v: statusFilter, def: 'todos' },
+      { k: 'opportunity', v: oppFilter, def: 'todos' },
+      { k: 'classes', v: classesSel },
+      { k: 'stage', v: stageFilter, def: ALL },
+      { k: 'gmvMin', v: gmvMin },
+    ]), { replace: true })
+  }, [search, statusFilter, oppFilter, classesSel, stageFilter, gmvMin, setSearchParams])
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [f, setF] = useState({ ...EMPTY_FORM })

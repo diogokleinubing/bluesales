@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { Star, Ban, Link2, MoreVertical, Mic2 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem,
@@ -44,18 +46,19 @@ export function OrganizadoresMercado() {
   const orgId = useCrmOrgId()
   const { profile } = useProfile()
   const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [valorMin, setValorMin] = useState('')
-  const [fonte, setFonte] = useState('todas')
-  const [cidade, setCidade] = useState('todas')
-  const [uf, setUf] = useState('')
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'q'))
+  const [valorMin, setValorMin] = useState(() => readStr(params, 'valorMin'))
+  const [fonte, setFonte] = useState(() => readStr(params, 'fonte', 'todas'))
+  const [cidade, setCidade] = useState(() => readStr(params, 'cidade', 'todas'))
+  const [uf, setUf] = useState(() => readStr(params, 'uf'))
   const facets = useEventFacets()
-  const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
-  const [soFav, setSoFav] = useState(false)
-  const [soIgnorados, setSoIgnorados] = useState(false)
-  const [classes, setClasses] = useState<string[]>([])
-  const [fitMin, setFitMin] = useState('')
-  const [ordFit, setOrdFit] = useState(false)
+  const [aplicado, setAplicado] = useState(() => ({ search: readStr(params, 'q'), valorMin: readStr(params, 'valorMin') }))
+  const [soFav, setSoFav] = useState(() => readBool(params, 'fav'))
+  const [soIgnorados, setSoIgnorados] = useState(() => readBool(params, 'ign'))
+  const [classes, setClasses] = useState<string[]>(() => readArr(params, 'classes'))
+  const [fitMin, setFitMin] = useState(() => readStr(params, 'fitMin'))
+  const [ordFit, setOrdFit] = useState(() => readBool(params, 'ordFit'))
   const fitRules = useFitRules()
   const [sel, setSel] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -67,6 +70,22 @@ export function OrganizadoresMercado() {
     const t = setTimeout(() => setAplicado({ search, valorMin }), 400)
     return () => clearTimeout(t)
   }, [search, valorMin])
+
+  // Filtros viram parâmetros na URL (voltar/F5 mantêm os filtros).
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'q', v: aplicado.search },
+      { k: 'valorMin', v: aplicado.valorMin },
+      { k: 'fonte', v: fonte, def: 'todas' },
+      { k: 'cidade', v: cidade, def: 'todas' },
+      { k: 'uf', v: uf },
+      { k: 'fav', v: soFav },
+      { k: 'ign', v: soIgnorados },
+      { k: 'classes', v: classes },
+      { k: 'fitMin', v: fitMin },
+      { k: 'ordFit', v: ordFit },
+    ]), { replace: true })
+  }, [aplicado, fonte, cidade, uf, soFav, soIgnorados, classes, fitMin, ordFit, setSearchParams])
 
   const filters: OrganizerFilters = useMemo(() => ({
     search: aplicado.search,

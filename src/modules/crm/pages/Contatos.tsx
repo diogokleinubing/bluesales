@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { readStr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -39,8 +40,15 @@ export function Contatos() {
   const orgId = useCrmOrgId()
   const { data, isLoading } = useContacts()
   const { stages } = useFunnel('relacionamento')
-  const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState(ALL)
+  const [params, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(() => readStr(params, 'search'))
+  const [stageFilter, setStageFilter] = useState(() => readStr(params, 'stage', ALL))
+  useEffect(() => {
+    setSearchParams(buildSearchParams([
+      { k: 'search', v: search },
+      { k: 'stage', v: stageFilter, def: ALL },
+    ]), { replace: true })
+  }, [search, stageFilter, setSearchParams])
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState('')
 
