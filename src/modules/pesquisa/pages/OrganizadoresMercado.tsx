@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Star, Ban, Link2, MoreVertical } from 'lucide-react'
+import { Star, Ban, Link2, MoreVertical, Mic2 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -52,6 +52,7 @@ export function OrganizadoresMercado() {
   const [aplicado, setAplicado] = useState({ search: '', valorMin: '' })
   const [soFav, setSoFav] = useState(false)
   const [soIgnorados, setSoIgnorados] = useState(false)
+  const [comArtista, setComArtista] = useState(false)
   const [fitMin, setFitMin] = useState('')
   const [ordFit, setOrdFit] = useState(false)
   const fitRules = useFitRules()
@@ -73,7 +74,8 @@ export function OrganizadoresMercado() {
     fonte,
     cidade,
     uf,
-  }), [aplicado, fonte, cidade, uf])
+    comArtista,
+  }), [aplicado, fonte, cidade, uf, comArtista])
 
   // Cidades como opções de autocomplete (id = "cidade|uf" usado no filtro).
   const cidadeOptions: Lookup[] = useMemo(
@@ -243,6 +245,17 @@ export function OrganizadoresMercado() {
             )}
           >
             <Ban className="size-4" /> Ignorados
+          </button>
+          <button
+            type="button"
+            onClick={() => setComArtista((v) => !v)}
+            title="Apenas com eventos que têm artista mapeado"
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              comArtista ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <Mic2 className="size-4" /> Com Artista
           </button>
           <Input type="number" min={0} max={100} value={fitMin} onChange={(e) => setFitMin(e.target.value)}
             placeholder="Fit mín." className={`${TOOLBAR_TRIGGER} w-[110px]`} />

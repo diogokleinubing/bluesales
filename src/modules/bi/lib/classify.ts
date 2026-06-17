@@ -93,7 +93,7 @@ function isWordChar(c: string): boolean {
  * (espaço, pontuação, &, |, /, etc.). Evita falsos positivos como
  * "suel" dentro de "consuelo". Ambos já normalizados (sem acento, minúsculos).
  */
-function matchesKeyword(textNorm: string, kwNorm: string): boolean {
+export function matchesKeyword(textNorm: string, kwNorm: string): boolean {
   if (!kwNorm) return false
   let from = 0
   for (;;) {

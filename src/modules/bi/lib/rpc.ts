@@ -470,6 +470,10 @@ export async function refreshPaymentsRollup(): Promise<void> {
   await rpc<null>('refresh_payments_rollup', {})
 }
 
+export async function refreshParcelamentoRollup(): Promise<void> {
+  await rpc<null>('refresh_parcelamento_rollup', {})
+}
+
 export async function biPaymentYears(orgId: string): Promise<number[]> {
   return rpc<number[]>('bi_payment_years', { p_org: orgId })
 }
@@ -497,6 +501,37 @@ export async function biPaymentsGroup(
     p_dim: dim,
     p_juros: juros,
     p_months: monthsArg(months),
+  })
+}
+
+export type ParcelamentoDim = 'organizador' | 'uf' | 'evento'
+
+export interface ParcelamentoRow {
+  nome: string
+  parcelas_media: number | null
+  receita_juros: number
+  gmv: number
+}
+
+/** Parcelamento com juros agregado por organizador / UF / evento. */
+export async function biParcelamento(
+  orgId: string,
+  year: number,
+  pdv: Pdv[],
+  dim: ParcelamentoDim,
+  months: number[] = [],
+  limit: number | null = null,
+  filtros?: { organizador?: string | null; uf?: string | null },
+): Promise<ParcelamentoRow[]> {
+  return rpc<ParcelamentoRow[]>('bi_parcelamento', {
+    p_org: orgId,
+    p_year: year,
+    p_pdv: pdv.length > 0 ? pdv : null,
+    p_dim: dim,
+    p_months: monthsArg(months),
+    p_limit: limit,
+    p_organizador: filtros?.organizador ?? null,
+    p_uf: filtros?.uf ?? null,
   })
 }
 

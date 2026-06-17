@@ -7,6 +7,7 @@ import {
   pruneRollupYear,
   refreshRollupCodigos,
   refreshPaymentsRollup,
+  refreshParcelamentoRollup,
 } from '../lib/rpc'
 import {
   parseCodigo,
@@ -294,6 +295,7 @@ export async function runImport({
   if (build.hasSales) {
     onProgress?.({ phase: 'Consolidando pagamentos', current: 0, total: 1 })
     await refreshPaymentsRollup()
+    await refreshParcelamentoRollup()
   }
 
   return {

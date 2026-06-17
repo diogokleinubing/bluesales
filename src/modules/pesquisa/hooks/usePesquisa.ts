@@ -164,6 +164,7 @@ export interface OrganizerFilters {
   fonte: string // slug | 'todas'
   cidade: string // 'cidade|uf' | 'todas'
   uf: string // UF | ''
+  comArtista?: boolean // só os que têm eventos com artista mapeado
 }
 
 /** Deriva (cidade, uf) para as RPCs: a UF vem do select ou do sufixo da cidade. */
@@ -183,6 +184,7 @@ export function useCrawledOrganizers(filters: OrganizerFilters): UseQueryResult<
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
+        p_com_artista: filters.comArtista ? true : null,
         ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
@@ -197,6 +199,7 @@ export interface LocalAggFilters {
   fonte: string
   cidade: string // 'cidade|uf' | 'todas'
   uf: string // UF | ''
+  comArtista?: boolean // só os que têm eventos com artista mapeado
 }
 
 export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<LocalAgg[]> {
@@ -210,6 +213,7 @@ export function useCrawledLocals(filters: LocalAggFilters): UseQueryResult<Local
         p_search: filters.search.trim() || null,
         p_valor_min: filters.valorMin,
         p_fonte: filters.fonte !== 'todas' ? filters.fonte : null,
+        p_com_artista: filters.comArtista ? true : null,
         ...cidadeUfParams(filters.cidade, filters.uf),
       })
       if (error) throw new Error(error.message)
@@ -232,18 +236,16 @@ export function useEventosDoOrganizador(
     queryFn: async (): Promise<CrawledEventRow[]> => {
       let q = supabase
         .from('crawled_events')
-        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
+        .select(fonteSlug
+          ? '*, crawler_sources!inner(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))'
+          : '*, crawler_sources(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .ilike('organizador_raw', nome!)
       if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
       const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)
-      return (data ?? []).map((e: Record<string, unknown>) => ({
-        ...(e as object),
-        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
-        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
-      })) as CrawledEventRow[]
+      return (data ?? []).map(mapEventRow)
     },
   })
 }
@@ -263,18 +265,16 @@ export function useEventosDoLocal(
     queryFn: async (): Promise<CrawledEventRow[]> => {
       let q = supabase
         .from('crawled_events')
-        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
+        .select(fonteSlug
+          ? '*, crawler_sources!inner(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))'
+          : '*, crawler_sources(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .ilike('local_raw', nome!)
       if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
       const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)
-      const rows = (data ?? []).map((e: Record<string, unknown>) => ({
-        ...(e as object),
-        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
-        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
-      })) as CrawledEventRow[]
+      const rows = (data ?? []).map(mapEventRow)
       // Refina pela cidade combinada (mesma chave usada no agregado).
       return rows.filter((e) => {
         const c = e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : null
@@ -298,18 +298,16 @@ export function useEventosDoLocalNome(
     queryFn: async (): Promise<CrawledEventRow[]> => {
       let q = supabase
         .from('crawled_events')
-        .select(fonteSlug ? '*, crawler_sources!inner(slug, nome)' : '*, crawler_sources(slug, nome)')
+        .select(fonteSlug
+          ? '*, crawler_sources!inner(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))'
+          : '*, crawler_sources(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .ilike('local_raw', nome!)
       if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
       const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)
-      return (data ?? []).map((e: Record<string, unknown>) => ({
-        ...(e as object),
-        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
-        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
-      })) as CrawledEventRow[]
+      return (data ?? []).map(mapEventRow)
     },
   })
 }
@@ -324,18 +322,14 @@ export function useEventosDoLocalChaves(chaves: string[] | null): UseQueryResult
     queryFn: async (): Promise<CrawledEventRow[]> => {
       const { data, error } = await supabase
         .from('crawled_events')
-        .select('*, crawler_sources(slug, nome)')
+        .select('*, crawler_sources(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
         .in('local_chave', chaves!)
         .order('data_inicio', { ascending: true })
         .limit(1000)
       if (error) throw new Error(error.message)
-      return (data ?? []).map((e: Record<string, unknown>) => ({
-        ...(e as object),
-        source_slug: (e.crawler_sources as { slug?: string } | null)?.slug ?? null,
-        source_nome: (e.crawler_sources as { nome?: string } | null)?.nome ?? null,
-      })) as CrawledEventRow[]
+      return (data ?? []).map(mapEventRow)
     },
   })
 }

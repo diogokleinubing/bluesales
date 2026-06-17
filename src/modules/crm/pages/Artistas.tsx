@@ -20,18 +20,20 @@ import {
   useArtists, ARTIST_CLASSES,
   type ArtistRow, type ArtistClasse,
 } from '../hooks/useCadastros'
+import { useGeneroOptions, useSegmentOptions } from '../hooks/useCrmLookups'
 import { ListView, ToolbarSearch } from '../components/ListView'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { AtracaoDialog } from '../components/AtracaoDialog'
 
 const NONE = '__none__'
 
-type SortKey = 'nome' | 'classe' | 'genero' | 'organizacao' | 'plataforma'
+type SortKey = 'nome' | 'classe' | 'segmento' | 'genero' | 'organizacao' | 'plataforma'
 
 /** Valor ordenável da coluna; índice p/ classe (ordem natural), texto p/ resto. */
 function sortVal(a: ArtistRow, k: SortKey): string | number {
   switch (k) {
     case 'classe': { const i = ARTIST_CLASSES.indexOf(a.classificacao as ArtistClasse); return i < 0 ? 99 : i }
+    case 'segmento': return (a.segmento ?? '').toLowerCase()
     case 'genero': return (a.genero_nome ?? '').toLowerCase()
     case 'organizacao': return (a.organization_nome ?? '').toLowerCase()
     case 'plataforma': return (a.platform_nome ?? '').toLowerCase()
@@ -39,10 +41,21 @@ function sortVal(a: ArtistRow, k: SortKey): string | number {
   }
 }
 
+/** Passa no filtro de coluna: 'all' = todos, NONE = vazios, senão igualdade. */
+function passaFiltro(val: string | null, filtro: string): boolean {
+  if (filtro === 'all') return true
+  if (filtro === NONE) return !val
+  return val === filtro
+}
+
 export function Artistas() {
   const { data, isLoading } = useArtists()
+  const generos = useGeneroOptions()
+  const segmentos = useSegmentOptions()
   const [search, setSearch] = useState('')
   const [classeFiltro, setClasseFiltro] = useState<string>('all')
+  const [segmentoFiltro, setSegmentoFiltro] = useState<string>('all')
+  const [generoFiltro, setGeneroFiltro] = useState<string>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' })
   const [open, setOpen] = useState(false)
   const [agenda, setAgenda] = useState<ArtistRow | null>(null)
@@ -52,9 +65,11 @@ export function Artistas() {
     const q = search.trim().toLowerCase()
     const filtered = (data ?? []).filter((a) => {
       if (q && !a.nome.toLowerCase().includes(q)) return false
-      if (classeFiltro === 'all') return true
-      if (classeFiltro === NONE) return !a.classificacao
-      return a.classificacao === classeFiltro
+      return (
+        passaFiltro(a.classificacao, classeFiltro) &&
+        passaFiltro(a.segmento, segmentoFiltro) &&
+        passaFiltro(a.genero_nome, generoFiltro)
+      )
     })
     const mul = sort.dir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
@@ -65,7 +80,7 @@ export function Artistas() {
       if (va > vb) return 1 * mul
       return 0
     })
-  }, [data, search, classeFiltro, sort])
+  }, [data, search, classeFiltro, segmentoFiltro, generoFiltro, sort])
 
   // Clique simples na linha abre a agenda; duplo clique abre o editar. Usa um
   // timer p/ não disparar a agenda quando o usuário dá duplo clique.
@@ -112,6 +127,22 @@ export function Artistas() {
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome…" />
+            <Select value={segmentoFiltro} onValueChange={setSegmentoFiltro}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Segmento" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os segmentos</SelectItem>
+                {(segmentos.data ?? []).map((s) => <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>)}
+                <SelectItem value={NONE}>(sem segmento)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={generoFiltro} onValueChange={setGeneroFiltro}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Gênero" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os gêneros</SelectItem>
+                {(generos.data ?? []).map((g) => <SelectItem key={g.id} value={g.nome}>{g.nome}</SelectItem>)}
+                <SelectItem value={NONE}>(sem gênero)</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={classeFiltro} onValueChange={setClasseFiltro}>
               <SelectTrigger className="w-[180px]"><SelectValue placeholder="Classe" /></SelectTrigger>
               <SelectContent>
@@ -127,6 +158,7 @@ export function Artistas() {
           <TableHeader><TableRow>
             <SortHead k="nome">Nome</SortHead>
             <SortHead k="classe">Classe</SortHead>
+            <SortHead k="segmento">Segmento</SortHead>
             <SortHead k="genero">Gênero</SortHead>
             <SortHead k="organizacao">Organização</SortHead>
             <SortHead k="plataforma">Plataforma</SortHead>
@@ -135,14 +167,15 @@ export function Artistas() {
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhuma atração.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhuma atração.</TableCell></TableRow>
             ) : rows.map((a) => (
               <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)} onDoubleClick={() => onRowDouble(a)}>
                 <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={a.nome}>{a.nome}</div></TableCell>
                 <TableCell><ClasseBadge classe={a.classificacao} /></TableCell>
+                <TableCell>{a.segmento ?? '—'}</TableCell>
                 <TableCell>{a.genero_nome ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{a.organization_nome ?? '—'}</TableCell>
                 <TableCell>{a.platform_nome ? <Badge variant="outline">{a.platform_nome}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
