@@ -191,6 +191,11 @@ async function getCfg(db: ReturnType<typeof adminClient>) {
   return (data?.config ?? {}) as Record<string, unknown>
 }
 
+async function saveCfg(db: ReturnType<typeof adminClient>, patch: Record<string, unknown>) {
+  const cur = await getCfg(db)
+  await db.from('crawler_sources').update({ config: { ...cur, ...patch } }).eq('slug', 'minhaentrada')
+}
+
 export const minhaEntradaScraper: Scraper = async (ctx) => {
   const db = adminClient()
   const cfg = await getCfg(db)
@@ -201,8 +206,22 @@ export const minhaEntradaScraper: Scraper = async (ctx) => {
   if (!sess) { ctx.notas?.push('Minha Entrada: falha ao abrir sessão/CSRF'); return [] }
 
   const todos = await descobrirSlugs(sess.sessao, sess.html, maxPaginas)
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
-  const alvo = todos.filter((slug) => !known.has(`${HOST}/evento/${slug}`)).slice(0, cap)
+
+  // Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços de
+  // `cap`, até o fim — então volta a 0). Coleta normal pega só os ainda-novos.
+  let alvo: string[]
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = todos.slice(off, off + cap)
+    const novoOff = off + alvo.length
+    const fim = novoOff >= todos.length || alvo.length === 0
+    await saveCfg(db, { reproc_offset: fim ? 0 : novoOff })
+    ctx.notas?.push(`Minha Entrada: reprocessando ${off}–${novoOff} de ${todos.length}${fim ? ' (fim → reinicia)' : ''}`)
+  } else {
+    const known = await getKnown(db)
+    alvo = todos.filter((slug) => !known.has(`${HOST}/evento/${slug}`)).slice(0, cap)
+    ctx.notas?.push(`Minha Entrada: descobertos ${todos.length}, novos ${alvo.length}`)
+  }
 
   const out: RawEvent[] = []
   for (let i = 0; i < alvo.length; i += BATCH) {
@@ -211,7 +230,6 @@ export const minhaEntradaScraper: Scraper = async (ctx) => {
     out.push(...mapped.filter((e): e is RawEvent => e !== null))
   }
 
-  ctx.notas?.push(`Minha Entrada: descobertos ${todos.length}, novos ${alvo.length}, coletados ${out.length}`)
-  console.log(`[minhaentrada] descobertos=${todos.length} alvo=${alvo.length} coletados=${out.length}`)
+  console.log(`[minhaentrada] descobertos=${todos.length} alvo=${alvo.length} coletados=${out.length} reproc=${ctx.reprocessar}`)
   return out
 }
