@@ -254,7 +254,8 @@ async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>
 export const megaBilheteriaScraper: Scraper = async (ctx) => {
   const db = adminClient()
   const src = await getSource(db)
-  const cap = Math.max(1, Number((src?.cfg ?? {}).detalhes_por_run ?? MAX_DETALHES))
+  const cfg = src?.cfg ?? {}
+  const cap = Math.max(1, Number(cfg.detalhes_por_run ?? MAX_DETALHES))
 
   const txt = await get(LISTA)
   if (!txt) { ctx.notas?.push('Mega Bilheteria: listagem vazia (HTTP?)'); return [] }
@@ -264,8 +265,20 @@ export const megaBilheteriaScraper: Scraper = async (ctx) => {
   // Só 'e' e 't' (os 'g' são aglutinadores multi-cidade sem cidade/data concreta).
   const elegiveis = itens.filter((it) => it && (it.tipo === 'e' || it.tipo === 't'))
 
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
-  const alvo = elegiveis.filter((it) => !known.has(urlCanonica(it))).slice(0, cap)
+  // Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços de
+  // `cap`, até o fim → volta a 0). Coleta normal pega só os ainda-novos.
+  let alvo: Item[]
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = elegiveis.slice(off, off + cap)
+    const novoOff = off + alvo.length
+    const fim = novoOff >= elegiveis.length || alvo.length === 0
+    if (src) await db.from('crawler_sources').update({ config: { ...cfg, reproc_offset: fim ? 0 : novoOff } }).eq('id', src.id)
+    ctx.notas?.push(`Mega Bilheteria: reprocessando ${off}–${novoOff} de ${elegiveis.length}${fim ? ' (fim → reinicia)' : ''}`)
+  } else {
+    const known = await getKnown(db)
+    alvo = elegiveis.filter((it) => !known.has(urlCanonica(it))).slice(0, cap)
+  }
 
   const out: RawEvent[] = []
   for (let i = 0; i < alvo.length; i += BATCH) {

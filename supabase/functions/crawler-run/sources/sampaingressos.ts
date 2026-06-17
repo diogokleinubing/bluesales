@@ -282,9 +282,20 @@ export const sampaIngressosScraper: Scraper = async (ctx) => {
     porCat.push(`${cat}=${n}`)
   }
 
-  // 2) Skip-known (salvo reprocessar) e teto de enriquecimento por execução.
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
-  const alvo = candidatos.filter((c) => !known.has(urlDe(c.e))).slice(0, cap)
+  // 2) Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços
+  // de `cap`, até o fim → volta a 0). Coleta normal pega só os ainda-novos.
+  let alvo: typeof candidatos
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = candidatos.slice(off, off + cap)
+    const novoOff = off + alvo.length
+    const fim = novoOff >= candidatos.length || alvo.length === 0
+    await db.from('crawler_sources').update({ config: { ...cfg, reproc_offset: fim ? 0 : novoOff } }).eq('slug', 'sampaingressos')
+    ctx.notas?.push(`Sampa Ingressos: reprocessando ${off}–${novoOff} de ${candidatos.length}${fim ? ' (fim → reinicia)' : ''}`)
+  } else {
+    const known = await getKnown(db)
+    alvo = candidatos.filter((c) => !known.has(urlDe(c.e))).slice(0, cap)
+  }
 
   // 3) Enriquece com as sessões reais (data/taxa) em lotes.
   const out: RawEvent[] = []

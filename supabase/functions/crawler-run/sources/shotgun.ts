@@ -210,11 +210,25 @@ export const shotgunScraper: Scraper = async (ctx) => {
     }
   }
 
-  // Skip-known (salvo reprocessar) e teto de detalhes por execução.
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
-  const alvo = candidatos
-    .filter((c) => !known.has(`${HOST}/pt-br/events/${c.slug}`))
-    .slice(0, MAX_DETALHES)
+  // Normal: pula conhecidos, detalha os primeiros MAX_DETALHES e avança o cursor.
+  // Reprocessar: CAMINHA por um offset DENTRO do bloco (recoleta os já existentes
+  // em pedaços), segurando o city_cursor até esgotar o bloco — só então avança
+  // para as próximas cidades (e zera o offset).
+  let alvo: { slug: string; cidade: string }[]
+  let cursorSalvar = prox
+  const patch: Record<string, unknown> = {}
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = candidatos.slice(off, off + MAX_DETALHES)
+    const fimBloco = off + alvo.length >= candidatos.length || alvo.length === 0
+    if (!fimBloco) cursorSalvar = start // segura o bloco
+    patch.reproc_offset = fimBloco ? 0 : off + alvo.length
+  } else {
+    const known = await getKnown(db)
+    alvo = candidatos
+      .filter((c) => !known.has(`${HOST}/pt-br/events/${c.slug}`))
+      .slice(0, MAX_DETALHES)
+  }
 
   const out: RawEvent[] = []
   for (let i = 0; i < alvo.length; i += BATCH) {
@@ -223,12 +237,13 @@ export const shotgunScraper: Scraper = async (ctx) => {
     for (const ev of mapped) if (ev) out.push(ev)
   }
 
-  if (src) await db.from('crawler_sources').update({ config: { ...cfg, city_cursor: prox } }).eq('id', src.id)
+  patch.city_cursor = cursorSalvar
+  if (src) await db.from('crawler_sources').update({ config: { ...cfg, ...patch } }).eq('id', src.id)
   const faixa = bloco.map((c) => c.name).join(', ')
   ctx.notas?.push(
     `Shotgun: cidades ${start + 1}-${start + bloco.length}/${cidades.length} (${faixa}); ` +
-    `candidatos=${candidatos.length}, detalhes=${alvo.length}; city_cursor ${start}->${prox}`,
+    `candidatos=${candidatos.length}, detalhes=${alvo.length}; city_cursor ${start}->${cursorSalvar}${ctx.reprocessar ? ' (reproc)' : ''}`,
   )
-  console.log(`[shotgun] cidades ${start}->${prox} candidatos=${candidatos.length} detalhes=${alvo.length} novos=${out.length}`)
+  console.log(`[shotgun] cidades ${start}->${cursorSalvar} candidatos=${candidatos.length} detalhes=${alvo.length} novos=${out.length} reproc=${!!ctx.reprocessar}`)
   return out
 }

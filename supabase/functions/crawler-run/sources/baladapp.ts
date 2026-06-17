@@ -79,8 +79,69 @@ async function fetchInstagram(url: string): Promise<string | null> {
   }
 }
 
+/** Preços do ingresso via API da vitrine (valor_venda; taxa é à parte). */
+async function fetchPrecos(
+  anuncioId: number,
+): Promise<{ min: number | null; max: number | null; taxaPct: number | null }> {
+  try {
+    const res = await fetch(
+      `https://vitrine.baladapp.com.br/api/v1/anuncios/${anuncioId}/vitrine?modo=evento`,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(12000) },
+    )
+    if (!res.ok) return { min: null, max: null, taxaPct: null }
+    const json = await res.json()
+    const opcoes = (json?.anuncio_opcoes ?? []) as Array<{
+      valor_venda?: string; valor?: string; taxa?: number; tipo?: string
+    }>
+    const vals: number[] = []
+    const taxas: number[] = []
+    for (const o of opcoes) {
+      if (o?.tipo === 'agrupador') continue // combos/mesas (ex.: bistrô) não são ingresso unitário
+      const v = Number(o?.valor_venda ?? o?.valor)
+      if (!Number.isFinite(v) || v <= 0) continue
+      vals.push(v)
+      const t = Number(o?.taxa ?? 0)
+      if (Number.isFinite(t) && t > 0) taxas.push((t / v) * 100)
+    }
+    if (vals.length) {
+      const taxaPct = taxas.length ? taxas.reduce((a, b) => a + b, 0) / taxas.length : null
+      return { min: Math.min(...vals), max: Math.max(...vals), taxaPct }
+    }
+
+    // Fallback: alguns anúncios expõem os preços só em tipo_opcoes (faixas).
+    const tipos = (json?.tipo_opcoes ?? []) as Array<{
+      menor_valor_venda?: string; maior_valor_venda?: string; menor_valor?: string; maior_valor?: string
+    }>
+    const mins: number[] = []
+    const maxs: number[] = []
+    for (const t of tipos) {
+      const lo = Number(t?.menor_valor_venda ?? t?.menor_valor)
+      const hi = Number(t?.maior_valor_venda ?? t?.maior_valor)
+      if (Number.isFinite(lo) && lo > 0) mins.push(lo)
+      if (Number.isFinite(hi) && hi > 0) maxs.push(hi)
+    }
+    const todos = [...mins, ...maxs]
+    if (todos.length) return { min: Math.min(...todos), max: Math.max(...todos), taxaPct: null }
+
+    return { min: null, max: null, taxaPct: null }
+  } catch {
+    return { min: null, max: null, taxaPct: null }
+  }
+}
+
+async function getCfg(db: ReturnType<typeof adminClient>) {
+  const { data } = await db.from('crawler_sources').select('config').eq('slug', 'baladapp').maybeSingle()
+  return (data?.config ?? {}) as Record<string, unknown>
+}
+async function saveCfg(db: ReturnType<typeof adminClient>, patch: Record<string, unknown>) {
+  const cur = await getCfg(db)
+  await db.from('crawler_sources').update({ config: { ...cur, ...patch } }).eq('slug', 'baladapp')
+}
+
 export const baladAppScraper: Scraper = async (ctx) => {
   const db = adminClient()
+  const cfg = await getCfg(db)
+  const cap = Math.max(1, Number(cfg.detalhes_por_run ?? MAX_DET))
   const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
 
   let anuncios: Anuncio[] = []
@@ -102,27 +163,50 @@ export const baladAppScraper: Scraper = async (ctx) => {
 
   // Novos (skip-forever): id + uri + título e ainda não coletados.
   const novos = anuncios.filter((a) => a?.id && a?.uri && a.evento?.titulo && !known.has(eventoUrl(a)))
-  console.log(`[baladapp] anuncios=${anuncios.length} novos=${novos.length}`)
 
-  // Instagram só para os primeiros MAX_DET (CPU/educação com a fonte).
+  // Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços de
+  // `cap`, até o fim → volta a 0) e emite só o pedaço (preços frescos). Coleta
+  // normal pega todos os novos e detalha só os primeiros `cap`.
+  let alvo: Anuncio[]
+  let emitir: Anuncio[]
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = novos.slice(off, off + cap)
+    const novoOff = off + alvo.length
+    const fim = novoOff >= novos.length || alvo.length === 0
+    await saveCfg(db, { reproc_offset: fim ? 0 : novoOff })
+    ctx.notas?.push(`BaladaApp: reprocessando ${off}–${novoOff} de ${novos.length}${fim ? ' (fim → reinicia)' : ''}`)
+    emitir = alvo
+  } else {
+    alvo = novos.slice(0, cap)
+    emitir = novos
+  }
+  console.log(`[baladapp] anuncios=${anuncios.length} novos=${novos.length} alvo=${alvo.length} reproc=${ctx.reprocessar}`)
+
+  // Instagram (HTML) + preços (API vitrine) só para o `alvo`.
   const instaByUrl = new Map<string, string | null>()
-  const aDetalhar = novos.slice(0, MAX_DET)
+  const precoByUrl = new Map<string, { min: number | null; max: number | null; taxaPct: number | null }>()
+  const aDetalhar = alvo
   const BATCH = 6
   for (let i = 0; i < aDetalhar.length; i += BATCH) {
     const slice = aDetalhar.slice(i, i + BATCH)
     await Promise.all(slice.map(async (a) => {
-      instaByUrl.set(eventoUrl(a), await fetchInstagram(eventoUrl(a)))
+      const url = eventoUrl(a)
+      const [insta, precos] = await Promise.all([fetchInstagram(url), fetchPrecos(a.id)])
+      instaByUrl.set(url, insta)
+      precoByUrl.set(url, precos)
     }))
   }
 
   const out: RawEvent[] = []
-  for (const a of novos) {
+  for (const a of emitir) {
     const url = eventoUrl(a)
     const ev = a.evento ?? {}
     const loc = ev.local ?? {}
     const { cidade, uf } = parseCidadeUf(loc?.cidade_estado)
     const ocultarLocal = ev.ocultar_local || loc?.ficticio
     const ig = instaByUrl.get(url) ?? null
+    const precos = precoByUrl.get(url) ?? { min: null, max: null, taxaPct: null }
     out.push({
       url_evento: url,
       nome: ev.titulo!,
@@ -134,9 +218,9 @@ export const baladAppScraper: Scraper = async (ctx) => {
       cidade,
       uf,
       pais: 'Brasil',
-      preco_min: null,
-      preco_max: null,
-      taxa_pct: null,
+      preco_min: precos.min,
+      preco_max: precos.max,
+      taxa_pct: precos.taxaPct,
       gratuito: false,
       online: false,
       categoria: null,

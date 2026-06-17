@@ -239,9 +239,20 @@ export const clubeDoIngressoScraper: Scraper = async (ctx) => {
     return []
   }
 
-  // Skip-known (salvo reprocessar) e teto de detalhes por execução.
-  const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
-  const alvo = slugs.filter((s) => !known.has(urlDe(s))).slice(0, cap)
+  // Reprocessar CAMINHA por um offset (recoleta os já existentes, em pedaços de
+  // `cap`, até o fim → volta a 0). Coleta normal pega só os ainda-novos.
+  let alvo: string[]
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    alvo = slugs.slice(off, off + cap)
+    const novoOff = off + alvo.length
+    const fim = novoOff >= slugs.length || alvo.length === 0
+    if (src) await db.from('crawler_sources').update({ config: { ...cfg, reproc_offset: fim ? 0 : novoOff } }).eq('id', src.id)
+    ctx.notas?.push(`Clube do Ingresso: reprocessando ${off}–${novoOff} de ${slugs.length}${fim ? ' (fim → reinicia)' : ''}`)
+  } else {
+    const known = await getKnown(db)
+    alvo = slugs.filter((s) => !known.has(urlDe(s))).slice(0, cap)
+  }
 
   const out: RawEvent[] = []
   for (let i = 0; i < alvo.length; i += BATCH) {

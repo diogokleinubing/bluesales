@@ -151,13 +151,32 @@ export const bilheteriaDigitalScraper: Scraper = async (ctx) => {
       }
     }
 
-    const novoCursor = (cursor + ESTADOS_POR_RUN) % UFS.length
-    if (src) await db.from('crawler_sources').update({ config: { ...cfg, uf_cursor: novoCursor } }).eq('id', src.id)
-    const aProcessar = candidatos.slice(0, MAX_NOVOS) // teto de detalhes por execução
-    console.log(`[bdigital] estados=${ufsRun.join(',')} cursor ${cursor}->${novoCursor} candidatos=${candidatos.length} processando=${aProcessar.length}`)
-    ctx.notas?.push(
-      `Estados varridos: ${ufsRun.join(', ')} (cursor ${cursor}→${novoCursor}) · candidatos novos: ${candidatos.length} · detalhados: ${aProcessar.length}`,
-    )
+    // Normal: avança o cursor a cada run e detalha os primeiros MAX_NOVOS novos.
+    // Reprocessar: CAMINHA por um offset DENTRO do bloco (recoleta os já
+    // existentes em pedaços), segurando o cursor de UF até esgotar o bloco —
+    // só então avança para os próximos estados (e zera o offset).
+    let aProcessar: Candidato[]
+    let novoCursor = (cursor + ESTADOS_POR_RUN) % UFS.length
+    const patch: Record<string, unknown> = {}
+    if (ctx.reprocessar) {
+      const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+      aProcessar = candidatos.slice(off, off + MAX_NOVOS)
+      const fimBloco = off + aProcessar.length >= candidatos.length || aProcessar.length === 0
+      if (!fimBloco) novoCursor = cursor // segura o bloco
+      patch.reproc_offset = fimBloco ? 0 : off + aProcessar.length
+      ctx.notas?.push(
+        `Reprocessando bloco ${ufsRun.join(', ')}: ${off}–${off + aProcessar.length} de ${candidatos.length}` +
+        `${fimBloco ? ' (bloco fim → próximos estados)' : ''}`,
+      )
+    } else {
+      aProcessar = candidatos.slice(0, MAX_NOVOS) // teto de detalhes por execução
+      ctx.notas?.push(
+        `Estados varridos: ${ufsRun.join(', ')} (cursor ${cursor}→${novoCursor}) · candidatos novos: ${candidatos.length} · detalhados: ${aProcessar.length}`,
+      )
+    }
+    patch.uf_cursor = novoCursor
+    if (src) await db.from('crawler_sources').update({ config: { ...cfg, ...patch } }).eq('id', src.id)
+    console.log(`[bdigital] estados=${ufsRun.join(',')} cursor ${cursor}->${novoCursor} candidatos=${candidatos.length} processando=${aProcessar.length} reproc=${!!ctx.reprocessar}`)
 
     // Fase 2: detalhe (preço/taxa/data/organizador) em paralelo.
     const out: RawEvent[] = []

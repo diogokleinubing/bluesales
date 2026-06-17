@@ -111,8 +111,19 @@ async function getKnown(db: ReturnType<typeof adminClient>): Promise<Set<string>
   return set
 }
 
+async function getCfg(db: ReturnType<typeof adminClient>) {
+  const { data } = await db.from('crawler_sources').select('config').eq('slug', 'ingressodigital').maybeSingle()
+  return (data?.config ?? {}) as Record<string, unknown>
+}
+async function saveCfg(db: ReturnType<typeof adminClient>, patch: Record<string, unknown>) {
+  const cur = await getCfg(db)
+  await db.from('crawler_sources').update({ config: { ...cur, ...patch } }).eq('slug', 'ingressodigital')
+}
+
 export const ingressoDigitalScraper: Scraper = async (ctx) => {
   const db = adminClient()
+  const cfg = await getCfg(db)
+  const cap = Math.max(1, Number(cfg.detalhes_por_run ?? 30))
   const known = ctx.reprocessar ? new Set<string>() : await getKnown(db)
   const agora = new Date()
 
@@ -162,8 +173,19 @@ export const ingressoDigitalScraper: Scraper = async (ctx) => {
     console.log(`[idigital] pg=${pg} cards=${cards.length} novos=${novos}`)
   }
 
-  // Fase 2: detalhe (local + preço) em paralelo (teto p/ não estourar CPU).
-  const aProcessar = candidatos.slice(0, 30)
+  // Fase 2: detalhe (local + preço). Reprocessar CAMINHA por um offset (recoleta
+  // os já existentes, em pedaços de `cap`, até o fim → volta a 0).
+  let aProcessar: typeof candidatos
+  if (ctx.reprocessar) {
+    const off = Math.max(0, Number(cfg.reproc_offset ?? 0))
+    aProcessar = candidatos.slice(off, off + cap)
+    const novoOff = off + aProcessar.length
+    const fim = novoOff >= candidatos.length || aProcessar.length === 0
+    await saveCfg(db, { reproc_offset: fim ? 0 : novoOff })
+    ctx.notas?.push(`Ingresso Digital: reprocessando ${off}–${novoOff} de ${candidatos.length}${fim ? ' (fim → reinicia)' : ''}`)
+  } else {
+    aProcessar = candidatos.slice(0, cap)
+  }
   const out: RawEvent[] = []
   const BATCH = 6
   for (let i = 0; i < aProcessar.length; i += BATCH) {
