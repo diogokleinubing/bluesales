@@ -72,6 +72,7 @@ export function loadControls(): GlobalControls {
     return {
       ...DEFAULT_CONTROLS,
       ...parsed,
+      metric: 'gmv', // conceito abandonado: todos os relatórios fixos em GMV
       pdv:
         Array.isArray(parsed.pdv) && parsed.pdv.length > 0
           ? parsed.pdv

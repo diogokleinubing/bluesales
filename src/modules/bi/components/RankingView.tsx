@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { GroupAgg } from '../lib/aggregate'
-import { BiEventosDialog } from './BiEventosDialog'
+import { RankingEventRows, type EventSortRef } from './BiEventsList'
 import { contaComercialRoute } from '@/modules/shared/navigation'
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format'
 
@@ -109,34 +109,49 @@ export function RankingView({
     return arr
   }, [groups, sort, desde])
 
-  // Seleção de células de GMV para somatório em tempo real (estilo planilha):
+  // Seleção de células para somatório em tempo real (estilo planilha):
   // clique = só ela; shift = intervalo a partir da âncora; ctrl/cmd = alterna avulsa.
-  const [selGmv, setSelGmv] = useState<Set<string>>(new Set())
-  const [anchorKey, setAnchorKey] = useState<string | null>(null)
-  function onGmvClick(idx: number, key: string, e: React.MouseEvent) {
+  // GMV e % do total têm seleções INDEPENDENTES.
+  function computeSel(
+    e: React.MouseEvent, idx: number, key: string, sel: Set<string>, anchor: string | null,
+  ): { sel: Set<string>; anchor: string | null } {
     if (e.shiftKey) {
       e.preventDefault()
-      const aIdx = anchorKey ? sortedGroups.findIndex((g) => g.key === anchorKey) : -1
+      const aIdx = anchor ? sortedGroups.findIndex((g) => g.key === anchor) : -1
       const start = aIdx >= 0 ? aIdx : idx
       const lo = Math.min(start, idx)
       const hi = Math.max(start, idx)
-      setSelGmv(new Set(sortedGroups.slice(lo, hi + 1).map((g) => g.key)))
-      if (aIdx < 0) setAnchorKey(key)
-    } else if (e.metaKey || e.ctrlKey) {
-      setSelGmv((prev) => {
-        const next = new Set(prev)
-        if (next.has(key)) next.delete(key)
-        else next.add(key)
-        return next
-      })
-      setAnchorKey(key)
-    } else {
-      setSelGmv(new Set([key]))
-      setAnchorKey(key)
+      return { sel: new Set(sortedGroups.slice(lo, hi + 1).map((g) => g.key)), anchor: aIdx < 0 ? key : anchor }
     }
+    if (e.metaKey || e.ctrlKey) {
+      const next = new Set(sel)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return { sel: next, anchor: key }
+    }
+    return { sel: new Set([key]), anchor: key }
   }
-  const selRows = sortedGroups.filter((g) => selGmv.has(g.key))
-  const selSum = selRows.reduce((a, g) => a + g.gmv, 0)
+  const [selGmv, setSelGmv] = useState<Set<string>>(new Set())
+  const [anchorGmv, setAnchorGmv] = useState<string | null>(null)
+  function onGmvClick(idx: number, key: string, e: React.MouseEvent) {
+    const r = computeSel(e, idx, key, selGmv, anchorGmv)
+    setSelGmv(r.sel); setAnchorGmv(r.anchor)
+  }
+  const selGmvSum = sortedGroups.filter((g) => selGmv.has(g.key)).reduce((a, g) => a + g.gmv, 0)
+  function limparSel() {
+    setSelGmv(new Set()); setAnchorGmv(null)
+  }
+
+  // Expansão inline: mostra os eventos do item (lazy). Clica no nome ou na seta.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  function toggleExpand(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const SortHead = ({ col, children, right }: { col: SortCol; children: React.ReactNode; right?: boolean }) => (
     <TableHead className={right ? 'text-right' : undefined}>
@@ -153,11 +168,7 @@ export function RankingView({
     </TableHead>
   )
 
-  // Abre os eventos do item clicado num dialog (antes ia para /bi/eventos).
-  const [drillSel, setDrillSel] = useState<string | null>(null)
-  function drill(label: string) {
-    if (label && label !== '—') setDrillSel(label)
-  }
+  const expandSort: EventSortRef = sort
 
   function openCrm(label: string) {
     if (label && label !== '—') navigate(contaComercialRoute(label))
@@ -205,14 +216,19 @@ export function RankingView({
                   </TableRow>
                 ) : (
                   sortedGroups.map((g, idx) => (
-                    <TableRow key={g.key}>
-                      <TableCell>
-                        <button
-                          className="text-left font-medium hover:text-primary hover:underline"
-                          onClick={() => drill(g.label)}
-                        >
-                          {g.label}
-                        </button>
+                    <Fragment key={g.key}>
+                    <TableRow>
+                      <TableCell
+                        onClick={() => toggleExpand(g.key)}
+                        className="cursor-pointer select-none"
+                        title="Ver eventos"
+                      >
+                        <div className="flex items-center gap-1.5 font-medium hover:text-primary">
+                          {expanded.has(g.key)
+                            ? <ChevronDown className="size-4 shrink-0 opacity-60" />
+                            : <ChevronRight className="size-4 shrink-0 opacity-60" />}
+                          <span>{g.label}</span>
+                        </div>
                       </TableCell>
                       {showCidadeUf && (
                         <TableCell className="text-muted-foreground">{g.cidade ?? '—'}</TableCell>
@@ -269,6 +285,15 @@ export function RankingView({
                         </TableCell>
                       )}
                     </TableRow>
+                    {expanded.has(g.key) && (
+                      <RankingEventRows
+                        dim={drillParam}
+                        value={g.label}
+                        sort={expandSort}
+                        layout={{ showCidadeUf, showDesde, compare, crmLink, cols }}
+                      />
+                    )}
+                    </Fragment>
                   ))
                 )}
                 {!loading && groups.length > 0 && (
@@ -304,20 +329,16 @@ export function RankingView({
         </CardContent>
       </Card>
 
-      <BiEventosDialog dim={drillParam} value={drillSel} onClose={() => setDrillSel(null)} />
-
-      {selRows.length > 0 && (
+      {selGmv.size > 0 && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
-          <span className="text-sm text-muted-foreground">
-            {selRows.length} célula(s) · GMV
-          </span>
-          <span className="font-semibold tabular-nums">{fmtBRL(selSum)}</span>
+          <span className="text-sm text-muted-foreground">{selGmv.size} célula(s) · GMV</span>
+          <span className="font-semibold tabular-nums">{fmtBRL(selGmvSum)}</span>
           <span className="text-sm tabular-nums text-muted-foreground">
-            {fmtPct(totalGmv > 0 ? selSum / totalGmv : 0)} do total
+            {fmtPct(totalGmv > 0 ? selGmvSum / totalGmv : 0)} do total
           </span>
           <button
             className="text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => { setSelGmv(new Set()); setAnchorKey(null) }}
+            onClick={limparSel}
           >
             Limpar
           </button>

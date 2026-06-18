@@ -33,11 +33,11 @@ import {
   YTD_VIEW_PARAM,
   type YtdView,
 } from '../lib/ytd'
-import { METRIC_LABELS, type Metric, type DateBase } from '../lib/controls'
+import { type Metric, type DateBase } from '../lib/controls'
 import { fmtBRL, fmtDelta } from '@/lib/format'
 
 export function YtdPage() {
-  const { year, metric: gMetric, dateBase: gDateBase, pdv } = useControls()
+  const { year, dateBase: gDateBase, pdv } = useControls()
   const orgId = useOrgId()
   const navigate = useNavigate()
 
@@ -52,7 +52,7 @@ export function YtdPage() {
   const [monthEnd, setMonthEnd] = useState(11)
   const [dateBase, setDateBase] = useState<DateBase>(gDateBase)
   const [view, setView] = useState<YtdView>('organizador')
-  const [metric, setMetric] = useState<Metric>(gMetric)
+  const metric: Metric = 'gmv' // fixo em GMV (Métrica removida)
 
   // Default: abre no último ano com vendas e no último mês com vendas.
   const latestYear = years[0]
@@ -243,13 +243,6 @@ export function YtdPage() {
               value={view}
               onChange={(v) => setView(v as YtdView)}
               options={Object.entries(YTD_VIEW_LABELS)}
-            />
-          </Ctrl>
-          <Ctrl label="Métrica">
-            <MiniSelect
-              value={metric}
-              onChange={(v) => setMetric(v as Metric)}
-              options={Object.entries(METRIC_LABELS)}
             />
           </Ctrl>
         </CardContent>

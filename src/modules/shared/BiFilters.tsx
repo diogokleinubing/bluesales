@@ -25,17 +25,15 @@ import {
   ALL_PDV,
   CURRENT_YEAR,
   DATE_BASE_LABELS,
-  METRIC_LABELS,
   MONTH_NAMES,
   PDV_LABELS,
   type DateBase,
-  type Metric,
   type Pdv,
 } from '@/modules/bi/lib/controls'
 
-/** Barra de filtros globais do BI (Ano, Métrica, Base de data, PDV). */
+/** Barra de filtros globais do BI (Ano, Meses, Base de data, PDV). */
 export function BiFilters() {
-  const { year, metric, dateBase, pdv, months, setControls } = useControls()
+  const { year, dateBase, pdv, months, setControls } = useControls()
   const yearsQuery = useBiYears(dateBase)
 
   const allMonths = months.length >= 12
@@ -128,24 +126,6 @@ export function BiFilters() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </ControlBlock>
-
-      <ControlBlock label="Métrica">
-        <Select
-          value={metric}
-          onValueChange={(v) => setControls({ metric: v as Metric })}
-        >
-          <SelectTrigger className="h-8 w-44" size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(METRIC_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </ControlBlock>
 
       <ControlBlock label="Base de data">
