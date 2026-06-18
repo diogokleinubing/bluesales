@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import {
   Download, RefreshCw, ChevronLeft, ChevronRight, X, Mic2, Sparkles, CalendarClock, TrendingUp,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -81,6 +81,7 @@ export function EventosCapturados() {
   const [comArtista, setComArtista] = useState(() => readBool(params, 'art'))
   const [comVendas, setComVendas] = useState(() => readBool(params, 'vendas'))
   const [proxSeven, setProxSeven] = useState(() => readBool(params, 'prox7'))
+  const [recentes, setRecentes] = useState(() => readBool(params, 'rec'))
   const [page, setPage] = useState(() => Number(readStr(params, 'page', '0')) || 0)
   const [sort, setSort] = useState<EventSort | null>(() => {
     const col = readStr(params, 'sortCol')
@@ -103,6 +104,12 @@ export function EventosCapturados() {
       </button>
     </TableHead>
   )
+  // "Recentes": filtra últimos 7 dias por data de cadastro e ordena por ela (DESC).
+  function toggleRecentes() {
+    const nv = !recentes
+    setRecentes(nv)
+    if (nv) setSort({ col: 'primeira_vez_visto', dir: 'desc' })
+  }
   const artistNames = useArtistNamesByClasse(classes)
   const [busy, setBusy] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -127,11 +134,12 @@ export function EventosCapturados() {
       { k: 'art', v: comArtista },
       { k: 'vendas', v: comVendas },
       { k: 'prox7', v: proxSeven },
+      { k: 'rec', v: recentes },
       { k: 'sortCol', v: sort?.col ?? '' },
       { k: 'sortDir', v: sort?.dir ?? '' },
       { k: 'page', v: page > 0 ? String(page) : '' },
     ]), { replace: true })
-  }, [searchAplicada, fonte, status, cidade, categoriaAplicada, valorMinAplicado, pais, uf, local, organizador, classes, favoritos, comArtista, comVendas, proxSeven, sort, page, setSearchParams])
+  }, [searchAplicada, fonte, status, cidade, categoriaAplicada, valorMinAplicado, pais, uf, local, organizador, classes, favoritos, comArtista, comVendas, proxSeven, recentes, sort, page, setSearchParams])
 
   // Debounce da busca (evita 1 query por tecla).
   useEffect(() => {
@@ -168,8 +176,9 @@ export function EventosCapturados() {
       comArtista: comArtista || undefined,
       comVendas: comVendas || undefined,
       proxDias: proxSeven ? 7 : undefined,
+      recentesDias: recentes ? 7 : undefined,
     }),
-    [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven],
+    [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, recentes],
   )
 
   // Qualquer mudança de filtro volta pra primeira página (exceto na 1ª render,
@@ -178,7 +187,7 @@ export function EventosCapturados() {
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return }
     setPage(0)
-  }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, sort])
+  }, [searchAplicada, fonte, cidade, categoriaAplicada, status, pais, uf, local, organizador, valorMinAplicado, classes, artistNames.data, favoritos, comArtista, comVendas, proxSeven, recentes, sort])
 
   const ignoradosLocais = useIgnorados('local')
   const { data, isLoading, isFetching } = useCrawledEventsPaged(filters, page, EVENTS_PAGE_SIZE, sort)
@@ -286,6 +295,7 @@ export function EventosCapturados() {
         Evento: e.nome,
         Fonte: e.source_nome ?? e.source_slug ?? '',
         Data: e.data_inicio ? fmtDate(e.data_inicio) : '',
+        'Capturado em': e.primeira_vez_visto ? fmtDate(e.primeira_vez_visto) : '',
         Local: e.local_raw ?? '',
         Cidade: e.cidade ?? '',
         UF: e.uf ?? '',
@@ -457,6 +467,17 @@ export function EventosCapturados() {
           </button>
           <button
             type="button"
+            onClick={toggleRecentes}
+            title="Eventos capturados nos últimos 7 dias (ordena por data de cadastro)"
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors',
+              recentes ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+            )}
+          >
+            <Clock className="size-4" /> Recentes
+          </button>
+          <button
+            type="button"
             onClick={() => setComVendas((v) => !v)}
             title="Só eventos com dado de vendas capturado (ex.: Bileto)"
             className={cn(
@@ -484,6 +505,7 @@ export function EventosCapturados() {
           <TableHead>Fit IA</TableHead>
           <TableHead>Fonte</TableHead>
           {sortHead('data_inicio', 'Data')}
+          {sortHead('primeira_vez_visto', 'Capturado em')}
           {sortHead('local_raw', 'Local')}
           {sortHead('cidade', 'Cidade')}
           <TableHead>Artistas</TableHead>
@@ -495,10 +517,10 @@ export function EventosCapturados() {
         <TableBody>
           {isLoading ? (
             Array.from({ length: 12 }).map((_, i) => (
-              <TableRow key={i}><TableCell colSpan={comVendas ? 12 : 11}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+              <TableRow key={i}><TableCell colSpan={comVendas ? 13 : 12}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
             ))
           ) : rows.length === 0 ? (
-            <TableRow><TableCell colSpan={comVendas ? 12 : 11} className="py-12 text-center text-muted-foreground">
+            <TableRow><TableCell colSpan={comVendas ? 13 : 12} className="py-12 text-center text-muted-foreground">
               Nenhum evento encontrado.
             </TableCell></TableRow>
           ) : rows.map((e) => {
@@ -531,6 +553,7 @@ export function EventosCapturados() {
                   </div>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{e.primeira_vez_visto ? fmtDate(e.primeira_vez_visto) : '—'}</TableCell>
                 <TableCell className="max-w-[180px] truncate text-muted-foreground">{e.local_raw ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ''}` : '—'}</TableCell>
                 <TableCell className="max-w-[200px]">

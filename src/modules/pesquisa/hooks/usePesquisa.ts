@@ -10,6 +10,17 @@ export { useCrmOrgId, useCrmOrgId as usePesquisaOrgId } from '@/modules/crm/hook
 // ---------------------------------------------------------------------------
 // Tipos
 // ---------------------------------------------------------------------------
+/** Progresso de varredura (capturar novos) gravado pelo orquestrador. */
+export interface Progresso {
+  pos: number | null   // posição na volta atual (cresce; cai ao recomeçar)
+  total: number | null // tamanho da volta (quando conhecido)
+  passo: number | null // avanço médio por execução
+  voltou: boolean      // a última execução fechou uma volta
+  voltas: number       // voltas completas acumuladas
+  novos: number        // novos capturados na última execução
+  em: string           // ISO da última atualização
+}
+
 export interface CrawlerSource {
   id: string
   org_id: string
@@ -18,8 +29,14 @@ export interface CrawlerSource {
   tipo: string
   metodo: string
   ativo: boolean
-  config: { cidades?: { cidade: string; uf: string }[]; janela_dias?: number }
+  config: { cidades?: { cidade: string; uf: string }[]; janela_dias?: number; progresso?: Progresso }
   ultima_execucao: string | null
+}
+
+/** Lê o progresso de varredura atual de uma fonte (para o loop de "Varredura completa"). */
+export async function fetchSourceProgresso(sourceId: string): Promise<Progresso | null> {
+  const { data } = await supabase.from('crawler_sources').select('config').eq('id', sourceId).maybeSingle()
+  return ((data?.config as { progresso?: Progresso } | null)?.progresso) ?? null
 }
 
 export interface CrawledEventRow {
@@ -371,6 +388,8 @@ export interface EventFilters {
   proxDias?: number
   /** Só eventos com dado de vendas (vendidos não nulo — ex.: Bileto). */
   comVendas?: boolean
+  /** Só eventos capturados (primeira_vez_visto) nos últimos N dias. */
+  recentesDias?: number
 }
 
 export const EVENTS_PAGE_SIZE = 100
@@ -432,6 +451,10 @@ function applyEventFilters(
     const fim = new Date(agora.getTime() + f.proxDias * 86_400_000)
     qq = qq.gte('data_inicio', agora.toISOString()).lte('data_inicio', fim.toISOString())
   }
+  if (f.recentesDias != null && f.recentesDias > 0) {
+    const desde = new Date(Date.now() - f.recentesDias * 86_400_000)
+    qq = qq.gte('primeira_vez_visto', desde.toISOString())
+  }
   // Filtro por nome de artista: evento cujo nome contenha algum dos nomes.
   if (f.artistasNomes !== undefined) {
     // Duplas: "Jorge e Mateus" também procura "Jorge & Mateus" (e vice-versa).
@@ -476,7 +499,7 @@ export function useSourceMap(): Record<string, string> {
 /** Coluna do banco para ordenação da listagem (colunas reais de crawled_events). */
 export type EventSortCol =
   | 'nome' | 'data_inicio' | 'local_raw' | 'cidade' | 'categoria'
-  | 'preco_min' | 'taxa_pct' | 'vendidos'
+  | 'preco_min' | 'taxa_pct' | 'vendidos' | 'primeira_vez_visto'
 export type EventSort = { col: EventSortCol; dir: 'asc' | 'desc' }
 
 export function useCrawledEventsPaged(
@@ -1022,7 +1045,8 @@ export async function setSourceAtivo(id: string, ativo: boolean): Promise<void> 
 export async function resetSourceScan(source: CrawlerSource): Promise<void> {
   const cfg = (source.config ?? {}) as Record<string, unknown>
   const novo: Record<string, unknown> = {
-    ...cfg, offset: 0, sitemap_offset: 0, uf_cursor: 0, cursor: null,
+    ...cfg, offset: 0, sitemap_offset: 0, uf_cursor: 0, city_cursor: 0, pagina: 1,
+    cursor: null, reproc_offset: 0, progresso: null,
   }
   if (cfg.id_topo != null) novo.id_baixo = cfg.id_topo // Bileto volta ao topo
   const { error } = await supabase.from('crawler_sources').update({ config: novo }).eq('id', source.id)

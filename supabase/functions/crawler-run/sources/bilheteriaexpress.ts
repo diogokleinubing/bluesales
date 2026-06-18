@@ -14,7 +14,7 @@
 
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
-import { avgTaxaPct } from '../../_shared/classify.ts'
+import { avgTaxaPct, decodeEscapes } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.bilheteriaexpress.com.br'
 const LISTA = `${HOST}/eventos-por-data/todos-os-eventos.html?is_ajax=1&is_scroll=1&p=`
@@ -141,7 +141,7 @@ async function fetchDetalhe(url: string): Promise<Detalhe | null> {
   // Organizador (presente no eventData do pixel)
   let organizador: string | null = null
   const org = html.match(/"organizer_name":"([^"]+)"/)
-  if (org) organizador = decode(org[1])
+  if (org) organizador = decode(decodeEscapes(org[1]))
 
   // Imagem
   let imagem: string | null = null

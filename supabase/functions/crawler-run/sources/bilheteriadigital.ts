@@ -9,7 +9,7 @@
 import { load } from 'https://esm.sh/cheerio@1.0.0'
 import type { RawEvent, Scraper } from '../../_shared/types.ts'
 import { adminClient } from '../../_shared/db.ts'
-import { avgTaxaPct } from '../../_shared/classify.ts'
+import { avgTaxaPct, decodeEscapes } from '../../_shared/classify.ts'
 
 const HOST = 'https://www.bilheteriadigital.com'
 const MAX_PG_UF = 10 // teto de páginas por estado
@@ -62,7 +62,8 @@ async function fetchDetalhe(url: string): Promise<Detalhe> {
 
     const dataInicio = $('input[name=dataInicio]').attr('value') || null
     const local = $('input[name=local]').attr('value') || null
-    const organizador = html.match(/['"]brand['"]\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? null
+    const organizadorRaw = html.match(/['"]brand['"]\s*:\s*['"]([^'"]+)['"]/)?.[1] ?? null
+    const organizador = organizadorRaw ? decodeEscapes(organizadorRaw).trim() || null : null
 
     return {
       min: pos.length ? Math.min(...pos) : null,

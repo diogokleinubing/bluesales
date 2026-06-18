@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Play, Pencil, Loader2, RefreshCw, BarChart3, Timer, Square } from 'lucide-react'
+import { Play, Pencil, Loader2, RefreshCw, BarChart3, Timer, Square, FastForward, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +21,8 @@ import { fmtDate, fmtInt } from '@/lib/format'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
   useCrawlerSources, useSourceCounts, useSourceFutureCounts, setSourceAtivo, saveSourceConfig, resetSourceScan, runCrawler,
-  type CrawlerSource,
+  fetchSourceProgresso,
+  type CrawlerSource, type Progresso,
 } from '../hooks/usePesquisa'
 import { RelatorioFonteDialog } from '../components/RelatorioFonteDialog'
 import { ExecucoesTabela } from '../components/ExecucoesTabela'
@@ -95,7 +96,93 @@ export function FontesConfig() {
     toast('Lote interrompido', { description: 'Para após o ciclo atual.' })
   }
 
+  // Varredura completa: roda em ciclos (modo normal) até fechar uma volta
+  // (config.progresso.voltou), detectando o fim de cada run pelo progresso.em.
+  const [varredura, setVarredura] = useState<{ slug: string; nome: string; ciclo: number } | null>(null)
+  const varreduraStop = useRef(false)
+  useEffect(() => () => { varreduraStop.current = true }, [])
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+  async function cicloVarredura(s: CrawlerSource, ciclo: number, emAntes: string) {
+    if (varreduraStop.current) { setVarredura(null); return }
+    setVarredura({ slug: s.slug, nome: s.nome, ciclo })
+    try { await runCrawler(s.slug) } catch { /* segue */ }
+    // Espera a run terminar: progresso.em muda (até 5 min de tolerância).
+    const t0 = Date.now()
+    let prog: Progresso | null = null
+    while (Date.now() - t0 < 300_000) {
+      await sleep(5000)
+      if (varreduraStop.current) { setVarredura(null); return }
+      prog = await fetchSourceProgresso(s.id)
+      if (prog && prog.em !== emAntes) break
+    }
+    qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
+    qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })
+    if (!prog || prog.em === emAntes) {
+      setVarredura(null); toast('Varredura parada', { description: `${s.nome}: sem resposta no tempo limite.` }); return
+    }
+    if (prog.voltou) {
+      setVarredura(null); toast.success('Varredura completa', { description: `${s.nome} — volta fechada em ${ciclo} ciclo(s).` }); return
+    }
+    if (ciclo >= 100) {
+      setVarredura(null); toast('Varredura parada', { description: `${s.nome}: limite de 100 ciclos.` }); return
+    }
+    void cicloVarredura(s, ciclo + 1, prog.em)
+  }
+
+  async function iniciarVarredura(s: CrawlerSource) {
+    varreduraStop.current = false
+    const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
+    void cicloVarredura(s, 1, emAntes)
+  }
+  function pararVarredura() {
+    varreduraStop.current = true
+    setVarredura(null)
+    toast('Varredura interrompida', { description: 'Para após o ciclo atual.' })
+  }
+  const varreduraAtivo = !!varredura
+
+  // Executar tudo: roda 1 ciclo de cada fonte ativa, em sequência (espera uma
+  // terminar p/ ir à próxima), pausável. Cada fonte é uma invocação separada
+  // (curta) — evita o timeout de rodar todas numa só chamada.
+  const [tudo, setTudo] = useState<{ idx: number; total: number; nome: string } | null>(null)
+  const tudoStop = useRef(false)
+  useEffect(() => () => { tudoStop.current = true }, [])
+
+  async function iniciarTudo() {
+    const fontes = (data ?? []).filter((s) => s.ativo)
+    if (!fontes.length) return
+    tudoStop.current = false
+    for (let i = 0; i < fontes.length; i++) {
+      if (tudoStop.current) break
+      const s = fontes[i]
+      setTudo({ idx: i + 1, total: fontes.length, nome: s.nome })
+      const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
+      try { await runCrawler(s.slug) } catch { /* segue p/ a próxima */ }
+      // Espera a run terminar: progresso.em muda (até 5 min de tolerância).
+      const t0 = Date.now()
+      while (Date.now() - t0 < 300_000) {
+        await sleep(5000)
+        if (tudoStop.current) break
+        const p = await fetchSourceProgresso(s.id)
+        if (p && p.em !== emAntes) break
+      }
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })
+    }
+    const parado = tudoStop.current
+    setTudo(null)
+    if (parado) toast('Execução interrompida', { description: 'Parou após a fonte atual.' })
+    else toast.success('Execução concluída', { description: `${fontes.length} fonte(s) rodada(s).` })
+  }
+  function pararTudo() {
+    tudoStop.current = true
+    toast('Parando…', { description: 'Encerra após a fonte atual.' })
+  }
+  const tudoAtivo = !!tudo
+
   const batchAtivo = !!batch?.running
+  const loopAtivo = batchAtivo || varreduraAtivo || tudoAtivo
 
   async function executar(slug?: string, reprocessar = false) {
     setRunning((reprocessar ? 'rp:' : '') + (slug ?? '__all__'))
@@ -150,10 +237,15 @@ export function FontesConfig() {
           <p className="text-sm text-muted-foreground">Plataformas monitoradas pela coleta.</p>
         </div>
         {editable && (
-          <Button onClick={() => executar()} disabled={running !== null || batchAtivo}>
-            {running === '__all__' ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-            Executar tudo
-          </Button>
+          tudoAtivo ? (
+            <Button variant="destructive" onClick={pararTudo}>
+              <Square className="size-4" /> Parar ({tudo!.idx}/{tudo!.total})
+            </Button>
+          ) : (
+            <Button onClick={iniciarTudo} disabled={running !== null || batchAtivo || varreduraAtivo}>
+              <Play className="size-4" /> Executar tudo
+            </Button>
+          )
         )}
       </div>
 
@@ -175,6 +267,28 @@ export function FontesConfig() {
         </CardContent></Card>
       )}
 
+      {varredura && (
+        <Card><CardContent className="flex items-center justify-between gap-3 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <span className="font-medium">Varredura completa · {varredura.nome}</span>
+            <span className="text-muted-foreground">ciclo {varredura.ciclo} · rodando até fechar a volta</span>
+          </div>
+          <Button size="sm" variant="destructive" onClick={pararVarredura}><Square className="size-4" /> Parar</Button>
+        </CardContent></Card>
+      )}
+
+      {tudo && (
+        <Card><CardContent className="flex items-center justify-between gap-3 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <span className="font-medium">Executar tudo · fonte {tudo.idx}/{tudo.total}</span>
+            <span className="text-muted-foreground">rodando: {tudo.nome}</span>
+          </div>
+          <Button size="sm" variant="destructive" onClick={pararTudo}><Square className="size-4" /> Parar</Button>
+        </CardContent></Card>
+      )}
+
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
@@ -183,13 +297,14 @@ export function FontesConfig() {
             <TableHead>Cidades</TableHead>            <TableHead>Última execução</TableHead>
             <TableHead className="text-right">Eventos</TableHead>
             <TableHead className="text-right">Eventos Futuros</TableHead>
+            <TableHead className="w-[160px]">Varredura</TableHead>
             <TableHead>Ativa</TableHead>
-            {editable && <TableHead className="w-28" />}
+            {editable && <TableHead className="w-32" />}
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : (data ?? []).map((s) => (
               <TableRow key={s.id}>
@@ -198,6 +313,7 @@ export function FontesConfig() {
                 <TableCell className="text-muted-foreground">{s.config?.cidades?.length ? s.config.cidades.length : 'todas'}</TableCell>                <TableCell className="whitespace-nowrap text-muted-foreground">{s.ultima_execucao ? fmtDate(s.ultima_execucao) : 'nunca'}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtInt(counts.data?.[s.id] ?? 0)}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtInt(futureCounts.data?.[s.id] ?? 0)}</TableCell>
+                <TableCell><ProgressoCell p={s.config?.progresso} /></TableCell>
                 <TableCell>
                   <Switch checked={s.ativo} disabled={!editable} onCheckedChange={() => toggle(s)} />
                 </TableCell>
@@ -208,16 +324,22 @@ export function FontesConfig() {
                         onClick={() => setReport(s)}>
                         <BarChart3 className="size-4" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Executar agora"
-                        disabled={running !== null || batchAtivo} onClick={() => executar(s.slug)}>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" title="Executar agora (1 ciclo)"
+                        disabled={running !== null || loopAtivo} onClick={() => executar(s.slug)}>
                         {running === s.slug ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                       </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2"
+                        title="Varredura completa (roda em ciclos até cobrir o site inteiro)"
+                        disabled={running !== null || batchAtivo || tudoAtivo || (varreduraAtivo && varredura?.slug !== s.slug)}
+                        onClick={() => varredura?.slug === s.slug ? pararVarredura() : iniciarVarredura(s)}>
+                        {varredura?.slug === s.slug ? <Loader2 className="size-4 animate-spin" /> : <FastForward className="size-4" />}
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Rodar em lote (vários ciclos com intervalo)"
-                        disabled={running !== null || batchAtivo} onClick={() => { setCiclos('20'); setIntervalo('60'); setLoteCfg(s) }}>
+                        disabled={running !== null || loopAtivo} onClick={() => { setCiclos('20'); setIntervalo('60'); setLoteCfg(s) }}>
                         <Timer className="size-4" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Reprocessar (atualiza os já coletados)"
-                        disabled={running !== null || batchAtivo} onClick={() => executar(s.slug, true)}>
+                        disabled={running !== null || loopAtivo} onClick={() => executar(s.slug, true)}>
                         {running === `rp:${s.slug}` ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" title="Editar cidades/janela"
@@ -238,6 +360,7 @@ export function FontesConfig() {
                 <TableCell className="text-right tabular-nums">
                   {fmtInt((data ?? []).reduce((s, x) => s + (futureCounts.data?.[x.id] ?? 0), 0))}
                 </TableCell>
+                <TableCell />
                 <TableCell />
                 {editable && <TableCell />}
               </TableRow>
@@ -318,5 +441,37 @@ export function FontesConfig() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/** Célula de progresso de varredura: barra (quando há total) ou status textual. */
+function ProgressoCell({ p }: { p?: Progresso | null }) {
+  if (!p) return <span className="text-xs text-muted-foreground">—</span>
+  const { pos, total, passo, voltou, voltas, novos } = p
+  if (total && total > 0 && pos != null) {
+    const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)))
+    const rest = passo && passo > 0 && pos < total ? Math.ceil((total - pos) / passo) : null
+    return (
+      <div className="min-w-[120px]" title={`posição ${pos}/${total}${voltas ? ` · ${voltas} volta(s) completas` : ''}`}>
+        <div className="h-1.5 overflow-hidden rounded bg-muted">
+          <div className="h-full rounded bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="mt-0.5 text-[11px] text-muted-foreground">
+          {pct}%{rest != null ? ` · ~${rest} exec.` : ''}
+        </div>
+      </div>
+    )
+  }
+  if (voltou) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--success)]" title={voltas ? `${voltas} volta(s)` : ''}>
+        <CheckCircle2 className="size-3.5" /> volta completa
+      </span>
+    )
+  }
+  return (
+    <span className="text-[11px] text-muted-foreground">
+      {novos > 0 ? `capturando · ${novos} novos` : 'sem novos'}{voltas ? ` · ${voltas}ª volta` : ''}
+    </span>
   )
 }

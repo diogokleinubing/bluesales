@@ -10,6 +10,16 @@ export function norm(text: string | null | undefined): string {
     .trim()
 }
 
+/**
+ * Decodifica escapes de strings vindas de JSON/JS embutido no HTML:
+ * `\uXXXX` (inclui pares surrogate) e `\/`. Ex.: "PRODUÇÕES" -> "PRODUÇÕES".
+ */
+export function decodeEscapes(s: string | null | undefined): string {
+  return (s ?? '')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\\//g, '/')
+}
+
 /** % médio de taxa a partir de pares (preço, taxa). Null se não houver dados. */
 export function avgTaxaPct(items: { price: number; tax: number }[]): number | null {
   const pcts = items

@@ -113,11 +113,11 @@ async function authorize(
  * run e comparando com o snapshot de antes, e as notas que o scraper deu push.
  */
 async function montarObservacao(
-  db: ReturnType<typeof adminClient>,
   source: SourceRow,
   cidadesCfg: { cidade: string; uf: string }[],
   reprocessar: boolean,
   cfgAntes: Record<string, unknown>,
+  cfgDepois: Record<string, unknown>,
   notas: string[],
 ): Promise<string | null> {
   const linhas: string[] = []
@@ -129,12 +129,7 @@ async function montarObservacao(
   if (reprocessar) linhas.push('Reprocessar: sim (ignora skip-forever)')
 
   // Diff dos campos de paginação no config (offset/cursor/etc.).
-  let cfgDepois: Record<string, unknown> = cfgAntes
-  try {
-    const { data } = await db.from('crawler_sources').select('config').eq('id', source.id).maybeSingle()
-    cfgDepois = (data?.config ?? {}) as Record<string, unknown>
-  } catch { /* mantém cfgAntes */ }
-  const IGNORAR = new Set(['cidades', 'janela_dias'])
+  const IGNORAR = new Set(['cidades', 'janela_dias', 'progresso'])
   const chaves = new Set([...Object.keys(cfgAntes), ...Object.keys(cfgDepois)])
   for (const k of [...chaves].sort()) {
     if (IGNORAR.has(k)) continue
@@ -153,6 +148,71 @@ async function montarObservacao(
 function fmtVal(v: unknown): string {
   if (v === undefined || v === null) return '—'
   return String(v)
+}
+
+// ── Progresso de varredura (foco: capturar novos) ───────────────────────────
+// Modelo único pra todas as fontes: uma "volta" é uma passada pelo catálogo/faixa.
+// `pos` cresce ao longo da volta e CAI quando recomeça (wrap) → detecta `voltou`.
+// `total` só quando dá pra inferir do config. `catalogo`: fontes que enxergam o
+// catálogo inteiro por execução — a volta termina quando não há mais novos.
+type Cfg = Record<string, unknown>
+type ProgDesc = { pos?: (c: Cfg) => number; total?: (c: Cfg) => number; token?: string; catalogo?: boolean }
+const N = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d }
+const PROGRESSO: Record<string, ProgDesc> = {
+  bileto: {
+    pos: (c) => N(c.id_topo, 122500) - N(c.id_baixo, N(c.id_topo, 122500)),
+    total: (c) => N(c.id_topo, 122500) - N(c.id_min, 1),
+  },
+  bilheteriadigital: { pos: (c) => N(c.uf_cursor), total: () => 27 },
+  shotgun: { pos: (c) => N(c.city_cursor) },
+  guicheweb: { pos: (c) => N(c.offset) },
+  diskingressos: { pos: (c) => N(c.offset) },
+  ingresse: { pos: (c) => N(c.offset) },
+  sympla: { pos: (c) => N(c.sitemap_offset) },
+  ingressonacional: { pos: (c) => N(c.offset) },
+  q2ingressos: { pos: (c) => N(c.offset) },
+  ticketsports: { pos: (c) => N(c.offset) },
+  uhuu: { pos: (c) => N(c.offset) },
+  zigtickets: { catalogo: true }, // emite TODOS os eventos por run → novos em 1 ciclo
+  bilheteriaexpress: { pos: (c) => N(c.pagina) },
+  ticketcenter: { pos: (c) => N(c.pagina) },
+  pensanoevento: { token: 'cursor' },
+  baladapp: { catalogo: true },
+  clubedoingresso: { catalogo: true },
+  megabilheteria: { catalogo: true },
+  sampaingressos: { catalogo: true },
+  ingressodigital: { catalogo: true },
+}
+
+type Progresso = {
+  pos: number | null; total: number | null; passo: number | null
+  voltou: boolean; voltas: number; novos: number; em: string
+}
+function calcProgresso(slug: string, antes: Cfg, depois: Cfg, novos: number): Progresso | null {
+  const d = PROGRESSO[slug]
+  if (!d) return null
+  const prev = (antes.progresso ?? {}) as Partial<Progresso>
+  let pos: number | null = null
+  let total: number | null = null
+  let voltou = false
+  if (d.catalogo) {
+    voltou = novos === 0 // catálogo inteiro por run: caught up quando 0 novos
+  } else if (d.token) {
+    voltou = !!antes[d.token] && !depois[d.token] // token esvaziou = deu a volta
+  } else if (d.pos) {
+    const pa = d.pos(antes)
+    pos = d.pos(depois)
+    total = d.total ? d.total(depois) : null
+    voltou = pos < pa // cursor recuou = recomeçou a volta
+  }
+  const passo = (!voltou && pos != null && prev.pos != null) ? Math.max(0, pos - prev.pos) : (prev.passo ?? null)
+  return {
+    pos, total, passo,
+    voltou,
+    voltas: N(prev.voltas) + (voltou ? 1 : 0),
+    novos,
+    em: new Date().toISOString(),
+  }
 }
 
 async function runSource(
@@ -251,8 +311,15 @@ async function runSource(
     }).eq('id', jobId)
   }
 
+  // Lê o config DEPOIS da run (scraper moveu offset/cursor) p/ observação + progresso.
+  let cfgDepois: Record<string, unknown> = cfgAntes
+  try {
+    const { data } = await db.from('crawler_sources').select('config').eq('id', source.id).maybeSingle()
+    cfgDepois = (data?.config ?? {}) as Record<string, unknown>
+  } catch { /* mantém cfgAntes */ }
+
   // Observação: cidades, reprocessar, diff de config (offset/cursor) e notas.
-  const observacao = await montarObservacao(db, source, cidadesCfg, reprocessar, cfgAntes, notas)
+  const observacao = await montarObservacao(source, cidadesCfg, reprocessar, cfgAntes, cfgDepois, notas)
 
   await db.from('crawler_runs').update({
     status: erros > 0 && vistos === 0 ? 'error' : 'done',
@@ -265,9 +332,13 @@ async function runSource(
     finalizado_em: new Date().toISOString(),
   }).eq('id', runId)
 
-  await db.from('crawler_sources')
-    .update({ ultima_execucao: new Date().toISOString() })
-    .eq('id', source.id)
+  // Progresso de varredura: só no modo normal (capturar novos); reproc não mexe.
+  const srcPatch: Record<string, unknown> = { ultima_execucao: new Date().toISOString() }
+  if (!reprocessar) {
+    const prog = calcProgresso(source.slug, cfgAntes, cfgDepois, novos)
+    if (prog) srcPatch.config = { ...cfgDepois, progresso: prog }
+  }
+  await db.from('crawler_sources').update(srcPatch).eq('id', source.id)
 
   return { vistos, novos, ignorados, erros }
 }

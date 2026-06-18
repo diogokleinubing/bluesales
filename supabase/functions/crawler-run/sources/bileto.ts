@@ -13,7 +13,8 @@ import { norm, normPais, avgTaxaPct } from '../../_shared/classify.ts'
 import { adminClient } from '../../_shared/db.ts'
 
 const API = 'https://bff-sales-api-cdn.bileto.sympla.com.br/api/v1/events'
-const MAX_SCAN = 1500 // IDs varridos por execução
+const MAX_SCAN = 1500 // IDs varridos por execução (normal: pula conhecidos, barato)
+const REPROC_SCAN = 300 // reprocessar refaz HTTP+upsert de TODOS da janela: menor p/ não estourar o limite
 const MISS_STREAK = 200 // IDs inexistentes seguidos => fronteira (tolera buracos)
 const BATCH = 10
 const UA =
@@ -102,7 +103,8 @@ async function runScan(reprocessar: boolean): Promise<Scanned[]> {
   if (!src) return scanCache
 
   const cfg = (src.config ?? {}) as Record<string, unknown>
-  const maxScan = Number(cfg.scan ?? MAX_SCAN)
+  // Reprocessar não pula conhecidos (HTTP+upsert de todos): janela menor.
+  const maxScan = reprocessar ? Number(cfg.scan_reproc ?? REPROC_SCAN) : Number(cfg.scan ?? MAX_SCAN)
   const topo = Number(cfg.id_topo ?? 122500) // recomeço (acima da fronteira atual)
   const minId = Number(cfg.id_min ?? 1)
   // Reprocessar: não pula os conhecidos (recoleta/atualiza); o cursor avança igual.
