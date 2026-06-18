@@ -145,7 +145,7 @@ export function FontesConfig() {
   // Executar tudo: roda 1 ciclo de cada fonte ativa, em sequência (espera uma
   // terminar p/ ir à próxima), pausável. Cada fonte é uma invocação separada
   // (curta) — evita o timeout de rodar todas numa só chamada.
-  const [tudo, setTudo] = useState<{ idx: number; total: number; nome: string } | null>(null)
+  const [tudo, setTudo] = useState<{ idx: number; total: number; nome: string; ciclo: number } | null>(null)
   const tudoStop = useRef(false)
   useEffect(() => () => { tudoStop.current = true }, [])
 
@@ -156,24 +156,31 @@ export function FontesConfig() {
     for (let i = 0; i < fontes.length; i++) {
       if (tudoStop.current) break
       const s = fontes[i]
-      setTudo({ idx: i + 1, total: fontes.length, nome: s.nome })
-      const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
-      try { await runCrawler(s.slug) } catch { /* segue p/ a próxima */ }
-      // Espera a run terminar: progresso.em muda (até 5 min de tolerância).
-      const t0 = Date.now()
-      while (Date.now() - t0 < 300_000) {
-        await sleep(5000)
-        if (tudoStop.current) break
-        const p = await fetchSourceProgresso(s.id)
-        if (p && p.em !== emAntes) break
+      // Roda esta fonte em CICLOS até FECHAR a volta (varredura completa); só
+      // então passa pra próxima. Tetos: 200 ciclos e 5 min de espera por ciclo.
+      for (let ciclo = 1; ciclo <= 200 && !tudoStop.current; ciclo++) {
+        setTudo({ idx: i + 1, total: fontes.length, nome: s.nome, ciclo })
+        const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
+        try { await runCrawler(s.slug) } catch { /* segue */ }
+        // Espera a run terminar: progresso.em muda (até 5 min de tolerância).
+        const t0 = Date.now()
+        let prog: Progresso | null = null
+        while (Date.now() - t0 < 300_000) {
+          await sleep(5000)
+          if (tudoStop.current) break
+          prog = await fetchSourceProgresso(s.id)
+          if (prog && prog.em !== emAntes) break
+        }
+        qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
+        qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })
+        if (!prog || prog.em === emAntes) break // sem resposta -> próxima fonte
+        if (prog.voltou) break // volta completa -> próxima fonte
       }
-      qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
-      qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })
     }
     const parado = tudoStop.current
     setTudo(null)
-    if (parado) toast('Execução interrompida', { description: 'Parou após a fonte atual.' })
-    else toast.success('Execução concluída', { description: `${fontes.length} fonte(s) rodada(s).` })
+    if (parado) toast('Execução interrompida', { description: 'Parou após o ciclo atual.' })
+    else toast.success('Execução concluída', { description: `Todas as ${fontes.length} fonte(s) varridas.` })
   }
   function pararTudo() {
     tudoStop.current = true
@@ -283,7 +290,7 @@ export function FontesConfig() {
           <div className="flex items-center gap-2 text-sm">
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
             <span className="font-medium">Executar tudo · fonte {tudo.idx}/{tudo.total}</span>
-            <span className="text-muted-foreground">rodando: {tudo.nome}</span>
+            <span className="text-muted-foreground">varrendo {tudo.nome} · ciclo {tudo.ciclo} (até fechar a volta)</span>
           </div>
           <Button size="sm" variant="destructive" onClick={pararTudo}><Square className="size-4" /> Parar</Button>
         </CardContent></Card>

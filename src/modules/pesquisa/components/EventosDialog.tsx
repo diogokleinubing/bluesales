@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -8,10 +10,16 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { fmtDate } from '@/lib/format'
+import { norm } from '@/modules/bi/lib/classify'
+import { useProfile } from '@/modules/crm/hooks/useProfile'
 import { CopyUrlButton } from './CopyUrlButton'
+import { ImportCrmButton } from './ImportCrmButton'
 import { faixaPreco } from '../lib/preco'
 import { AtracaoDialog } from '@/modules/crm/components/AtracaoDialog'
-import type { CrawledEventRow } from '../hooks/usePesquisa'
+import {
+  useCrmNomes, usePromocoes, useCrmOrgId, promoverOrganizador,
+  type CrawledEventRow,
+} from '../hooks/usePesquisa'
 
 /** Limpa o nome do evento p/ sugerir o nome da atração (remove o ano). */
 function suggestAttr(nome: string | null): string {
@@ -46,6 +54,34 @@ export function EventosDialog({
     (a.data_inicio ?? '').localeCompare(b.data_inicio ?? ''),
   )
   const [addNome, setAddNome] = useState<string | null>(null)
+
+  // Organizador → CRM: chip verde se já existe (promovido/cadastrado), + p/ importar.
+  const qc = useQueryClient()
+  const { profile } = useProfile()
+  const orgId = useCrmOrgId()
+  const crmNomes = useCrmNomes('organizador').data
+  const promos = usePromocoes('organizador').data
+  const [busyOrg, setBusyOrg] = useState<string | null>(null)
+
+  async function onImportOrg(e: CrawledEventRow) {
+    const nome = (e.organizador_raw ?? '').trim()
+    if (!nome || !orgId) return
+    const chave = nome.toLowerCase()
+    setBusyOrg(chave)
+    try {
+      await promoverOrganizador(orgId, {
+        chave, nome,
+        cidade: e.cidade ?? null, uf: e.uf ?? null,
+        precoMin: e.preco_min, precoMax: e.preco_max, taxaMediaPct: e.taxa_pct,
+        eventos: 1, cidades: e.cidade ? [e.cidade] : [], fontes: e.source_nome ? [e.source_nome] : [],
+      }, profile?.id ?? null)
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'crm-nomes'] })
+      qc.invalidateQueries({ queryKey: ['pesquisa', 'promocoes'] })
+      toast.success('Organizador copiado para o CRM', { description: nome })
+    } catch (err) {
+      toast.error('Erro ao copiar', { description: (err as Error).message })
+    } finally { setBusyOrg(null) }
+  }
 
   return (
     <>
@@ -92,7 +128,32 @@ export function EventosDialog({
                       </button>
                     )}
                   </TableCell>
-                  {showOrganizador && <TableCell className="truncate text-muted-foreground" title={e.organizador_raw ?? undefined}>{e.organizador_raw ?? '—'}</TableCell>}
+                  {showOrganizador && (
+                    <TableCell className="text-muted-foreground">
+                      {e.organizador_raw ? (() => {
+                        const chave = e.organizador_raw.trim().toLowerCase()
+                        const promo = !!promos?.has(chave)
+                        const noCrm = !promo && !!crmNomes?.has(norm(e.organizador_raw))
+                        const href = `/pesquisa/eventos?${new URLSearchParams({ organizador: e.organizador_raw }).toString()}`
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={href} target="_blank" rel="noreferrer"
+                              className="min-w-0 truncate hover:text-primary hover:underline"
+                              title={`Ver eventos de ${e.organizador_raw} em Pesquisa`}
+                            >
+                              {e.organizador_raw}
+                            </a>
+                            <ImportCrmButton
+                              imported={promo} inCrm={noCrm}
+                              disabled={busyOrg === chave || !orgId}
+                              onImport={() => onImportOrg(e)} className="shrink-0"
+                            />
+                          </div>
+                        )
+                      })() : '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap text-muted-foreground">{e.data_inicio ? fmtDate(e.data_inicio) : '—'}</TableCell>
                   <TableCell className="whitespace-nowrap text-right tabular-nums">
                     {e.gratuito ? 'Grátis' : faixaPreco(e.preco_min, e.preco_max)}

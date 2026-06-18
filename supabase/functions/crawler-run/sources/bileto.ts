@@ -16,6 +16,9 @@ const API = 'https://bff-sales-api-cdn.bileto.sympla.com.br/api/v1/events'
 const MAX_SCAN = 1500 // IDs varridos por execução (normal: pula conhecidos, barato)
 const REPROC_SCAN = 300 // reprocessar refaz HTTP+upsert de TODOS da janela: menor p/ não estourar o limite
 const MISS_STREAK = 200 // IDs inexistentes seguidos => fronteira (tolera buracos)
+const FWD_MAX = 400 // teto de IDs sondados na FRENTE (descobrir novos) por execução
+const FWD_MISS = 60 // misses seguidos na frente => passou da fronteira do topo (para)
+const BACKLOG_FETCH = 200 // teto de REQUESTS no backlog/run (pula conhecidos de graça)
 const BATCH = 10
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -105,20 +108,49 @@ async function runScan(reprocessar: boolean): Promise<Scanned[]> {
   const cfg = (src.config ?? {}) as Record<string, unknown>
   // Reprocessar não pula conhecidos (HTTP+upsert de todos): janela menor.
   const maxScan = reprocessar ? Number(cfg.scan_reproc ?? REPROC_SCAN) : Number(cfg.scan ?? MAX_SCAN)
-  const topo = Number(cfg.id_topo ?? 122500) // recomeço (acima da fronteira atual)
+  let topo = Number(cfg.id_topo ?? 122500) // teto da faixa (cresce com os novos)
   const minId = Number(cfg.id_min ?? 1)
   // Reprocessar: não pula os conhecidos (recoleta/atualiza); o cursor avança igual.
   const known = reprocessar ? new Set<string>() : await getKnown(db)
 
-  // Varredura DESCENDENTE a partir do cursor de baixo, pulando os já coletados
-  // (rápido) e capturando os de IDs menores. Cobre toda a faixa ao longo das
-  // execuções (use o Lote). Ao chegar no fundo, recomeça do topo (pega novos).
+  const events: Scanned[] = []
+
+  // FASE FRENTE (só normal): descobre NOVOS subindo a partir da fronteira do topo
+  // (id_alto). Eventos novos do Bileto têm IDs maiores; aqui os capturamos e
+  // avançamos a fronteira. Para ao bater FWD_MISS misses seguidos (passou do topo)
+  // ou FWD_MAX sondados.
+  let idAlto = Number(cfg.id_alto ?? topo)
+  if (!reprocessar) {
+    const fwdMax = Number(cfg.scan_frente ?? FWD_MAX)
+    let up = idAlto + 1
+    let probed = 0
+    let miss = 0
+    let achados = 0
+    while (probed < fwdMax && miss < FWD_MISS) {
+      const ids: number[] = []
+      for (let k = 0; k < BATCH && probed < fwdMax; k++) { ids.push(up); up++; probed++ }
+      const results = await Promise.all(
+        ids.map(async (i) => ({ i, ev: known.has(String(i)) ? 'KNOWN' as const : await fetchBileto(i) })),
+      )
+      for (const { i, ev } of results) {
+        if (ev === 'KNOWN') { idAlto = Math.max(idAlto, i); miss = 0; continue } // já temos: existe
+        if (ev) { events.push({ id: i, ev }); achados++; idAlto = Math.max(idAlto, i); miss = 0 }
+        else miss++
+      }
+    }
+    topo = Math.max(topo, idAlto) // a faixa do backlog cresce até os novos
+    console.log(`[bileto] frente: sondou ${probed} acima, ${achados} novos, id_alto -> ${idAlto}`)
+  }
+
+  // FASE BACKLOG: varredura DESCENDENTE a partir do cursor de baixo, pulando os
+  // já coletados (rápido). Ao chegar no fundo, recomeça do topo (que cresceu).
   let id = Number(cfg.id_baixo ?? topo)
   if (id < minId || id > topo) id = topo
   let scanned = 0
-  const events: Scanned[] = []
+  let fetched = 0 // nº de REQUESTS (IDs desconhecidos sondados) — o que pesa
+  const fetchCap = reprocessar ? maxScan : Number(cfg.scan_fetch ?? BACKLOG_FETCH)
 
-  while (scanned < maxScan && id >= minId) {
+  while (scanned < maxScan && fetched < fetchCap && id >= minId) {
     const ids: number[] = []
     for (let k = 0; k < BATCH && scanned < maxScan && id >= minId; k++) { ids.push(id); id--; scanned++ }
     const results = await Promise.all(
@@ -127,6 +159,7 @@ async function runScan(reprocessar: boolean): Promise<Scanned[]> {
       ),
     )
     for (const { i, ev } of results) {
+      if (ev !== 'KNOWN') fetched++ // contou um request (existindo ou não)
       if (ev === 'KNOWN' || !ev) continue
       events.push({ id: i, ev })
     }
@@ -135,9 +168,9 @@ async function runScan(reprocessar: boolean): Promise<Scanned[]> {
   const fim = id < minId
   const novoBaixo = fim ? topo : id
   await db.from('crawler_sources')
-    .update({ config: { ...cfg, id_baixo: novoBaixo } })
+    .update({ config: { ...cfg, id_baixo: novoBaixo, id_alto: idAlto, id_topo: topo } })
     .eq('id', src.id)
-  console.log(`[bileto] scan desc: ${Number(cfg.id_baixo ?? topo)} -> ${novoBaixo} (${scanned} ids, ${events.length} novos${fim ? ', recomeçou do topo' : ''})`)
+  console.log(`[bileto] backlog: ${Number(cfg.id_baixo ?? topo)} -> ${novoBaixo} (${scanned} ids, ${fetched} requests, ${events.length} eventos${fim ? ', recomeçou do topo' : ''})`)
 
   scanCache = events
   return scanCache

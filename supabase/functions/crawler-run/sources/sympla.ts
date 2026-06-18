@@ -224,21 +224,23 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
   let novoOffset: number | null = null
 
   if (semCidade) {
-    // Avança por um offset no sitemap (cobre tudo aos poucos, sem repetir).
+    // Caminha o sitemap a partir do offset ACUMULANDO até `cap` NOVOS — pula os
+    // já coletados/online de graça (só checagem em memória), sem gastar o ciclo.
+    // Assim cada run rende um lote cheio de trabalho real (não uma janela que
+    // pode estar quase toda já coletada). O offset avança o quanto for preciso.
     const src = await getSource()
     srcId = src?.id ?? null
     const cfg = src?.cfg ?? {}
     const cap = Number(cfg.scan ?? 150)
-    const offset = Number(cfg.sitemap_offset ?? 0)
-    const fim = Math.min(offset + cap, urls.length)
-    for (let i = offset; i < fim; i++) {
-      const u = urls[i]
+    let i = urls.length ? Number(cfg.sitemap_offset ?? 0) % urls.length : 0
+    while (ids.length < cap && i < urls.length) {
+      const u = urls[i]; i++
       if (/online/i.test(u)) continue
       const id = idDaUrl(u)
       if (!id || known.has(id)) continue
       ids.push(id)
     }
-    novoOffset = fim >= urls.length ? 0 : fim // ao terminar a passada, recomeça
+    novoOffset = i >= urls.length ? 0 : i // chegou ao fim do sitemap -> recomeça
   } else {
     const cidadeToken = norm(cidade).replace(/ /g, '-') // "São Paulo" -> "sao-paulo"
     for (const u of urls) {
@@ -253,32 +255,40 @@ export const symplaScraper: Scraper = async (ctx: ScrapeContext) => {
   const agora = Date.now()
   const out: RawEvent[] = []
 
-  for (const id of ids) {
-    const ev = await fetchEvento(id)
-    if (!ev?.name) continue
-    if (ev.cancelled || ev.published === false || ev.visible === false) continue
+  // Busca os novos em lotes paralelos (evento + preço por evento em paralelo).
+  const BATCH = 8
+  for (let b = 0; b < ids.length; b += BATCH) {
+    const slice = ids.slice(b, b + BATCH)
+    const mapped = await Promise.all(slice.map(async (id) => {
+      const ev = await fetchEvento(id)
+      if (!ev?.name) return null
+      if (ev.cancelled || ev.published === false || ev.visible === false) return null
 
-    const cidadeEv = ev.eventsAddress?.city ?? null
-    if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) continue
+      const cidadeEv = ev.eventsAddress?.city ?? null
+      if (!semCidade && (!cidadeEv || norm(cidadeEv) !== norm(cidade))) return null
 
-    // Capturamos eventos passados também (sem data não descarta). Só não
-    // buscamos preço de evento já encerrado (venda fechada).
-    const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
-    const t = dataIni ? Date.parse(dataIni) : NaN
-    const ehPassado = !isNaN(t) && t < agora - 86_400_000
+      // Capturamos eventos passados também (sem data não descarta). Só não
+      // buscamos preço de evento já encerrado (venda fechada).
+      const dataIni = ev.startDateMultiFormat?.ISO8601 ?? ev.startDate ?? null
+      const t = dataIni ? Date.parse(dataIni) : NaN
+      const ehPassado = !isNaN(t) && t < agora - 86_400_000
 
-    const ehFree = (ev.paymentEventType ?? '').toLowerCase() === 'free'
-    const precos = (ehFree || ehPassado) ? null : await fetchPrecos(id)
-    const urlEvento = ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`
-    out.push(toRawEvent(ev, id, urlEvento, precos, ehFree))
+      const ehFree = (ev.paymentEventType ?? '').toLowerCase() === 'free'
+      const precos = (ehFree || ehPassado) ? null : await fetchPrecos(id)
+      const urlEvento = ev.oldUrl ?? `https://www.sympla.com.br/${ev.slug ?? ''}__${id}`
+      return toRawEvent(ev, id, urlEvento, precos, ehFree)
+    }))
+    for (const r of mapped) if (r) out.push(r)
   }
 
   if (semCidade && srcId && novoOffset != null) {
     const db = adminClient()
     const { data: cur } = await db.from('crawler_sources').select('config').eq('id', srcId).maybeSingle()
     const cfg = (cur?.config ?? {}) as Record<string, unknown>
-    await db.from('crawler_sources').update({ config: { ...cfg, sitemap_offset: novoOffset } }).eq('id', srcId)
-    console.log(`[sympla] sitemap_offset -> ${novoOffset} (${ids.length} ids, ${out.length} válidos)`)
+    await db.from('crawler_sources').update({
+      config: { ...cfg, sitemap_offset: novoOffset, sitemap_total: urls.length },
+    }).eq('id', srcId)
+    console.log(`[sympla] sitemap_offset -> ${novoOffset} (${ids.length} novos, ${out.length} válidos)`)
   }
 
   return out

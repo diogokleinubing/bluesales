@@ -168,7 +168,7 @@ const PROGRESSO: Record<string, ProgDesc> = {
   guicheweb: { pos: (c) => N(c.offset) },
   diskingressos: { pos: (c) => N(c.offset) },
   ingresse: { pos: (c) => N(c.offset) },
-  sympla: { pos: (c) => N(c.sitemap_offset) },
+  sympla: { pos: (c) => N(c.sitemap_offset), total: (c) => N(c.sitemap_total) || 0 },
   ingressonacional: { pos: (c) => N(c.offset) },
   q2ingressos: { pos: (c) => N(c.offset) },
   ticketsports: { pos: (c) => N(c.offset) },
@@ -182,6 +182,7 @@ const PROGRESSO: Record<string, ProgDesc> = {
   megabilheteria: { catalogo: true },
   sampaingressos: { catalogo: true },
   ingressodigital: { catalogo: true },
+  minhaentrada: { catalogo: true },
 }
 
 type Progresso = {
@@ -358,8 +359,11 @@ Deno.serve(async (req) => {
   const { data: org } = await db.from('orgs').select('id').order('created_at').limit(1).maybeSingle()
   if (!org) return json({ error: 'Nenhuma org' }, 400)
 
-  let q = db.from('crawler_sources').select('*').eq('org_id', org.id).eq('ativo', true)
+  // Run específico (slug) ignora o "ativo": o switch só gateia o "rodar todas"
+  // (Executar tudo / cron); manual/varredura sempre roda a fonte escolhida.
+  let q = db.from('crawler_sources').select('*').eq('org_id', org.id)
   if (body.source_slug) q = q.eq('slug', body.source_slug)
+  else q = q.eq('ativo', true)
   const { data: sources, error: srcErr } = await q
   if (srcErr) return json({ error: srcErr.message }, 500)
 
