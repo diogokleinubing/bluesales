@@ -35,6 +35,9 @@ import { q2IngressosScraper } from './sources/q2ingressos.ts'
 import { zigTicketsScraper } from './sources/zigtickets.ts'
 import { uhuuScraper } from './sources/uhuu.ts'
 import { ticketSportsScraper } from './sources/ticketsports.ts'
+import { ticketmasterScraper } from './sources/ticketmaster.ts'
+import { ticket360Scraper } from './sources/ticket360.ts'
+import { meapleScraper } from './sources/meaple.ts'
 import { bilheteriaExpressScraper } from './sources/bilheteriaexpress.ts'
 import { shotgunScraper } from './sources/shotgun.ts'
 import { clubeDoIngressoScraper } from './sources/clubedoingresso.ts'
@@ -58,6 +61,9 @@ const SCRAPERS: Record<string, Scraper> = {
   zigtickets: zigTicketsScraper,
   uhuu: uhuuScraper,
   ticketsports: ticketSportsScraper,
+  ticketmaster: ticketmasterScraper,
+  ticket360: ticket360Scraper,
+  meaple: meapleScraper,
   bilheteriaexpress: bilheteriaExpressScraper,
   shotgun: shotgunScraper,
   clubedoingresso: clubeDoIngressoScraper,
@@ -172,6 +178,9 @@ const PROGRESSO: Record<string, ProgDesc> = {
   ingressonacional: { pos: (c) => N(c.offset) },
   q2ingressos: { pos: (c) => N(c.offset) },
   ticketsports: { pos: (c) => N(c.offset) },
+  ticketmaster: { catalogo: true }, // descobre o catálogo (home + /page/) por run
+  ticket360: { catalogo: true }, // descobre o catálogo (por estado) por run
+  meaple: { catalogo: true }, // sitemap = catálogo completo por run
   uhuu: { pos: (c) => N(c.offset) },
   zigtickets: { catalogo: true }, // emite TODOS os eventos por run → novos em 1 ciclo
   bilheteriaexpress: { pos: (c) => N(c.pagina) },
