@@ -18,7 +18,6 @@ const REPROC_SCAN = 300 // reprocessar refaz HTTP+upsert de TODOS da janela: men
 const MISS_STREAK = 200 // IDs inexistentes seguidos => fronteira (tolera buracos)
 const FWD_MAX = 400 // teto de IDs sondados na FRENTE (descobrir novos) por execução
 const FWD_MISS = 60 // misses seguidos na frente => passou da fronteira do topo (para)
-const BACKLOG_FETCH = 200 // teto de REQUESTS no backlog/run (pula conhecidos de graça)
 const BATCH = 10
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -142,35 +141,35 @@ async function runScan(reprocessar: boolean): Promise<Scanned[]> {
     console.log(`[bileto] frente: sondou ${probed} acima, ${achados} novos, id_alto -> ${idAlto}`)
   }
 
-  // FASE BACKLOG: varredura DESCENDENTE a partir do cursor de baixo, pulando os
-  // já coletados (rápido). Ao chegar no fundo, recomeça do topo (que cresceu).
-  let id = Number(cfg.id_baixo ?? topo)
-  if (id < minId || id > topo) id = topo
-  let scanned = 0
-  let fetched = 0 // nº de REQUESTS (IDs desconhecidos sondados) — o que pesa
-  const fetchCap = reprocessar ? maxScan : Number(cfg.scan_fetch ?? BACKLOG_FETCH)
-
-  while (scanned < maxScan && fetched < fetchCap && id >= minId) {
-    const ids: number[] = []
-    for (let k = 0; k < BATCH && scanned < maxScan && id >= minId; k++) { ids.push(id); id--; scanned++ }
-    const results = await Promise.all(
-      ids.map(async (i) =>
-        known.has(String(i)) ? { i, ev: 'KNOWN' as const } : { i, ev: await fetchBileto(i) },
-      ),
-    )
-    for (const { i, ev } of results) {
-      if (ev !== 'KNOWN') fetched++ // contou um request (existindo ou não)
-      if (ev === 'KNOWN' || !ev) continue
-      events.push({ id: i, ev })
+  // FASE BACKLOG — só no REPROCESSAR (manual, "para trás"): varredura DESCENDENTE
+  // do cursor de baixo até `id_min` (limite que VOCÊ define no config), recoletando.
+  // Normal NUNCA desce — só sobe (frente). Ao bater no id_min, volta ao topo.
+  let novoBaixo = Number(cfg.id_baixo ?? topo)
+  if (reprocessar) {
+    let id = Number(cfg.id_baixo ?? topo)
+    if (id < minId || id > topo) id = topo
+    let scanned = 0
+    while (scanned < maxScan && id >= minId) {
+      const ids: number[] = []
+      for (let k = 0; k < BATCH && scanned < maxScan && id >= minId; k++) { ids.push(id); id--; scanned++ }
+      const results = await Promise.all(
+        ids.map(async (i) => ({ i, ev: known.has(String(i)) ? 'KNOWN' as const : await fetchBileto(i) })),
+      )
+      for (const { i, ev } of results) {
+        if (ev === 'KNOWN' || !ev) continue
+        events.push({ id: i, ev })
+      }
     }
+    const fim = id < minId
+    novoBaixo = fim ? topo : id
+    console.log(`[bileto] backlog(reproc) -> ${novoBaixo} (${scanned} ids, ${events.length} eventos${fim ? ', fim→topo' : ''})`)
   }
 
-  const fim = id < minId
-  const novoBaixo = fim ? topo : id
-  await db.from('crawler_sources')
-    .update({ config: { ...cfg, id_baixo: novoBaixo, id_alto: idAlto, id_topo: topo } })
-    .eq('id', src.id)
-  console.log(`[bileto] backlog: ${Number(cfg.id_baixo ?? topo)} -> ${novoBaixo} (${scanned} ids, ${fetched} requests, ${events.length} eventos${fim ? ', recomeçou do topo' : ''})`)
+  // Normal salva a frente (id_alto/id_topo); reprocessar salva o backlog (id_baixo).
+  const patch: Record<string, unknown> = reprocessar
+    ? { id_baixo: novoBaixo }
+    : { id_alto: idAlto, id_topo: topo }
+  await db.from('crawler_sources').update({ config: { ...cfg, ...patch } }).eq('id', src.id)
 
   scanCache = events
   return scanCache

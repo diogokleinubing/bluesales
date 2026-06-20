@@ -56,6 +56,9 @@ export function FontesConfig() {
   const [report, setReport] = useState<CrawlerSource | null>(null)
   const [edit, setEdit] = useState<CrawlerSource | null>(null)
   const [cidadesTxt, setCidadesTxt] = useState('')
+  // Faixa de IDs do Bileto (só p/ essa fonte): subir a partir de / descer até.
+  const [biletoAlto, setBiletoAlto] = useState('')
+  const [biletoMin, setBiletoMin] = useState('')
 
   // Lote: roda N ciclos em sequência com intervalo (loop no front, interrompível).
   const [batch, setBatch] = useState<{ slug: string; nome: string; total: number; done: number; intervalSec: number; running: boolean; reprocessar: boolean } | null>(null)
@@ -215,6 +218,9 @@ export function FontesConfig() {
   function openEdit(s: CrawlerSource) {
     setEdit(s)
     setCidadesTxt(cidadesToText(s))
+    const cfg = (s.config ?? {}) as Record<string, unknown>
+    setBiletoAlto(s.slug === 'bileto' ? String(cfg.id_alto ?? cfg.id_topo ?? '') : '')
+    setBiletoMin(s.slug === 'bileto' ? String(cfg.id_min ?? '') : '')
   }
 
   async function reiniciarVarredura() {
@@ -230,7 +236,19 @@ export function FontesConfig() {
   async function salvar() {
     if (!edit) return
     try {
-      await saveSourceConfig(edit, { cidades: parseCidades(cidadesTxt) })
+      const patch: Record<string, unknown> = { cidades: parseCidades(cidadesTxt) }
+      if (edit.slug === 'bileto') {
+        const alto = Math.floor(Number(biletoAlto))
+        const min = Math.floor(Number(biletoMin))
+        if (biletoAlto.trim() && Number.isFinite(alto) && alto > 0) {
+          // "Subir a partir de N": a frente começa em N (id_alto = N-1).
+          patch.id_alto = alto - 1
+          const topoAtual = Number((edit.config as Record<string, unknown>)?.id_topo ?? 0)
+          patch.id_topo = Math.max(alto, topoAtual)
+        }
+        if (biletoMin.trim() && Number.isFinite(min) && min > 0) patch.id_min = min
+      }
+      await saveSourceConfig(edit, patch)
       qc.invalidateQueries({ queryKey: ['pesquisa', 'sources'] })
       setEdit(null)
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
@@ -398,6 +416,29 @@ export function FontesConfig() {
               <Textarea rows={8} value={cidadesTxt} onChange={(e) => setCidadesTxt(e.target.value)}
                 placeholder={'Florianópolis;SC\nSão Paulo;SP'} />
             </div>
+            {edit?.slug === 'bileto' && (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-sm font-medium">Faixa de IDs (Bileto)</p>
+                <p className="text-xs text-muted-foreground">
+                  A coleta normal <b>sobe</b> (descobre novos); o <b>reprocessar desce</b> até o mínimo.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Subir a partir de</Label>
+                    <Input type="number" min={1} value={biletoAlto} onChange={(e) => setBiletoAlto(e.target.value)}
+                      placeholder="ex.: 121000" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Descer até (mínimo)</Label>
+                    <Input type="number" min={1} value={biletoMin} onChange={(e) => setBiletoMin(e.target.value)}
+                      placeholder="ex.: 100000" />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Topo atual (cresce sozinho com os novos): {String((edit.config as Record<string, unknown>)?.id_topo ?? '—')}
+                </p>
+              </div>
+            )}
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -455,6 +496,15 @@ export function FontesConfig() {
 function ProgressoCell({ p }: { p?: Progresso | null }) {
   if (!p) return <span className="text-xs text-muted-foreground">—</span>
   const { pos, total, passo, voltou, voltas, novos } = p
+  // Acabou de fechar uma volta -> mostra "volta completa" (antes da barra, senão
+  // a barra reseta pra ~0% e parece que recomeçou).
+  if (voltou) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--success)]" title={voltas ? `${voltas} volta(s) completas` : ''}>
+        <CheckCircle2 className="size-3.5" /> volta completa
+      </span>
+    )
+  }
   if (total && total > 0 && pos != null) {
     const pct = Math.max(0, Math.min(100, Math.round((pos / total) * 100)))
     const rest = passo && passo > 0 && pos < total ? Math.ceil((total - pos) / passo) : null
@@ -464,16 +514,9 @@ function ProgressoCell({ p }: { p?: Progresso | null }) {
           <div className="h-full rounded bg-primary transition-all" style={{ width: `${pct}%` }} />
         </div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">
-          {pct}%{rest != null ? ` · ~${rest} exec.` : ''}
+          {voltas ? `${voltas}ª volta · ` : ''}{pct}%{rest != null ? ` · ~${rest} exec.` : ''}
         </div>
       </div>
-    )
-  }
-  if (voltou) {
-    return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--success)]" title={voltas ? `${voltas} volta(s)` : ''}>
-        <CheckCircle2 className="size-3.5" /> volta completa
-      </span>
     )
   }
   return (

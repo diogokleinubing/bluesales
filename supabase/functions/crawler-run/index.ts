@@ -165,10 +165,7 @@ type Cfg = Record<string, unknown>
 type ProgDesc = { pos?: (c: Cfg) => number; total?: (c: Cfg) => number; token?: string; catalogo?: boolean }
 const N = (v: unknown, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d }
 const PROGRESSO: Record<string, ProgDesc> = {
-  bileto: {
-    pos: (c) => N(c.id_topo, 122500) - N(c.id_baixo, N(c.id_topo, 122500)),
-    total: (c) => N(c.id_topo, 122500) - N(c.id_min, 1),
-  },
+  bileto: { catalogo: true }, // normal = só frente (sobe); volta completa quando 0 novos
   bilheteriadigital: { pos: (c) => N(c.uf_cursor), total: () => 27 },
   shotgun: { pos: (c) => N(c.city_cursor) },
   guicheweb: { pos: (c) => N(c.offset) },
