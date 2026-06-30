@@ -20,6 +20,7 @@ import { useLocalOptions, useOrgOptions, useSegmentOptions } from '../hooks/useC
 import { usePlatforms } from '../hooks/useConfigCadastros'
 import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplete'
 import { AtividadesPanel } from '../components/AtividadesPanel'
+import { OportunidadesCard } from '../components/OportunidadesCard'
 import { StageSelector } from '../components/StageSelector'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -56,6 +57,7 @@ export function EventoDetalhe() {
         <aside className="space-y-6 p-4">
           <EventoDetalhesForm ev={ev} />
           <EventoEdicoes ev={ev} />
+          <OportunidadesCard crmEventId={ev.id} initialTitulo={ev.nome} />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
             <DeleteEntityButton

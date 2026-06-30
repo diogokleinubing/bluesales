@@ -22,6 +22,7 @@ import { useOrganizations } from '../hooks/useOrganizations'
 import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplete'
 import { usePlatforms, useLocalTipos } from '../hooks/useConfigCadastros'
 import { AtividadesPanel } from '../components/AtividadesPanel'
+import { OportunidadesCard } from '../components/OportunidadesCard'
 import { StageSelector } from '../components/StageSelector'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -83,6 +84,7 @@ export function LocalDetalhe() {
             <h3 className="mb-2 text-sm font-semibold">Organizações vinculadas</h3>
             <LocalOrganizacoes localId={local.id} />
           </div>
+          <OportunidadesCard localId={local.id} initialTitulo={local.nome} />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
             <DeleteEntityButton

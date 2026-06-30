@@ -51,12 +51,15 @@ async function enrich(rows: Opportunity[]): Promise<OppListRow[]> {
   })
 }
 
-export function useOpportunities(organizationId?: string) {
+export function useOpportunities(
+  organizationId?: string,
+  opts?: { localId?: string; crmEventId?: string },
+) {
   const orgId = useCrmOrgId()
   return useQuery({
     enabled: !!orgId,
     staleTime: 30 * 1000,
-    queryKey: ['crm', 'opportunities', orgId, organizationId ?? 'all'],
+    queryKey: ['crm', 'opportunities', orgId, organizationId ?? 'all', opts?.localId ?? '', opts?.crmEventId ?? ''],
     queryFn: async (): Promise<OppListRow[]> => {
       let q = supabase
         .from('opportunities')
@@ -65,6 +68,8 @@ export function useOpportunities(organizationId?: string) {
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
       if (organizationId) q = q.eq('organization_id', organizationId)
+      if (opts?.localId) q = q.eq('local_id', opts.localId)
+      if (opts?.crmEventId) q = q.eq('crm_event_id', opts.crmEventId)
       const { data, error } = await q
       if (error) throw new Error(error.message)
       return enrich((data ?? []) as Opportunity[])
