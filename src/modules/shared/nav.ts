@@ -28,9 +28,14 @@ import {
   Rss,
   FilterX,
   ScrollText,
+  FolderKanban,
+  ListChecks,
+  ListTodo,
+  LayoutGrid,
+  Users,
 } from 'lucide-react'
 
-export type ModuleId = 'bi' | 'comercial' | 'pesquisa'
+export type ModuleId = 'bi' | 'comercial' | 'pesquisa' | 'projetos'
 
 export interface NavItem {
   to: string
@@ -170,11 +175,35 @@ export const MODULES: ModuleDef[] = [
       },
     ],
   },
+  {
+    id: 'projetos',
+    label: 'Projetos',
+    icon: FolderKanban,
+    home: '/projetos/acoes',
+    groups: [
+      {
+        title: 'Visão geral',
+        items: [
+          { to: '/projetos/acoes', label: 'Ações', icon: ListChecks, color: '#6366f1' },
+          { to: '/projetos/tarefas', label: 'Tarefas', icon: ListTodo, color: '#10b981' },
+        ],
+      },
+      {
+        title: 'Cadastros',
+        items: [
+          { to: '/projetos/objetivos', label: 'Objetivos', icon: Target, color: '#f59e0b' },
+          { to: '/projetos/areas', label: 'Áreas', icon: LayoutGrid, color: '#0ea5e9' },
+          { to: '/projetos/pessoas', label: 'Pessoas', icon: Users, color: '#a855f7' },
+        ],
+      },
+    ],
+  },
 ]
 
 export function moduleFromPath(pathname: string): ModuleId {
   if (pathname.startsWith('/comercial')) return 'comercial'
   if (pathname.startsWith('/pesquisa')) return 'pesquisa'
+  if (pathname.startsWith('/projetos')) return 'projetos'
   return 'bi'
 }
 
@@ -185,18 +214,64 @@ export function getModule(id: ModuleId): ModuleDef {
 /** IDs de módulo válidos (para sanear o valor vindo do perfil). */
 export const MODULE_IDS: ModuleId[] = MODULES.map((m) => m.id)
 
-/**
- * Um módulo é acessível se não houver restrição (allowed = null/vazio = todos)
- * ou se ele estiver na lista permitida.
- */
-export function isModuleAllowed(
-  id: ModuleId,
-  allowed: ModuleId[] | null,
-): boolean {
-  return !allowed || allowed.length === 0 || allowed.includes(id)
+/** Contexto de permissão do usuário para decidir a exibição de módulos/menus. */
+export interface AccessCtx {
+  isAdmin: boolean
+  isGestor: boolean
+  /** null = sem restrição de módulo. */
+  allowedModules: ModuleId[] | null
+  /** null = sem restrição de menu (cai no gate de módulo); [] = nenhum menu. */
+  allowedMenus: string[] | null
 }
 
-/** Módulos visíveis dado o conjunto permitido (null/vazio = todos). */
-export function visibleModules(allowed: ModuleId[] | null): ModuleDef[] {
-  return MODULES.filter((m) => isModuleAllowed(m.id, allowed))
+/**
+ * Um item de menu é visível se o papel permite (requires) E a permissão libera:
+ * quando `allowedMenus` é definido, ele é a fonte (por rota); senão cai no gate
+ * de `allowedModules`. Admin vê tudo.
+ */
+export function itemVisible(item: NavItem, moduleId: ModuleId, ctx: AccessCtx): boolean {
+  if (ctx.isAdmin) return true
+  if (item.requires === 'admin') return false
+  if (item.requires === 'gestor' && !ctx.isGestor) return false
+  if (ctx.allowedMenus != null) return ctx.allowedMenus.includes(item.to)
+  return ctx.allowedModules == null || ctx.allowedModules.includes(moduleId)
+}
+
+/** Um módulo é visível se tiver ao menos um item visível. */
+export function moduleVisible(m: ModuleDef, ctx: AccessCtx): boolean {
+  if (ctx.isAdmin) return true
+  return m.groups.some((g) => g.items.some((it) => itemVisible(it, m.id, ctx)))
+}
+
+/** Módulos que o usuário pode ver. */
+export function accessibleModules(ctx: AccessCtx): ModuleDef[] {
+  return MODULES.filter((m) => moduleVisible(m, ctx))
+}
+
+/** Item de menu correspondente a um pathname (match por prefixo mais longo). */
+export function findNavItemByPath(
+  pathname: string,
+): { moduleId: ModuleId; item: NavItem } | null {
+  let best: { moduleId: ModuleId; item: NavItem } | null = null
+  for (const m of MODULES) {
+    for (const g of m.groups) {
+      for (const it of g.items) {
+        if (pathname === it.to || pathname.startsWith(it.to + '/')) {
+          if (!best || it.to.length > best.item.to.length) best = { moduleId: m.id, item: it }
+        }
+      }
+    }
+  }
+  return best
+}
+
+/** Primeira rota visível para o usuário (para fallback/redirect), ou '/'. */
+export function firstVisibleRoute(ctx: AccessCtx): string {
+  for (const m of accessibleModules(ctx)) {
+    for (const g of m.groups) {
+      const it = g.items.find((i) => itemVisible(i, m.id, ctx))
+      if (it) return it.to
+    }
+  }
+  return '/'
 }

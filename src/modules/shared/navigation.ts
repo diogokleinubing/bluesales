@@ -10,6 +10,7 @@ const lastByModuleKey = (m: ModuleId) => `bt-last-route:${m}`
 function moduleOf(pathname: string): ModuleId {
   if (pathname.startsWith('/comercial')) return 'comercial'
   if (pathname.startsWith('/pesquisa')) return 'pesquisa'
+  if (pathname.startsWith('/projetos')) return 'projetos'
   return 'bi'
 }
 
@@ -26,7 +27,7 @@ export function rememberRoute(pathname: string, search = '') {
 export function lastRoute(): string {
   try {
     const v = localStorage.getItem(LAST_GLOBAL)
-    if (v && (v.startsWith('/bi/') || v.startsWith('/comercial/') || v.startsWith('/pesquisa/'))) return v
+    if (v && (v.startsWith('/bi/') || v.startsWith('/comercial/') || v.startsWith('/pesquisa/') || v.startsWith('/projetos/'))) return v
   } catch {
     // ignore
   }

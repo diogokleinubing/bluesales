@@ -61,6 +61,22 @@ export async function setUserModules(
 }
 
 /**
+ * Define os menus (rotas) liberados de um usuário.
+ * `null` = sem restrição de menu (cai no gate de módulos / vê tudo).
+ * Lista vazia `[]` = nenhum menu liberado (acesso bloqueado).
+ */
+export async function setUserMenus(
+  id: string,
+  menus: string[] | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ menus })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/**
  * Reseta a senha de outro usuário (via Edge Function admin-actions).
  * Retorna a senha temporária; o usuário será forçado a trocá-la no login.
  */

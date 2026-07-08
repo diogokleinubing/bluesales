@@ -159,6 +159,26 @@ const ExecucoesConfig = lazyWithRetry(() =>
   import('@/modules/pesquisa/pages/ExecucoesConfig').then((m) => ({ default: m.ExecucoesConfig })),
 )
 
+// --- Módulo Projetos (mock front) ---
+const ProjetosLayout = lazyWithRetry(() =>
+  import('@/modules/projetos/ProjetosLayout').then((m) => ({ default: m.ProjetosLayout })),
+)
+const ProjetosAcoes = lazyWithRetry(() =>
+  import('@/modules/projetos/pages/Acoes').then((m) => ({ default: m.Acoes })),
+)
+const ProjetosTarefas = lazyWithRetry(() =>
+  import('@/modules/projetos/pages/Tarefas').then((m) => ({ default: m.Tarefas })),
+)
+const ProjetosObjetivos = lazyWithRetry(() =>
+  import('@/modules/projetos/pages/Objetivos').then((m) => ({ default: m.Objetivos })),
+)
+const ProjetosAreas = lazyWithRetry(() =>
+  import('@/modules/projetos/pages/Areas').then((m) => ({ default: m.Areas })),
+)
+const ProjetosPessoas = lazyWithRetry(() =>
+  import('@/modules/projetos/pages/Pessoas').then((m) => ({ default: m.Pessoas })),
+)
+
 // --- Ambiente ---
 const ConfiguracoesPage = lazyWithRetry(() =>
   import('@/modules/settings/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })),
@@ -276,6 +296,20 @@ export const router = createBrowserRouter([
       { path: 'comercial/configuracao/segmentos', element: <SegmentosConfig /> },
       { path: 'comercial/configuracao/generos', element: <GenerosConfig /> },
       { path: 'comercial/configuracao/fit-score', element: <FitScoreConfig /> },
+
+      // Módulo Projetos (mock front — estado em memória via ProjetosProvider)
+      {
+        path: 'projetos',
+        element: <ProjetosLayout />,
+        children: [
+          { index: true, element: <Navigate to="/projetos/acoes" replace /> },
+          { path: 'acoes', element: <ProjetosAcoes /> },
+          { path: 'tarefas', element: <ProjetosTarefas /> },
+          { path: 'objetivos', element: <ProjetosObjetivos /> },
+          { path: 'areas', element: <ProjetosAreas /> },
+          { path: 'pessoas', element: <ProjetosPessoas /> },
+        ],
+      },
 
       // Módulo Pesquisa
       { path: 'pesquisa/eventos', element: <EventosCapturados /> },

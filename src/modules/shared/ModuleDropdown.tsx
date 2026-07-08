@@ -6,16 +6,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import { visibleModules, getModule, type ModuleId } from './nav'
+import { accessibleModules, getModule, type ModuleId, type AccessCtx } from './nav'
 import { lastRouteOfModule } from './navigation'
 import { useAuth } from '@/lib/auth'
 
 /** Seletor de módulo em formato dropdown, com o ícone do produto à esquerda. */
 export function ModuleDropdown({ active, collapsed }: { active: ModuleId; collapsed?: boolean }) {
   const navigate = useNavigate()
-  const { allowedModules } = useAuth()
+  const { isAdmin, isGestor, allowedModules, allowedMenus } = useAuth()
+  const ctx: AccessCtx = { isAdmin, isGestor, allowedModules, allowedMenus }
   const mod = getModule(active)
-  const mods = visibleModules(allowedModules)
+  const mods = accessibleModules(ctx)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
