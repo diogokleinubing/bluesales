@@ -39,7 +39,12 @@ export function LocalDetalhe() {
   const local = useMemo(() => (data ?? []).find((l) => l.id === id) ?? null, [data, id])
   const [verEventos, setVerEventos] = useState(false)
   // Eventos captados pelo módulo Pesquisa para este local (lazy: só ao abrir).
-  const eventosLocal = useEventosDoLocalNome(verEventos && local ? local.nome : null)
+  // Inclui o nome principal + nomes alternativos (aliases) na busca.
+  const eventosLocal = useEventosDoLocalNome(
+    verEventos && local
+      ? [local.nome, ...(local.aliases?.split(',').map((a) => a.trim()).filter(Boolean) ?? [])]
+      : null,
+  )
 
   if (isLoading) return <div className="-mx-6 -mt-6 p-6"><Skeleton className="h-96 w-full" /></div>
   if (!local) return <div className="-mx-6 -mt-6 p-6 text-muted-foreground">Local não encontrado.</div>

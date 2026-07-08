@@ -305,17 +305,21 @@ export function useEventosDoLocal(
   })
 }
 
-/** Eventos (não ignorados) de um local pelo nome (match por local_raw, sem cidade). */
+/**
+ * Eventos (não ignorados) de um local por nome (match por local_raw, sem cidade).
+ * Aceita o nome principal + nomes alternativos (aliases): casa com qualquer um.
+ */
 export function useEventosDoLocalNome(
-  nome: string | null,
+  nomes: string[] | null,
   fonte?: string | null,
 ): UseQueryResult<CrawledEventRow[]> {
   const orgId = useCrmOrgId()
   const fonteSlug = fonte && fonte !== 'todas' ? fonte : null
+  const names = [...new Set((nomes ?? []).map((n) => n.trim()).filter(Boolean))]
   return useQuery({
-    enabled: !!orgId && !!nome,
+    enabled: !!orgId && names.length > 0,
     staleTime: 30_000,
-    queryKey: ['pesquisa', 'local-eventos-nome', orgId, nome, fonteSlug],
+    queryKey: ['pesquisa', 'local-eventos-nome', orgId, names.join('|'), fonteSlug],
     queryFn: async (): Promise<CrawledEventRow[]> => {
       let q = supabase
         .from('crawled_events')
@@ -324,7 +328,8 @@ export function useEventosDoLocalNome(
           : '*, crawler_sources(slug, nome), crawled_event_artists(artist_id, removido, artists(nome))')
         .eq('org_id', orgId!)
         .eq('ignorado', false)
-        .ilike('local_raw', nome!)
+        // OR de ilike (match exato case-insensitive) para nome + aliases.
+        .or(names.map((n) => `local_raw.ilike."${n.replace(/["\\]/g, '')}"`).join(','))
       if (fonteSlug) q = q.eq('crawler_sources.slug', fonteSlug)
       const { data, error } = await q.order('data_inicio', { ascending: true }).limit(1000)
       if (error) throw new Error(error.message)

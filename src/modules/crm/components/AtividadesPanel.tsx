@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Users, Phone, Mail, MessageCircle, StickyNote, CircleDot,
-  ShieldQuestion, CheckSquare, FileText, type LucideIcon,
+  ShieldQuestion, CheckSquare, FileText, Milestone, type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,9 +21,22 @@ import { fmtDate } from '@/lib/format'
 import { useProfile } from '../hooks/useProfile'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { useActivities, createActivity, type ActivityTipo } from '../hooks/useActivities'
+import { useAuditLog } from '../hooks/useAuditLog'
 import { useObjectionsBase } from '../hooks/useConfigCadastros'
 
 type Tipo = ActivityTipo | 'Objeção'
+
+/**
+ * entityType do painel -> entity_type usado na auditoria (stage_history/audit_log),
+ * conforme crm_entity_type() no banco (0081: crm_locals -> 'local', crm_events -> 'crm_event').
+ */
+const AUDIT_ENTITY: Record<AtividadesPanelProps['entityType'], string> = {
+  organization: 'organization',
+  person: 'person',
+  opportunity: 'opportunity',
+  evento: 'crm_event',
+  local: 'local',
+}
 
 const TYPES: { tipo: Tipo; icon: LucideIcon }[] = [
   { tipo: 'Nota', icon: StickyNote },
@@ -117,9 +130,19 @@ export function AtividadesPanel({
         .eq('entity_type', entityType)
         .eq('entity_id', entityId)
         .order('created_at', { ascending: false })
-      return data ?? []
+      const rows = data ?? []
+      const ids = [...new Set(rows.map((o) => o.created_by).filter(Boolean) as string[])]
+      let names = new Map<string, string>()
+      if (ids.length) {
+        const { data: profs } = await supabase.from('profiles').select('id, nome').in('id', ids)
+        names = new Map((profs ?? []).map((p) => [p.id as string, p.nome as string]))
+      }
+      return rows.map((o) => ({ ...o, author: o.created_by ? names.get(o.created_by) ?? null : null }))
     },
   })
+
+  // Mudanças de estágio de relacionamento (stage_history) no mesmo feed.
+  const hist = useAuditLog(AUDIT_ENTITY[entityType], entityId)
 
   const timeline = useMemo(() => {
     const items: {
@@ -140,11 +163,22 @@ export function AtividadesPanel({
       items.push({
         key: `o-${o.id}`, at: o.created_at, tipo: 'Objeção', icon: ShieldQuestion,
         titulo: obj?.titulo ?? 'Objeção', resumo: o.comentario, categoria: obj?.categoria ?? null,
+        author: o.author,
+      })
+    }
+    for (const e of hist.data ?? []) {
+      if (e.kind !== 'stage') continue
+      const c = e.changes[0]
+      items.push({
+        key: e.id, at: e.at, tipo: 'Estágio', icon: Milestone,
+        titulo: 'Mudança de estágio',
+        resumo: `${c?.oldValue ?? '—'} → ${c?.newValue ?? '—'}`,
+        author: e.user,
       })
     }
     // Sem data (To-Do) primeiro; depois por data desc.
     return items.sort((a, b) => ((a.at ?? '9999') < (b.at ?? '9999') ? 1 : -1))
-  }, [acts.data, objs.data])
+  }, [acts.data, objs.data, hist.data])
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['crm', 'activities'] })
@@ -253,7 +287,7 @@ export function AtividadesPanel({
       </div>
 
       {/* Timeline */}
-      {acts.isLoading || objs.isLoading ? (
+      {acts.isLoading || objs.isLoading || hist.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : timeline.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma atividade registrada.</p>
