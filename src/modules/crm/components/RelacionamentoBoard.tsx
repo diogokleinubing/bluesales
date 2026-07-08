@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ClasseBadge } from './ClasseBadge'
 import { useFunnel } from '../hooks/useFunnelStages'
 import { moveRelItemStage, type RelItem, type RelTipo } from '../hooks/useRelacionamento'
-import { fmtBRL } from '@/lib/format'
+import { fmtBRL, fmtDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const NONE = '__none__'
@@ -40,12 +40,13 @@ function rankClasse(b?: string | null) {
 }
 
 export function RelacionamentoBoard({
-  items, includeInactiveStages, showCidade = true, showGmv = true,
+  items, includeInactiveStages, showCidade = true, showGmv = true, showCadastro = false,
 }: {
   items: RelItem[]
   includeInactiveStages?: boolean
   showCidade?: boolean
   showGmv?: boolean
+  showCadastro?: boolean
 }) {
   const openItem = useOpenItem()
   const qc = useQueryClient()
@@ -109,20 +110,20 @@ export function RelacionamentoBoard({
       <div className="flex gap-2 pb-2">
         {columns.map((col) => (
           <Column key={col.id} id={col.id} nome={col.nome} cor={col.cor}
-            items={byStage.get(col.id) ?? []} showCidade={showCidade} showGmv={showGmv}
+            items={byStage.get(col.id) ?? []} showCidade={showCidade} showGmv={showGmv} showCadastro={showCadastro}
             onOpen={(e, href) => openItem(e, href)} />
         ))}
       </div>
       <DragOverlay>
-        {activeItem ? <CardView item={activeItem} showCidade={showCidade} showGmv={showGmv} dragging /> : null}
+        {activeItem ? <CardView item={activeItem} showCidade={showCidade} showGmv={showGmv} showCadastro={showCadastro} dragging /> : null}
       </DragOverlay>
     </DndContext>
   )
 }
 
-function Column({ id, nome, cor, items, showCidade, showGmv, onOpen }: {
+function Column({ id, nome, cor, items, showCidade, showGmv, showCadastro, onOpen }: {
   id: string; nome: string; cor: string | null; items: RelItem[]
-  showCidade: boolean; showGmv: boolean; onOpen: (e: ReactMouseEvent, href: string) => void
+  showCidade: boolean; showGmv: boolean; showCadastro: boolean; onOpen: (e: ReactMouseEvent, href: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const CAP = 60
@@ -143,7 +144,7 @@ function Column({ id, nome, cor, items, showCidade, showGmv, onOpen }: {
         )}
       </div>
       <div ref={setNodeRef} className={cn('flex min-h-32 flex-1 flex-col gap-2 p-2 transition-colors', isOver && 'bg-primary/5')}>
-        {shown.map((c) => <DraggableCard key={`${c.tipo}:${c.id}`} item={c} showCidade={showCidade} showGmv={showGmv} onOpen={onOpen} />)}
+        {shown.map((c) => <DraggableCard key={`${c.tipo}:${c.id}`} item={c} showCidade={showCidade} showGmv={showGmv} showCadastro={showCadastro} onOpen={onOpen} />)}
         {items.length > CAP && <p className="px-1 py-2 text-center text-xs text-muted-foreground">+{items.length - CAP} — use a busca</p>}
         {items.length === 0 && <p className="px-1 py-4 text-center text-xs text-muted-foreground">Vazio</p>}
       </div>
@@ -151,20 +152,20 @@ function Column({ id, nome, cor, items, showCidade, showGmv, onOpen }: {
   )
 }
 
-function DraggableCard({ item, showCidade, showGmv, onOpen }: {
-  item: RelItem; showCidade: boolean; showGmv: boolean; onOpen: (e: ReactMouseEvent, href: string) => void
+function DraggableCard({ item, showCidade, showGmv, showCadastro, onOpen }: {
+  item: RelItem; showCidade: boolean; showGmv: boolean; showCadastro: boolean; onOpen: (e: ReactMouseEvent, href: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `${item.tipo}:${item.id}` })
   return (
     <div ref={setNodeRef} {...listeners} {...attributes} onClick={(e) => onOpen(e, item.href)}
       className={cn('cursor-pointer rounded-md border border-border bg-card p-2.5 text-left shadow-sm transition-opacity hover:border-primary', isDragging && 'opacity-40')}>
-      <CardView item={item} showCidade={showCidade} showGmv={showGmv} />
+      <CardView item={item} showCidade={showCidade} showGmv={showGmv} showCadastro={showCadastro} />
     </div>
   )
 }
 
-function CardView({ item, showCidade = true, showGmv = true, dragging }: {
-  item: RelItem; showCidade?: boolean; showGmv?: boolean; dragging?: boolean
+function CardView({ item, showCidade = true, showGmv = true, showCadastro = false, dragging }: {
+  item: RelItem; showCidade?: boolean; showGmv?: boolean; showCadastro?: boolean; dragging?: boolean
 }) {
   const meta = TIPO_META[item.tipo]
   const Icon = meta.icon
@@ -182,6 +183,9 @@ function CardView({ item, showCidade = true, showGmv = true, dragging }: {
       )}
       {showGmv && item.gmv != null && (
         <p className="mt-1 text-xs font-medium tabular-nums">{fmtBRL(item.gmv)}</p>
+      )}
+      {showCadastro && item.cadastro && (
+        <p className="mt-1 text-xs text-muted-foreground">Cadastro: {fmtDate(item.cadastro)}</p>
       )}
     </div>
   )

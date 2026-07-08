@@ -16,6 +16,8 @@ export interface RelItem {
   gmv: number | null
   /** status_comercial — só organizações. */
   status: string | null
+  /** Data de cadastro na base (created_at ISO). Local pode ser null até a coluna existir. */
+  cadastro: string | null
   href: string
 }
 
@@ -46,9 +48,10 @@ export function useRelacionamento() {
     queryKey: ['crm', 'relacionamento', orgId],
     queryFn: async (): Promise<RelItem[]> => {
       const [orgs, locs, evs] = await Promise.all([
-        fetchAll('organizations', 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id, gmv_anual', orgId!, true),
-        fetchAll('crm_locals', 'id, nome, cidade, uf, classificacao, funil_stage_id', orgId!),
-        fetchAll('crm_events', 'id, nome, classificacao, funil_stage_id, gmv_estimado, local_id, crm_locals(cidade, uf)', orgId!),
+        fetchAll('organizations', 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id, gmv_anual, created_at', orgId!, true),
+        // '*' é resiliente: pega created_at quando a coluna existir (ver migration), sem quebrar antes.
+        fetchAll('crm_locals', '*', orgId!),
+        fetchAll('crm_events', 'id, nome, classificacao, funil_stage_id, gmv_estimado, local_id, created_at, crm_locals(cidade, uf)', orgId!),
       ])
 
       // GMV por local = soma dos eventos do local.
@@ -65,14 +68,16 @@ export function useRelacionamento() {
           tipo: 'org', id: o.id, nome: o.nome, cidade: o.cidade, uf: o.uf,
           classificacao: o.classificacao, funil_stage_id: o.funil_stage_id,
           gmv: o.gmv_anual != null ? Number(o.gmv_anual) : null,
-          status: o.status_comercial, href: `/comercial/organizacoes/${o.id}`,
+          status: o.status_comercial, cadastro: o.created_at ?? null,
+          href: `/comercial/organizacoes/${o.id}`,
         })
       }
       for (const l of locs) {
         items.push({
           tipo: 'local', id: l.id, nome: l.nome, cidade: l.cidade, uf: l.uf,
           classificacao: l.classificacao, funil_stage_id: l.funil_stage_id,
-          gmv: gmvPorLocal.get(l.id) ?? null, status: null, href: `/comercial/locais/${l.id}`,
+          gmv: gmvPorLocal.get(l.id) ?? null, status: null,
+          cadastro: l.created_at ?? null, href: `/comercial/locais/${l.id}`,
         })
       }
       for (const e of evs) {
@@ -81,7 +86,7 @@ export function useRelacionamento() {
           tipo: 'evento', id: e.id, nome: e.nome, cidade: loc?.cidade ?? null, uf: loc?.uf ?? null,
           classificacao: e.classificacao, funil_stage_id: e.funil_stage_id,
           gmv: e.gmv_estimado != null ? Number(e.gmv_estimado) : null, status: null,
-          href: `/comercial/eventos/${e.id}`,
+          cadastro: e.created_at ?? null, href: `/comercial/eventos/${e.id}`,
         })
       }
       return items
