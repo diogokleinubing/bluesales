@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,15 +25,16 @@ import { GrowthBars, MultiLineChart } from '../components/charts'
 import { MONTH_LABELS } from '../components/chart-theme'
 import { useControls } from '@/modules/shared/controls-context'
 import { useBiYears, useOrgId } from '../hooks/useBi'
-import { biYtdMonthly, biYtdGroup, biMonthsElapsed } from '../lib/rpc'
+import { biYtdMonthly, biYtdGroup, biMonthsElapsed, biEvents, type BiEventsParams } from '../lib/rpc'
 import { cn } from '@/lib/utils'
 import {
   buildYtdResult,
+  mergeEventYears,
   YTD_VIEW_LABELS,
   YTD_VIEW_PARAM,
   type YtdView,
 } from '../lib/ytd'
-import { type Metric, type DateBase } from '../lib/controls'
+import { type Metric, type DateBase, type Pdv } from '../lib/controls'
 import { fmtBRL, fmtDelta } from '@/lib/format'
 
 export function YtdPage() {
@@ -53,6 +54,17 @@ export function YtdPage() {
   const [dateBase, setDateBase] = useState<DateBase>(gDateBase)
   const [view, setView] = useState<YtdView>('organizador')
   const metric: Metric = 'gmv' // fixo em GMV (Métrica removida)
+
+  // Linhas expandidas (mostram os eventos do grupo dentro da própria linha).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  function toggleExpand(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   // Default: abre no último ano com vendas e no último mês com vendas.
   const latestYear = years[0]
@@ -289,11 +301,11 @@ export function YtdPage() {
               <TableHeader>
                 <TableRow>
                   <SortHead k="label">{YTD_VIEW_LABELS[view]}</SortHead>
-                  <SortHead k="target" align="right">
-                    {targetYear}
-                  </SortHead>
                   <SortHead k="base" align="right">
                     {baseYear}
+                  </SortHead>
+                  <SortHead k="target" align="right">
+                    {targetYear}
                   </SortHead>
                   <SortHead k="deltaAbs" align="right">
                     Δ R$
@@ -304,36 +316,63 @@ export function YtdPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedRows.map((g) => (
-                  <TableRow key={g.key}>
-                    <TableCell>
-                      <button
-                        className="text-left font-medium hover:text-primary hover:underline"
-                        onClick={() => drill(g.label)}
-                      >
-                        {g.label}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtBRL(g.target)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtBRL(g.base)}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right tabular-nums ${
-                        g.deltaAbs >= 0
-                          ? 'text-[var(--success)]'
-                          : 'text-destructive'
-                      }`}
-                    >
-                      {fmtBRL(g.deltaAbs)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {g.deltaPct == null ? '—' : fmtDelta(g.deltaPct)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedRows.map((g) => {
+                  const canExpand = view !== 'familia' && g.key !== '—'
+                  const isExpanded = expanded.has(g.key)
+                  return (
+                    <Fragment key={g.key}>
+                      <TableRow>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {canExpand ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(g.key)}
+                                className="text-muted-foreground transition-colors hover:text-foreground"
+                                aria-label={isExpanded ? 'Recolher' : 'Expandir'}
+                              >
+                                {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                              </button>
+                            ) : (
+                              <span className="inline-block w-4" />
+                            )}
+                            <button
+                              className="text-left font-medium hover:text-primary hover:underline"
+                              onClick={() => drill(g.label)}
+                            >
+                              {g.label}
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtBRL(g.base)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtBRL(g.target)}</TableCell>
+                        <TableCell
+                          className={`text-right tabular-nums ${
+                            g.deltaAbs >= 0 ? 'text-[var(--success)]' : 'text-destructive'
+                          }`}
+                        >
+                          {fmtBRL(g.deltaAbs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {g.deltaPct == null ? '—' : fmtDelta(g.deltaPct)}
+                        </TableCell>
+                      </TableRow>
+                      {canExpand && isExpanded && (
+                        <GroupEventRows
+                          orgId={orgId}
+                          view={view}
+                          groupKey={g.key}
+                          targetYear={targetYear}
+                          baseYear={baseYear}
+                          monthStart={monthStart}
+                          monthEnd={monthEnd}
+                          dateBase={dateBase}
+                          pdv={pdv}
+                        />
+                      )}
+                    </Fragment>
+                  )
+                })}
                 {sortedRows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
@@ -349,6 +388,136 @@ export function YtdPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/** Filtro do bi_events correspondente à dimensão da visão atual. */
+function eventsFilterForView(view: YtdView, key: string): BiEventsParams {
+  switch (view) {
+    case 'organizador':
+      return { organizador: key }
+    case 'segmento':
+      return { segmento: key }
+    case 'cidade':
+      return { cidade: key }
+    case 'uf':
+      return { uf: key }
+    case 'local':
+      return { local: key }
+    case 'familia':
+      return { search: key }
+  }
+}
+
+/** Sub-linhas de um grupo expandido: eventos com os dois anos lado a lado. */
+function GroupEventRows({
+  orgId,
+  view,
+  groupKey,
+  targetYear,
+  baseYear,
+  monthStart,
+  monthEnd,
+  dateBase,
+  pdv,
+}: {
+  orgId: string | undefined
+  view: YtdView
+  groupKey: string
+  targetYear: number
+  baseYear: number
+  monthStart: number
+  monthEnd: number
+  dateBase: DateBase
+  pdv: Pdv[]
+}) {
+  const months = useMemo(() => {
+    const lo = Math.min(monthStart, monthEnd)
+    const hi = Math.max(monthStart, monthEnd)
+    const arr: number[] = []
+    for (let m = lo; m <= hi; m++) arr.push(m)
+    return arr
+  }, [monthStart, monthEnd])
+
+  const q = useQuery({
+    enabled: !!orgId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['bi', 'ytd-group-events', orgId, view, groupKey, targetYear, monthStart, monthEnd, dateBase, pdv],
+    queryFn: async () => {
+      const filter = eventsFilterForView(view, groupKey)
+      const [t, b] = await Promise.all([
+        biEvents(orgId!, targetYear, dateBase, pdv, { ...filter, months, limit: 300 }),
+        biEvents(orgId!, baseYear, dateBase, pdv, { ...filter, months, limit: 300 }),
+      ])
+      return mergeEventYears(t, b, 'gmv')
+    },
+  })
+
+  if (q.isLoading) {
+    return (
+      <TableRow>
+        <TableCell colSpan={5} className="bg-muted/20 py-3 pl-11 text-sm text-muted-foreground">
+          Carregando eventos…
+        </TableCell>
+      </TableRow>
+    )
+  }
+  if (q.isError) {
+    return (
+      <TableRow>
+        <TableCell colSpan={5} className="bg-muted/20 py-3 pl-11 text-sm text-destructive">
+          Não foi possível carregar os eventos.
+        </TableCell>
+      </TableRow>
+    )
+  }
+  const rows = q.data ?? []
+  if (rows.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={5} className="bg-muted/20 py-3 pl-11 text-sm text-muted-foreground">
+          Sem eventos no período.
+        </TableCell>
+      </TableRow>
+    )
+  }
+  return (
+    <>
+      {rows.map((ev) => {
+        const delta = ev.target - ev.base
+        return (
+          <TableRow key={ev.key} className="bg-muted/20">
+            <TableCell className="pl-11">
+              <span className="flex items-center gap-2">
+                <span className="truncate text-sm">{ev.nome}</span>
+                {ev.multiano && (
+                  <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    recorrente
+                  </span>
+                )}
+              </span>
+            </TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">
+              {ev.base > 0 ? fmtBRL(ev.base) : '—'}
+            </TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">
+              {ev.target > 0 ? fmtBRL(ev.target) : '—'}
+            </TableCell>
+            <TableCell
+              className={cn(
+                'text-right tabular-nums',
+                ev.multiano ? (delta >= 0 ? 'text-[var(--success)]' : 'text-destructive') : 'text-muted-foreground',
+              )}
+            >
+              {ev.multiano ? fmtBRL(delta) : '—'}
+            </TableCell>
+            <TableCell className="text-right tabular-nums text-muted-foreground">
+              {ev.multiano && ev.base > 0 ? fmtDelta((ev.target - ev.base) / Math.abs(ev.base)) : '—'}
+            </TableCell>
+          </TableRow>
+        )
+      })}
+    </>
   )
 }
 

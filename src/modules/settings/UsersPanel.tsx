@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -15,6 +15,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -27,11 +28,8 @@ import {
 } from '@/components/ui/table'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -48,7 +46,7 @@ import {
   fetchProfiles,
   setAdmin,
   setGestor,
-  setUserModules,
+  setUserMenus,
   setUserNome,
   resetUserPassword,
   disableUserMfa,
@@ -140,7 +138,7 @@ export function UsersPanel() {
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-center">Admin</TableHead>
                 <TableHead className="text-center">Gestor</TableHead>
-                <TableHead>Módulos</TableHead>
+                <TableHead>Acesso</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -197,7 +195,7 @@ export function UsersPanel() {
                         />
                       </TableCell>
                       <TableCell>
-                        <ModulesCell user={u} />
+                        <AccessCell user={u} />
                       </TableCell>
                       <TableCell className="text-right">
                         {isSelf ? (
@@ -301,68 +299,136 @@ function NomeCell({ user }: { user: ProfileRow }) {
 }
 
 /**
- * Seletor dos módulos visíveis de um usuário. Sem restrição (todos marcados ou
- * nenhum) é salvo como NULL = "Todos". Marcar um subconjunto restringe a visão.
+ * Botão de acesso do usuário. Abre a árvore Módulo ▸ Menus. `menus` NULL =
+ * "Todos" (sem restrição de menu). Uma lista = só esses menus.
  */
-function ModulesCell({ user }: { user: ProfileRow }) {
-  const qc = useQueryClient()
-  const [busy, setBusy] = useState(false)
-  const allIds = MODULES.map((m) => m.id as string)
-  const restricted =
-    !!user.modules && user.modules.length > 0 && user.modules.length < allIds.length
-  const selected = restricted ? user.modules! : allIds
-  const label = restricted
-    ? MODULES.filter((m) => selected.includes(m.id))
-        .map((m) => m.label)
-        .join(', ')
-    : 'Todos'
+function AccessCell({ user }: { user: ProfileRow }) {
+  const [open, setOpen] = useState(false)
+  const restricted = user.menus != null
+  const count = restricted ? user.menus!.length : 0
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 max-w-[180px] gap-1.5 font-normal"
+        onClick={() => setOpen(true)}
+      >
+        <LayoutGrid className="size-3.5 shrink-0" />
+        <span className="truncate">{restricted ? `${count} ${count === 1 ? 'menu' : 'menus'}` : 'Todos'}</span>
+      </Button>
+      {open && <AccessDialog user={user} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
 
-  async function toggle(id: string, checked: boolean) {
-    const next = checked
-      ? [...new Set([...selected, id])]
-      : selected.filter((m) => m !== id)
+/** Árvore de módulos e menus para marcar o que o usuário pode acessar. */
+function AccessDialog({ user, onClose }: { user: ProfileRow; onClose: () => void }) {
+  const qc = useQueryClient()
+  const allItems = useMemo(
+    () => MODULES.flatMap((m) => m.groups.flatMap((g) => g.items.map((i) => i.to))),
+    [],
+  )
+  const [sel, setSel] = useState<Set<string>>(() => new Set(user.menus ?? allItems))
+  const [busy, setBusy] = useState(false)
+
+  function toggleItem(to: string) {
+    setSel((prev) => {
+      const n = new Set(prev)
+      if (n.has(to)) n.delete(to)
+      else n.add(to)
+      return n
+    })
+  }
+  function toggleModule(tos: string[], on: boolean) {
+    setSel((prev) => {
+      const n = new Set(prev)
+      for (const to of tos) if (on) n.add(to); else n.delete(to)
+      return n
+    })
+  }
+
+  async function salvar() {
     setBusy(true)
     try {
-      // Vazio ou todos = sem restrição (NULL).
-      await setUserModules(user.id, next.length === allIds.length ? null : next)
+      // Todos marcados = sem restrição (NULL).
+      const value = sel.size >= allItems.length ? null : Array.from(sel)
+      await setUserMenus(user.id, value)
       await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
+      onClose()
     } catch (e) {
-      toast.error('Erro ao salvar módulos', { description: (e as Error).message })
+      toast.error('Erro ao salvar acesso', { description: (e as Error).message })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          className="h-8 max-w-[180px] gap-1.5 font-normal"
-        >
-          <LayoutGrid className="size-3.5 shrink-0" />
-          <span className="truncate">{label}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>Módulos visíveis</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {MODULES.map((m) => (
-          <DropdownMenuCheckboxItem
-            key={m.id}
-            checked={selected.includes(m.id)}
-            onSelect={(e) => e.preventDefault()}
-            onCheckedChange={(c) => toggle(m.id, !!c)}
-            className="gap-2"
-          >
-            <m.icon className="size-4" />
-            {m.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Acesso — {user.email ?? user.nome ?? 'usuário'}</DialogTitle>
+          <DialogDescription>
+            Marque os módulos e menus que este usuário pode acessar. Tudo marcado = sem restrição.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between py-2">
+          <span className="text-xs text-muted-foreground">
+            {sel.size} de {allItems.length} menus
+          </span>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSel(new Set(allItems))}>
+              Marcar todos
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSel(new Set())}>
+              Limpar
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {MODULES.map((m) => {
+            const tos = m.groups.flatMap((g) => g.items.map((i) => i.to))
+            const selCount = tos.filter((to) => sel.has(to)).length
+            const allOn = selCount === tos.length
+            const someOn = selCount > 0 && !allOn
+            return (
+              <div key={m.id} className="overflow-hidden rounded-md border border-border">
+                <label className="flex cursor-pointer items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
+                  <Checkbox
+                    checked={allOn ? true : someOn ? 'indeterminate' : false}
+                    onCheckedChange={(c) => toggleModule(tos, c !== false)}
+                  />
+                  <m.icon className="size-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{m.label}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{selCount}/{tos.length}</span>
+                </label>
+                <div className="grid grid-cols-1 gap-0.5 p-2 sm:grid-cols-2">
+                  {m.groups.flatMap((g) => g.items).map((it) => (
+                    <label key={it.to} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/40">
+                      <Checkbox checked={sel.has(it.to)} onCheckedChange={() => toggleItem(it.to)} />
+                      <it.icon className="size-3.5 text-muted-foreground" />
+                      <span className="truncate text-sm">{it.label}</span>
+                      {it.requires && (
+                        <span className="ml-auto shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                          {it.requires}
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <DialogFooter className="pt-3">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={salvar} disabled={busy}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

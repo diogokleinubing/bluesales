@@ -5,19 +5,34 @@ import { useAuth } from '@/lib/auth'
 import { Sidebar } from './Sidebar'
 import { BiFilters } from './BiFilters'
 import { rememberRoute } from './navigation'
-import { isModuleAllowed, moduleFromPath, visibleModules } from './nav'
+import {
+  accessibleModules,
+  findNavItemByPath,
+  firstVisibleRoute,
+  getModule,
+  itemVisible,
+  moduleFromPath,
+  moduleVisible,
+  type AccessCtx,
+} from './nav'
 
 export function AppLayout() {
   const location = useLocation()
-  const { allowedModules } = useAuth()
+  const { isAdmin, isGestor, allowedModules, allowedMenus, signOut } = useAuth()
   const isBi = location.pathname.startsWith('/bi/')
 
-  // Rota pertence a um módulo e o usuário não tem acesso a ele?
-  const onModulePath = /^\/(bi|comercial|pesquisa)\//.test(location.pathname)
-  const blocked =
-    onModulePath &&
-    !isModuleAllowed(moduleFromPath(location.pathname), allowedModules)
-  const fallbackHome = visibleModules(allowedModules)[0]?.home ?? '/'
+  const ctx: AccessCtx = { isAdmin, isGestor, allowedModules, allowedMenus }
+  const mods = accessibleModules(ctx)
+
+  // Rota atual permitida? (item de menu casado por prefixo, ou visão do módulo)
+  const onModulePath = /^\/(bi|comercial|pesquisa|projetos)\//.test(location.pathname)
+  const match = findNavItemByPath(location.pathname)
+  const routeAllowed = !onModulePath
+    ? true
+    : match
+      ? itemVisible(match.item, match.moduleId, ctx)
+      : moduleVisible(getModule(moduleFromPath(location.pathname)), ctx)
+  const blocked = onModulePath && !routeAllowed
 
   // Persiste a última rota visitada (global e por módulo) — exceto bloqueadas.
   useEffect(() => {
@@ -26,7 +41,25 @@ export function AppLayout() {
     }
   }, [location.pathname, location.search, onModulePath, blocked])
 
-  if (blocked) return <Navigate to={fallbackHome} replace />
+  // Usuário sem nenhum módulo/menu liberado.
+  if (mods.length === 0) {
+    return (
+      <div className="flex h-svh flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+        <p className="text-lg font-medium text-foreground">Sem acesso liberado</p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Nenhum módulo ou menu está liberado para o seu usuário. Fale com um administrador.
+        </p>
+        <button
+          onClick={signOut}
+          className="mt-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Sair
+        </button>
+      </div>
+    )
+  }
+
+  if (blocked) return <Navigate to={firstVisibleRoute(ctx)} replace />
 
   return (
     <div className="flex h-svh overflow-hidden bg-background text-foreground">

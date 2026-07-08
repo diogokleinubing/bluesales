@@ -180,6 +180,37 @@ export function MultiLineChart({
   )
 }
 
+/** Múltiplas barras verticais por mês, agrupadas (mesma forma de dados do MultiLineChart). */
+export function MultiBarChart({
+  data,
+  series,
+}: {
+  data: Array<Record<string, number>>
+  series: string[]
+}) {
+  const c = useChartColors()
+  const axisProps = useAxis(c)
+  const chartData = data.map((d) => ({ ...d, mes: MONTH_LABELS[d.month] }))
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <CartesianGrid stroke={c.grid} vertical={false} />
+        <XAxis dataKey="mes" {...axisProps} />
+        <YAxis {...axisProps} tickFormatter={(v) => fmtShort(v)} width={70} />
+        <Tooltip
+          contentStyle={c.tooltip}
+          cursor={{ fill: c.cursor }}
+          formatter={(value, name) => [fmtBRL(Number(value)), name]}
+        />
+        <Legend wrapperStyle={{ fontSize: 12, color: c.axis }} />
+        {series.map((s, i) => (
+          <Bar key={s} dataKey={s} fill={c.series[i % c.series.length]} radius={[4, 4, 0, 0]} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 interface RankDatum {
   label: string
   value: number

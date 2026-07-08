@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { ChevronRight, ChevronLeft, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
-import { getModule, moduleFromPath, type NavItem } from './nav'
+import { getModule, moduleFromPath, itemVisible, type NavItem, type AccessCtx } from './nav'
 import { ModuleDropdown } from './ModuleDropdown'
 import { GlobalSearch } from '@/modules/crm/components/GlobalSearch'
 import { UserMenu } from './UserMenu'
@@ -23,9 +23,10 @@ const itemClass = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) 
 
 export function Sidebar() {
   const { pathname } = useLocation()
-  const { isAdmin, isGestor } = useAuth()
+  const { isAdmin, isGestor, allowedModules, allowedMenus } = useAuth()
   const moduleId = moduleFromPath(pathname)
   const mod = getModule(moduleId)
+  const ctx: AccessCtx = { isAdmin, isGestor, allowedModules, allowedMenus }
 
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
@@ -34,12 +35,7 @@ export function Sidebar() {
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0') } catch { /* ignore */ }
   }, [collapsed])
 
-  const canSee = (item: NavItem) =>
-    item.requires === 'admin'
-      ? isAdmin
-      : item.requires === 'gestor'
-        ? isGestor
-        : true
+  const canSee = (item: NavItem) => itemVisible(item, moduleId, ctx)
 
   const groups = mod.groups
     .map((g) => ({ ...g, items: g.items.filter(canSee) }))

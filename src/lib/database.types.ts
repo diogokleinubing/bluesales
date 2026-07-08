@@ -76,6 +76,8 @@ export interface ProfileRow {
   is_gestor: boolean
   must_change_password: boolean
   modules: string[] | null
+  /** Rotas de menu liberadas (null = sem restrição de menu; cai no gate de `modules`). */
+  menus: string[] | null
   created_at: string
 }
 

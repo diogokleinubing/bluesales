@@ -12,21 +12,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth'
-import { trustDevice } from '@/lib/trusted-device'
 
 /**
  * Portão de 2FA. Renderizado dentro da área protegida quando:
  * - needsMfaEnroll: usuário sem fator -> obrigatório cadastrar (1º login)
  * - needsMfaChallenge: tem fator, sessão em aal1 -> pedir o código
  *
- * Ao concluir (enroll ou challenge), marca este navegador como confiável para
- * pular o desafio nos próximos logins (apenas neste navegador).
+ * O 2FA é exigido a cada nova sessão (não há "lembrar dispositivo"); a duração
+ * é controlada pela sessão do Supabase.
  */
 export function MfaGate() {
-  const { needsMfaEnroll, user, signOut, refreshMfa } = useAuth()
+  const { needsMfaEnroll, signOut, refreshMfa } = useAuth()
 
   function handleDone() {
-    trustDevice(user?.id)
     refreshMfa()
   }
 

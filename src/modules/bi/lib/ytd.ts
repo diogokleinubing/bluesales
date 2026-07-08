@@ -1,7 +1,7 @@
 import type { SaleEnriched } from './dataset'
 import type { DateBase, Metric, Pdv } from './controls'
 import { matchesPdv, metricValue, saleMonth, saleYear } from './metrics'
-import type { YtdGroupRow, YtdMonthlyRow } from './rpc'
+import type { EventRow, YtdGroupRow, YtdMonthlyRow } from './rpc'
 
 export type YtdView =
   | 'organizador'
@@ -152,6 +152,45 @@ export function buildYtdResult(
     monthly,
     byView,
   }
+}
+
+/** Evento (ou família recorrente) com valores dos dois anos, para a expansão do YTD. */
+export interface EventComparo {
+  /** Chave de pareamento (família, quando houver; senão o código da edição). */
+  key: string
+  nome: string
+  familia: string | null
+  base: number
+  target: number
+  /** Apareceu nos dois anos (família recorrente) → linha comparativa. */
+  multiano: boolean
+}
+
+/**
+ * Junta eventos do ano-alvo e do ano-base pareando pela **família recorrente**
+ * (edições da mesma família nos dois anos viram uma linha comparativa). Eventos
+ * sem família ficam só num dos anos.
+ */
+export function mergeEventYears(
+  targetRows: EventRow[],
+  baseRows: EventRow[],
+  metric: Metric,
+): EventComparo[] {
+  const map = new Map<string, EventComparo>()
+  const fam = (e: EventRow) => (e.familia && e.familia.trim()) || null
+  const pairKey = (e: EventRow) => (fam(e) ? `fam:${fam(e)!.toLowerCase()}` : `cod:${e.codigo_evento}`)
+  const label = (e: EventRow) => fam(e) || e.nome || e.codigo_evento
+  const add = (e: EventRow, year: 'base' | 'target') => {
+    const k = pairKey(e)
+    const cur = map.get(k) ?? { key: k, nome: label(e), familia: fam(e), base: 0, target: 0, multiano: false }
+    cur[year] += Number(e[metric] ?? 0)
+    map.set(k, cur)
+  }
+  for (const e of targetRows) add(e, 'target')
+  for (const e of baseRows) add(e, 'base')
+  return [...map.values()]
+    .map((r) => ({ ...r, multiano: r.base > 0 && r.target > 0 }))
+    .sort((a, b) => b.target - a.target || b.base - a.base || a.nome.localeCompare(b.nome, 'pt-BR'))
 }
 
 function inRange(month: number, start: number, end: number): boolean {
