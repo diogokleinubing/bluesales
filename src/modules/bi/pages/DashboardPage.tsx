@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '../components/KpiCard'
-import { MultiLineChart } from '../components/charts'
+import { MultiBarChart } from '../components/charts'
 import { CompareToggle } from '../components/CompareToggle'
 import { useDashboard } from '../hooks/useDashboard'
 import { useControls } from '@/modules/shared/controls-context'
@@ -81,7 +81,7 @@ export function DashboardPage() {
               {isLoading ? (
                 <Skeleton className="h-[300px] w-full" />
               ) : (
-                <MultiLineChart data={chartData} series={series} />
+                <MultiBarChart data={chartData} series={series} />
               )}
             </CardContent>
           </Card>
