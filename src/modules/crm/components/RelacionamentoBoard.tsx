@@ -172,9 +172,9 @@ function CardView({ item, showCidade = true, showGmv = true, showCadastro = fals
   return (
     <div className={dragging ? 'w-60 rounded-md border border-primary bg-card p-2.5 shadow-lg' : ''}>
       <div className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Icon className="size-3.5 shrink-0" style={{ color: meta.color }} aria-label={meta.label} />
-          <span className="truncate text-sm font-medium">{item.nome}</span>
+        <span className="flex min-w-0 items-start gap-1.5">
+          <Icon className="mt-0.5 size-3.5 shrink-0" style={{ color: meta.color }} aria-label={meta.label} />
+          <span className="line-clamp-2 text-sm font-medium">{item.nome}</span>
         </span>
         {item.classificacao && <span className="shrink-0"><ClasseBadge classe={item.classificacao} /></span>}
       </div>

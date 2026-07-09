@@ -275,7 +275,7 @@ function CardView({
       }
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="truncate text-sm font-medium">{card.title}</span>
+        <span className="line-clamp-2 min-w-0 text-sm font-medium">{card.title}</span>
         {card.badge && (
           kind === 'org'
             ? <span className="shrink-0"><ClasseBadge classe={card.badge} /></span>

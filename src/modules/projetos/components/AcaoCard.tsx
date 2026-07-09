@@ -37,7 +37,7 @@ export function AcaoCard({
       )}
       style={{ borderLeft: `3px solid ${cor}` }}
     >
-      <span className={cn('block text-sm font-medium leading-snug', acao.status === 'concluido' && 'text-muted-foreground line-through')}>
+      <span className={cn('line-clamp-2 text-sm font-medium leading-snug', acao.status === 'concluido' && 'text-muted-foreground line-through')}>
         {acao.titulo}
       </span>
 
