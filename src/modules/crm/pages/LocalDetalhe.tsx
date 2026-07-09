@@ -23,6 +23,7 @@ import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplet
 import { usePlatforms, useLocalTipos } from '../hooks/useConfigCadastros'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { OportunidadesCard } from '../components/OportunidadesCard'
+import { EntityContatos } from '../components/EntityContatos'
 import { StageSelector } from '../components/StageSelector'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -88,6 +89,10 @@ export function LocalDetalhe() {
           <div>
             <h3 className="mb-2 text-sm font-semibold">Organizações vinculadas</h3>
             <LocalOrganizacoes localId={local.id} />
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">Contatos</h3>
+            <EntityContatos entityType="local" entityId={local.id} />
           </div>
           <OportunidadesCard localId={local.id} initialTitulo={local.nome} />
           <div>
