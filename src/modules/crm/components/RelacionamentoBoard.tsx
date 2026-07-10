@@ -10,7 +10,9 @@ import {
 import { Building2, MapPin, CalendarRange } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ClasseBadge } from './ClasseBadge'
+import { AcompanhamentoControl } from './AcompanhamentoBadge'
 import { useFunnel } from '../hooks/useFunnelStages'
 import { moveRelItemStage, type RelItem, type RelTipo } from '../hooks/useRelacionamento'
 import { fmtBRL, fmtDate } from '@/lib/format'
@@ -174,19 +176,30 @@ function CardView({ item, showCidade = true, showGmv = true, showCadastro = fals
       <div className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-start gap-1.5">
           <Icon className="mt-0.5 size-3.5 shrink-0" style={{ color: meta.color }} aria-label={meta.label} />
-          <span className="line-clamp-2 text-sm font-medium">{item.nome}</span>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <span className="line-clamp-2 text-sm font-medium">{item.nome}</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{item.nome}</TooltipContent>
+          </Tooltip>
         </span>
         {item.classificacao && <span className="shrink-0"><ClasseBadge classe={item.classificacao} /></span>}
       </div>
       {showCidade && item.cidade && (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">{[item.cidade, item.uf].filter(Boolean).join('/')}</p>
       )}
-      {showGmv && item.gmv != null && (
-        <p className="mt-1 text-xs font-medium tabular-nums">{fmtBRL(item.gmv)}</p>
-      )}
-      {showCadastro && item.cadastro && (
-        <p className="mt-1 text-xs text-muted-foreground">Cadastro: {fmtDate(item.cadastro)}</p>
-      )}
+      {/* Rodapé: GMV/cadastro à esquerda, acompanhamento no canto inferior direito. */}
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <div className="min-w-0 space-y-0.5">
+          {showGmv && item.gmv != null && (
+            <p className="text-xs font-medium tabular-nums">{fmtBRL(item.gmv)}</p>
+          )}
+          {showCadastro && item.cadastro && (
+            <p className="text-xs text-muted-foreground">Cadastro: {fmtDate(item.cadastro)}</p>
+          )}
+        </div>
+        <AcompanhamentoControl item={item} className="shrink-0" />
+      </div>
     </div>
   )
 }

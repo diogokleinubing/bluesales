@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, Plus, X, GitMerge } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -22,6 +22,8 @@ import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplet
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { OportunidadesCard } from '../components/OportunidadesCard'
 import { EntityContatos } from '../components/EntityContatos'
+import { EmTrabalhoToggle } from '../components/EmTrabalhoToggle'
+import { MergeEntityDialog } from '../components/MergeEntityDialog'
 import { StageSelector } from '../components/StageSelector'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -35,6 +37,7 @@ export function EventoDetalhe() {
   const navigate = useNavigate()
   const { data, isLoading } = useCrmEvents()
   const ev = useMemo(() => (data ?? []).find((e) => e.id === id) ?? null, [data, id])
+  const [mergeOpen, setMergeOpen] = useState(false)
 
   if (isLoading) return <div className="-mx-6 -mt-6 p-6"><Skeleton className="h-96 w-full" /></div>
   if (!ev) return <div className="-mx-6 -mt-6 p-6 text-muted-foreground">Evento não encontrado.</div>
@@ -51,6 +54,8 @@ export function EventoDetalhe() {
         <ClasseBadge classe={ev.classificacao} />
       </div>
 
+      <MergeEntityDialog tipo="evento" entityId={ev.id} entityNome={ev.nome} open={mergeOpen} onOpenChange={setMergeOpen} />
+
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 border-b border-border p-4 lg:border-b-0 lg:border-r">
           <AtividadesPanel entityType="evento" entityId={ev.id} allowObjection={false} />
@@ -65,6 +70,13 @@ export function EventoDetalhe() {
           <OportunidadesCard crmEventId={ev.id} initialTitulo={ev.nome} />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
+            <EmTrabalhoToggle tipo="evento" entityId={ev.id} />
+            <button
+              onClick={() => setMergeOpen(true)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <GitMerge className="size-4" /> Unificar duplicado
+            </button>
             <DeleteEntityButton
               title="Remover evento?"
               description={`"${ev.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}

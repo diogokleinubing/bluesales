@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Trash2, History, MapPin, CalendarSearch } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, History, MapPin, CalendarSearch, GitMerge } from 'lucide-react'
 import { useEventosDoOrganizador } from '@/modules/pesquisa/hooks/usePesquisa'
 import { EventosDialog } from '@/modules/pesquisa/components/EventosDialog'
 import { SocialLinks } from '../components/SocialLinks'
@@ -37,6 +37,8 @@ import {
 import { useOpportunities } from '../hooks/useOpportunities'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { EntityContatos } from '../components/EntityContatos'
+import { EmTrabalhoToggle } from '../components/EmTrabalhoToggle'
+import { MergeEntityDialog } from '../components/MergeEntityDialog'
 
 const CLASSES = ['A+', 'A', 'B', 'C']
 const ORIGENS = ['Indicação', 'Prospecção ativa', 'Inbound', 'Evento', 'Pesquisa', 'Outro']
@@ -50,6 +52,7 @@ export function OrganizacaoDetalhe() {
   const [oppOpen, setOppOpen] = useState(false)
   const [histOpen, setHistOpen] = useState(false)
   const [verEventos, setVerEventos] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   // Eventos captados pelo módulo Pesquisa para este organizador (lazy: só ao abrir).
   const eventosOrg = useEventosDoOrganizador(verEventos && org ? org.nome : null)
 
@@ -128,6 +131,13 @@ export function OrganizacaoDetalhe() {
           <section className="border-t border-border pt-4">
             <h3 className="mb-2 text-sm font-medium">Opções</h3>
             <div className="space-y-1">
+              <EmTrabalhoToggle tipo="org" entityId={org.id} />
+              <button
+                onClick={() => setMergeOpen(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <GitMerge className="size-4" /> Unificar duplicado
+              </button>
               <button
                 onClick={() => setHistOpen(true)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -148,6 +158,8 @@ export function OrganizacaoDetalhe() {
       </div>
 
       <NovaOportunidadeDialog open={oppOpen} onOpenChange={setOppOpen} organizationId={org.id} />
+
+      <MergeEntityDialog tipo="org" entityId={org.id} entityNome={org.nome} open={mergeOpen} onOpenChange={setMergeOpen} />
 
       <Dialog open={histOpen} onOpenChange={setHistOpen}>
         <DialogContent className="sm:max-w-2xl">

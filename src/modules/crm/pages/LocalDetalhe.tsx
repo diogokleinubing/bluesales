@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, X, CalendarSearch, Building2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, X, CalendarSearch, Building2, Trash2, GitMerge } from 'lucide-react'
 import { useEventosDoLocalNome } from '@/modules/pesquisa/hooks/usePesquisa'
 import { EventosDialog } from '@/modules/pesquisa/components/EventosDialog'
 import { SocialLinks } from '../components/SocialLinks'
@@ -24,6 +24,8 @@ import { usePlatforms, useLocalTipos } from '../hooks/useConfigCadastros'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { OportunidadesCard } from '../components/OportunidadesCard'
 import { EntityContatos } from '../components/EntityContatos'
+import { EmTrabalhoToggle } from '../components/EmTrabalhoToggle'
+import { MergeEntityDialog } from '../components/MergeEntityDialog'
 import { StageSelector } from '../components/StageSelector'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
@@ -39,6 +41,7 @@ export function LocalDetalhe() {
   const { data, isLoading } = useLocais()
   const local = useMemo(() => (data ?? []).find((l) => l.id === id) ?? null, [data, id])
   const [verEventos, setVerEventos] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   // Eventos captados pelo módulo Pesquisa para este local (lazy: só ao abrir).
   // Inclui o nome principal + nomes alternativos (aliases) na busca.
   const eventosLocal = useEventosDoLocalNome(
@@ -79,6 +82,8 @@ export function LocalDetalhe() {
         eventos={eventosLocal.data ?? []}
       />
 
+      <MergeEntityDialog tipo="local" entityId={local.id} entityNome={local.nome} open={mergeOpen} onOpenChange={setMergeOpen} />
+
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 border-b border-border p-4 lg:border-b-0 lg:border-r">
           <AtividadesPanel entityType="local" entityId={local.id} allowObjection={false} />
@@ -97,6 +102,13 @@ export function LocalDetalhe() {
           <OportunidadesCard localId={local.id} initialTitulo={local.nome} />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
+            <EmTrabalhoToggle tipo="local" entityId={local.id} />
+            <button
+              onClick={() => setMergeOpen(true)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <GitMerge className="size-4" /> Unificar duplicado
+            </button>
             <DeleteEntityButton
               title="Remover local?"
               description={`"${local.nome}" sairá das listagens. Pode ser desfeito em Comercial → Logs.`}

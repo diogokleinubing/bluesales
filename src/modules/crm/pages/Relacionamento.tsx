@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { readStr, readBool, readArr, buildSearchParams } from '@/lib/urlState'
 import { useOpenItem } from '@/lib/useOpenItem'
-import { SlidersHorizontal, MoreVertical } from 'lucide-react'
+import { SlidersHorizontal, MoreVertical, ChevronDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,11 +13,13 @@ import {
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { useRelacionamento, type RelTipo } from '../hooks/useRelacionamento'
+import { useRelacionamento, acompEstado, type RelTipo, type AcompEstado } from '../hooks/useRelacionamento'
 import { STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
-import { ClasseChips, StageDot, useRelStageMap } from '../components/RelacionamentoBits'
+import { AcompanhamentoControl } from '../components/AcompanhamentoBadge'
+import { ACOMP_META, ACOMP_ORDER } from '../components/acompanhamentoMeta'
+import { CLASSES, StageDot, useRelStageMap } from '../components/RelacionamentoBits'
 import { RelacionamentoBoard, RelTipoBadge, TIPO_META } from '../components/RelacionamentoBoard'
 import { ListView, ToolbarSearch, ViewToggle, TOOLBAR_TRIGGER } from '../components/ListView'
 import { cn } from '@/lib/utils'
@@ -36,6 +38,8 @@ export function Relacionamento() {
   const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
   const [statusSel, setStatusSel] = useState<string[]>(() => readArr(params, 'status'))
   const [tiposSel, setTiposSel] = useState<RelTipo[]>(() => readArr(params, 'tipos').filter((t): t is RelTipo => (REL_TIPOS as string[]).includes(t)))
+  const [acompSel, setAcompSel] = useState<AcompEstado[]>(() => readArr(params, 'acomp').filter((a): a is AcompEstado => (ACOMP_ORDER as string[]).includes(a)))
+  const [ufSel, setUfSel] = useState<string[]>(() => readArr(params, 'uf'))
   const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
   const [estagiosInativos, setEstagiosInativos] = useState<boolean>(() => readBool(params, 'includeInactive'))
   const [showCidade, setShowCidade] = useState<boolean>(() => readBool(params, 'showCity', true))
@@ -52,6 +56,8 @@ export function Relacionamento() {
       { k: 'classes', v: classesSel },
       { k: 'status', v: statusSel },
       { k: 'tipos', v: tiposSel },
+      { k: 'acomp', v: acompSel },
+      { k: 'uf', v: ufSel },
       { k: 'gmvMin', v: gmvMin },
       { k: 'includeInactive', v: estagiosInativos },
       { k: 'showCity', v: showCidade, def: true },
@@ -61,11 +67,25 @@ export function Relacionamento() {
       { k: 'cadMin', v: cadastroMin },
       { k: 'cadMax', v: cadastroMax },
     ]), { replace: true })
-  }, [view, search, classesSel, statusSel, tiposSel, gmvMin, estagiosInativos, showCidade, showGmv, showCadastro, cadastroDias, cadastroMin, cadastroMax, setSearchParams])
+  }, [view, search, classesSel, statusSel, tiposSel, acompSel, ufSel, gmvMin, estagiosInativos, showCidade, showGmv, showCadastro, cadastroDias, cadastroMin, cadastroMax, setSearchParams])
 
   function toggleStatus(s: string) {
     setStatusSel(statusSel.includes(s) ? statusSel.filter((x) => x !== s) : [...statusSel, s])
   }
+  function toggleAcomp(a: AcompEstado) {
+    setAcompSel(acompSel.includes(a) ? acompSel.filter((x) => x !== a) : [...acompSel, a])
+  }
+  function toggleUf(u: string) {
+    setUfSel(ufSel.includes(u) ? ufSel.filter((x) => x !== u) : [...ufSel, u])
+  }
+  function toggleClasse(c: string) {
+    setClassesSel(classesSel.includes(c) ? classesSel.filter((x) => x !== c) : [...classesSel, c])
+  }
+  // UFs presentes na base (para as opções do filtro).
+  const ufOptions = useMemo(
+    () => [...new Set((data ?? []).map((it) => it.uf).filter((u): u is string => !!u))].sort((a, b) => a.localeCompare(b)),
+    [data],
+  )
   function toggleTipo(t: RelTipo) {
     setTiposSel(tiposSel.includes(t) ? tiposSel.filter((x) => x !== t) : [...tiposSel, t])
   }
@@ -96,12 +116,14 @@ export function Relacionamento() {
     const q = search.trim().toLowerCase()
     return (data ?? []).filter((it) => {
       if (tiposSel.length > 0 && !tiposSel.includes(it.tipo)) return false
+      if (acompSel.length > 0 && !acompSel.includes(acompEstado(it))) return false
+      if (ufSel.length > 0 && !(it.uf && ufSel.includes(it.uf))) return false
       if (q && !it.nome.toLowerCase().includes(q) && !(it.cidade ?? '').toLowerCase().includes(q)) return false
       if (classesSel.length > 0 && !(it.classificacao != null && classesSel.includes(it.classificacao))) return false
       // Status comercial: filtra APENAS organizações; locais/eventos sempre passam.
       if (it.tipo === 'org' && statusSel.length > 0 && !(it.status != null && statusSel.includes(it.status))) return false
-      // Data de cadastro: filtra APENAS locais (org/evento passam), como o status filtra só orgs.
-      if (it.tipo === 'local' && cadastroAtivo) {
+      // Data de cadastro na base: vale para qualquer tipo de entidade.
+      if (cadastroAtivo) {
         if (!it.cadastro) return false
         const t = new Date(it.cadastro)
         if (cadastroRange.min && t < cadastroRange.min) return false
@@ -113,7 +135,7 @@ export function Relacionamento() {
       if (gmvMinNum != null && !(it.gmv != null && it.gmv >= gmvMinNum)) return false
       return true
     })
-  }, [data, search, classesSel, statusSel, tiposSel, estagiosInativos, gmvMinNum, cadastroAtivo, cadastroRange, stageMap])
+  }, [data, search, classesSel, statusSel, tiposSel, acompSel, ufSel, estagiosInativos, gmvMinNum, cadastroAtivo, cadastroRange, stageMap])
 
   const gmvTotal = useMemo(() => rows.reduce((s, o) => s + (o.gmv ?? 0), 0), [rows])
 
@@ -149,7 +171,7 @@ export function Relacionamento() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Cadastro do local na base</DropdownMenuLabel>
+        <DropdownMenuLabel>Cadastro na base</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="space-y-2 px-2 py-1.5">
           <div className="flex flex-wrap gap-1">
@@ -202,19 +224,94 @@ export function Relacionamento() {
     </div>
   )
 
-  const statusChips = (
-    <div className="flex items-center gap-1">
-      {STATUS_COMERCIAL.map((s) => {
-        const on = statusSel.includes(s)
-        return (
-          <button key={s} type="button" onClick={() => toggleStatus(s)}
-            className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              on ? 'border-primary bg-primary text-primary-foreground' : CHIP_OFF)}>
+  const statusMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          Status comercial{statusSel.length > 0 ? ` · ${statusSel.length}` : ''}
+          <ChevronDown className="size-4 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>Status comercial (organizações)</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {STATUS_COMERCIAL.map((s) => (
+          <DropdownMenuCheckboxItem key={s} checked={statusSel.includes(s)}
+            onCheckedChange={() => toggleStatus(s)} onSelect={(ev) => ev.preventDefault()}>
             {s}
-          </button>
-        )
-      })}
-    </div>
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  const acompMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          Acompanhamento{acompSel.length > 0 ? ` · ${acompSel.length}` : ''}
+          <ChevronDown className="size-4 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>Acompanhamento</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {ACOMP_ORDER.map((e) => {
+          const meta = ACOMP_META[e]
+          const Icon = meta.icon
+          return (
+            <DropdownMenuCheckboxItem key={e} checked={acompSel.includes(e)}
+              onCheckedChange={() => toggleAcomp(e)} onSelect={(ev) => ev.preventDefault()}>
+              <Icon className="size-4" style={{ color: meta.color }} /> {meta.label}
+            </DropdownMenuCheckboxItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  const classeMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          Classe{classesSel.length > 0 ? ` · ${classesSel.length}` : ''}
+          <ChevronDown className="size-4 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>Classe</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {CLASSES.map((c) => (
+          <DropdownMenuCheckboxItem key={c} checked={classesSel.includes(c)}
+            onCheckedChange={() => toggleClasse(c)} onSelect={(ev) => ev.preventDefault()}>
+            <ClasseBadge classe={c} />
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  const ufMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          UF{ufSel.length > 0 ? ` · ${ufSel.length}` : ''}
+          <ChevronDown className="size-4 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+        <DropdownMenuLabel>Estado (UF)</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {ufOptions.length === 0 ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">Sem UF na base</div>
+        ) : ufOptions.map((u) => (
+          <DropdownMenuCheckboxItem key={u} checked={ufSel.includes(u)}
+            onCheckedChange={() => toggleUf(u)} onSelect={(ev) => ev.preventDefault()}>
+            {u}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 
   return (
@@ -227,8 +324,10 @@ export function Relacionamento() {
         <>
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome ou cidade…" />
           {tipoChips}
-          <ClasseChips value={classesSel} onChange={setClassesSel} />
-          {statusChips}
+          {acompMenu}
+          {classeMenu}
+          {ufMenu}
+          {statusMenu}
           <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
             placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           {extraFiltrosMenu}
@@ -244,6 +343,7 @@ export function Relacionamento() {
           <TableHeader>
             <TableRow>
               <TableHead>Tipo</TableHead>
+              <TableHead className="text-center">Acomp.</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Classe</TableHead>
               <TableHead>Cidade/UF</TableHead>
@@ -256,13 +356,14 @@ export function Relacionamento() {
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhum item.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="py-10 text-center text-muted-foreground">Nenhum item.</TableCell></TableRow>
             ) : rows.map((it) => (
               <TableRow key={`${it.tipo}:${it.id}`} className="cursor-pointer" onClick={(e) => openItem(e, it.href)}>
                 <TableCell><RelTipoBadge tipo={it.tipo} /></TableCell>
+                <TableCell><span className="flex justify-center"><AcompanhamentoControl item={it} /></span></TableCell>
                 <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={it.nome}>{it.nome}</div></TableCell>
                 <TableCell><ClasseBadge classe={it.classificacao} /></TableCell>
                 <TableCell className="text-muted-foreground">{[it.cidade, it.uf].filter(Boolean).join('/') || '—'}</TableCell>
@@ -276,7 +377,7 @@ export function Relacionamento() {
           {!isLoading && rows.length > 0 && (
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={7} className="font-medium">Total ({rows.length})</TableCell>
+                <TableCell colSpan={8} className="font-medium">Total ({rows.length})</TableCell>
                 <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">{fmtBRL(gmvTotal)}</TableCell>
               </TableRow>
             </TableFooter>

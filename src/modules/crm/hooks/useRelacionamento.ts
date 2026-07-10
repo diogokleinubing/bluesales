@@ -4,6 +4,11 @@ import { useCrmOrgId } from './useFunnelStages'
 
 export type RelTipo = 'org' | 'local' | 'evento'
 
+/** Saúde derivada das atividades pendentes de uma entidade. */
+export type RelHealth = 'em_dia' | 'atrasada' | 'sem_acao'
+/** Estado de acompanhamento exibido (combina a flag manual + a saúde). */
+export type AcompEstado = 'fora' | RelHealth
+
 export interface RelItem {
   tipo: RelTipo
   id: string
@@ -18,7 +23,20 @@ export interface RelItem {
   status: string | null
   /** Data de cadastro na base (created_at ISO). Local pode ser null até a coluna existir. */
   cadastro: string | null
+  /** Flag manual: estamos em trabalho ativo de relacionamento nesta entidade? */
+  emTrabalho: boolean
+  /** Saúde derivada das activities pendentes (só relevante quando emTrabalho). */
+  health: RelHealth
+  /** Próxima ação futura agendada (ISO), para tooltip. */
+  proximaAcaoAt: string | null
+  /** Pendência vencida mais antiga (ISO), para tooltip "atrasada desde". */
+  atrasadaDesde: string | null
   href: string
+}
+
+/** Estado visual final: se não está em trabalho, é "fora"; senão, a saúde derivada. */
+export function acompEstado(item: RelItem): AcompEstado {
+  return item.emTrabalho ? item.health : 'fora'
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +57,33 @@ async function fetchAll(table: string, cols: string, orgId: string, parentNull =
   return out
 }
 
+interface PendRow {
+  organization_id: string | null
+  local_id: string | null
+  crm_event_id: string | null
+  data_hora: string | null
+}
+
+/** Atividades pendentes (não realizadas) com data marcada — base da saúde derivada. */
+async function fetchPendentes(orgId: string): Promise<PendRow[]> {
+  const out: PendRow[] = []
+  for (let from = 0; ; from += 1000) {
+    const res = await supabase
+      .from('activities')
+      .select('organization_id, local_id, crm_event_id, data_hora')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .eq('realizada', false)
+      .not('data_hora', 'is', null)
+      .range(from, from + 999)
+    if (res.error) throw new Error(res.error.message)
+    const data = (res.data ?? []) as PendRow[]
+    out.push(...data)
+    if (data.length < 1000) break
+  }
+  return out
+}
+
 /** Itens do Funil de Relacionamento: organizações + locais + eventos. */
 export function useRelacionamento() {
   const orgId = useCrmOrgId()
@@ -47,11 +92,12 @@ export function useRelacionamento() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'relacionamento', orgId],
     queryFn: async (): Promise<RelItem[]> => {
-      const [orgs, locs, evs] = await Promise.all([
-        fetchAll('organizations', 'id, nome, cidade, uf, classificacao, status_comercial, funil_stage_id, gmv_anual, created_at', orgId!, true),
-        // '*' é resiliente: pega created_at quando a coluna existir (ver migration), sem quebrar antes.
+      const [orgs, locs, evs, pend] = await Promise.all([
+        // '*' é resiliente: pega em_trabalho_relacionamento quando a coluna existir, sem quebrar antes.
+        fetchAll('organizations', '*', orgId!, true),
         fetchAll('crm_locals', '*', orgId!),
-        fetchAll('crm_events', 'id, nome, classificacao, funil_stage_id, gmv_estimado, local_id, created_at, crm_locals(cidade, uf)', orgId!),
+        fetchAll('crm_events', '*, crm_locals(cidade, uf)', orgId!),
+        fetchPendentes(orgId!),
       ])
 
       // GMV por local = soma dos eventos do local.
@@ -62,6 +108,29 @@ export function useRelacionamento() {
         }
       }
 
+      // Saúde derivada: por entidade, menor data futura (próxima ação) e menor
+      // data vencida (atrasada desde) entre as atividades pendentes agendadas.
+      const now = Date.now()
+      const agg = new Map<string, { minFuture: number | null; minOverdue: number | null }>()
+      for (const a of pend) {
+        const t = a.data_hora ? Date.parse(a.data_hora) : NaN
+        if (Number.isNaN(t)) continue
+        for (const id of [a.organization_id, a.local_id, a.crm_event_id]) {
+          if (!id) continue
+          const cur = agg.get(id) ?? { minFuture: null, minOverdue: null }
+          if (t >= now) cur.minFuture = cur.minFuture == null ? t : Math.min(cur.minFuture, t)
+          else cur.minOverdue = cur.minOverdue == null ? t : Math.min(cur.minOverdue, t)
+          agg.set(id, cur)
+        }
+      }
+      function saude(id: string): Pick<RelItem, 'health' | 'proximaAcaoAt' | 'atrasadaDesde'> {
+        const a = agg.get(id)
+        const proximaAcaoAt = a?.minFuture != null ? new Date(a.minFuture).toISOString() : null
+        const atrasadaDesde = a?.minOverdue != null ? new Date(a.minOverdue).toISOString() : null
+        const health: RelHealth = atrasadaDesde ? 'atrasada' : proximaAcaoAt ? 'em_dia' : 'sem_acao'
+        return { health, proximaAcaoAt, atrasadaDesde }
+      }
+
       const items: RelItem[] = []
       for (const o of orgs) {
         items.push({
@@ -69,6 +138,7 @@ export function useRelacionamento() {
           classificacao: o.classificacao, funil_stage_id: o.funil_stage_id,
           gmv: o.gmv_anual != null ? Number(o.gmv_anual) : null,
           status: o.status_comercial, cadastro: o.created_at ?? null,
+          emTrabalho: !!o.em_trabalho_relacionamento, ...saude(o.id),
           href: `/comercial/organizacoes/${o.id}`,
         })
       }
@@ -77,7 +147,9 @@ export function useRelacionamento() {
           tipo: 'local', id: l.id, nome: l.nome, cidade: l.cidade, uf: l.uf,
           classificacao: l.classificacao, funil_stage_id: l.funil_stage_id,
           gmv: gmvPorLocal.get(l.id) ?? null, status: null,
-          cadastro: l.created_at ?? null, href: `/comercial/locais/${l.id}`,
+          cadastro: l.created_at ?? null,
+          emTrabalho: !!l.em_trabalho_relacionamento, ...saude(l.id),
+          href: `/comercial/locais/${l.id}`,
         })
       }
       for (const e of evs) {
@@ -86,7 +158,9 @@ export function useRelacionamento() {
           tipo: 'evento', id: e.id, nome: e.nome, cidade: loc?.cidade ?? null, uf: loc?.uf ?? null,
           classificacao: e.classificacao, funil_stage_id: e.funil_stage_id,
           gmv: e.gmv_estimado != null ? Number(e.gmv_estimado) : null, status: null,
-          cadastro: e.created_at ?? null, href: `/comercial/eventos/${e.id}`,
+          cadastro: e.created_at ?? null,
+          emTrabalho: !!e.em_trabalho_relacionamento, ...saude(e.id),
+          href: `/comercial/eventos/${e.id}`,
         })
       }
       return items
@@ -105,5 +179,27 @@ export async function moveRelItemStage(tipo: RelTipo, id: string, stageId: strin
 /** Altera a classe (A+/A/B/C ou null) de um item. */
 export async function updateRelClasse(tipo: RelTipo, id: string, classe: string | null) {
   const { error } = await supabase.from(TABLE[tipo]).update({ classificacao: classe }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Liga/desliga a flag de trabalho ativo de relacionamento de um item. */
+export async function updateEmTrabalho(tipo: RelTipo, id: string, value: boolean) {
+  const { error } = await supabase.from(TABLE[tipo]).update({ em_trabalho_relacionamento: value }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Aplica os campos escolhidos ao sobrevivente antes de unificar. */
+export async function updateEntityFields(tipo: RelTipo, id: string, patch: Record<string, unknown>) {
+  if (Object.keys(patch).length === 0) return
+  const { error } = await supabase.from(TABLE[tipo]).update(patch).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Unifica um duplicado no sobrevivente (RPC transacional crm_merge_entity). */
+export async function mergeEntity(tipo: RelTipo, survivorId: string, duplicateId: string) {
+  const p_tipo = tipo === 'org' ? 'organization' : tipo
+  const { error } = await supabase.rpc('crm_merge_entity', {
+    p_tipo, p_survivor: survivorId, p_duplicate: duplicateId,
+  })
   if (error) throw new Error(error.message)
 }

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Users, Phone, Mail, MessageCircle, StickyNote, CircleDot,
-  ShieldQuestion, CheckSquare, FileText, Milestone, type LucideIcon,
+  ShieldQuestion, CheckSquare, FileText, Milestone, Pencil, type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,9 +20,10 @@ import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 import { useProfile } from '../hooks/useProfile'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useActivities, createActivity, type ActivityTipo } from '../hooks/useActivities'
+import { useActivities, createActivity, type ActivityTipo, type ActivityRow } from '../hooks/useActivities'
 import { useAuditLog } from '../hooks/useAuditLog'
 import { useObjectionsBase } from '../hooks/useConfigCadastros'
+import { ActivityDialog } from './ActivityDialog'
 
 type Tipo = ActivityTipo | 'Objeção'
 
@@ -103,6 +104,7 @@ export function AtividadesPanel({
   const [dataHora, setDataHora] = useState(defaultDataHora())
   const [semData, setSemData] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState<ActivityRow | null>(null)
 
   const temData = !SEM_DATA.includes(tipo)
   // Data futura = agendamento (margem de 1 min para o "agora" do default).
@@ -148,14 +150,14 @@ export function AtividadesPanel({
     const items: {
       key: string; at: string | null; tipo: string; icon: LucideIcon
       titulo: string; resumo?: string | null; author?: string | null
-      fileUrl?: string | null; categoria?: string | null
+      fileUrl?: string | null; categoria?: string | null; act?: ActivityRow
     }[] = []
     for (const a of acts.data ?? []) {
       items.push({
         key: `a-${a.id}`, at: a.data_hora, tipo: a.tipo ?? 'Outro',
         icon: ICON[a.tipo ?? 'Outro'] ?? CircleDot,
         titulo: a.titulo, resumo: a.resumo, author: a.author,
-        fileUrl: a.transcricao_file_url,
+        fileUrl: a.transcricao_file_url, act: a,
       })
     }
     for (const o of objs.data ?? []) {
@@ -183,6 +185,8 @@ export function AtividadesPanel({
   function refresh() {
     qc.invalidateQueries({ queryKey: ['crm', 'activities'] })
     qc.invalidateQueries({ queryKey: ['crm', 'timeline-objections', entityType, entityId] })
+    // Atividades mudam a "próxima ação" derivada do Funil de Relacionamento.
+    qc.invalidateQueries({ queryKey: ['crm', 'relacionamento'] })
   }
 
   async function registrar() {
@@ -304,7 +308,18 @@ export function AtividadesPanel({
                 <div className="min-w-0 flex-1 rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium">{it.titulo}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{it.at ? dt(it.at) : 'Sem data'}</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">{it.at ? dt(it.at) : 'Sem data'}</span>
+                      {it.act && (
+                        <button
+                          onClick={() => setEditing(it.act!)}
+                          title="Editar atividade"
+                          className="text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     <Badge variant="secondary">{it.tipo}</Badge>
@@ -324,6 +339,13 @@ export function AtividadesPanel({
           })}
         </ol>
       )}
+
+      <ActivityDialog
+        open={!!editing}
+        onOpenChange={(o) => { if (!o) setEditing(null) }}
+        activity={editing ?? undefined}
+        onSaved={refresh}
+      />
     </div>
   )
 }
