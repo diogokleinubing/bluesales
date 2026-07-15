@@ -21,7 +21,7 @@ import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions } from '../hooks/
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { createOpportunity } from '../hooks/useOpportunities'
 import { createOrganization } from '../hooks/useOrganizations'
-import { linkLocalToOrg } from '../hooks/useCadastros'
+import { linkLocalToOrg, saveCrmEvent, saveLocal } from '../hooks/useCadastros'
 
 const NONE = '__none__'
 
@@ -60,10 +60,16 @@ export function NovaOportunidadeDialog({
   const [saving, setSaving] = useState(false)
   const { consider, dialog: gmvDialog } = useGmvCopy(gmv, setGmv)
 
-  // Criação rápida de organização dentro do diálogo.
+  // Criação rápida de entidade dentro do diálogo (organização / evento / local).
   const [newOrgOpen, setNewOrgOpen] = useState(false)
   const [newOrgNome, setNewOrgNome] = useState('')
   const [creatingOrg, setCreatingOrg] = useState(false)
+  const [newEventOpen, setNewEventOpen] = useState(false)
+  const [newEventNome, setNewEventNome] = useState('')
+  const [creatingEvent, setCreatingEvent] = useState(false)
+  const [newLocalOpen, setNewLocalOpen] = useState(false)
+  const [newLocalNome, setNewLocalNome] = useState('')
+  const [creatingLocal, setCreatingLocal] = useState(false)
 
   function abrirNovaOrg() {
     // Pré-preenche com o nome do local selecionado, se houver.
@@ -95,6 +101,36 @@ export function NovaOportunidadeDialog({
     } finally {
       setCreatingOrg(false)
     }
+  }
+
+  async function criarEvento() {
+    if (!orgId || !newEventNome.trim()) return
+    setCreatingEvent(true)
+    try {
+      const id = await saveCrmEvent(orgId, { nome: newEventNome.trim() })
+      qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'events-gmv'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'events'] })
+      setEvento(id)
+      setNewEventOpen(false); setNewEventNome('')
+      toast.success('Evento criado')
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally { setCreatingEvent(false) }
+  }
+
+  async function criarLocal() {
+    if (!orgId || !newLocalNome.trim()) return
+    setCreatingLocal(true)
+    try {
+      const id = await saveLocal(orgId, { nome: newLocalNome.trim() })
+      qc.invalidateQueries({ queryKey: ['crm', 'lookup', 'locais'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
+      setLocal(id)
+      setNewLocalOpen(false); setNewLocalNome('')
+      toast.success('Local criado')
+    } catch (e) {
+      toast.error('Erro', { description: (e as Error).message })
+    } finally { setCreatingLocal(false) }
   }
 
   // Reinicializa o formulário ao abrir (com valores pré-preenchidos, se houver).
@@ -131,8 +167,8 @@ export function NovaOportunidadeDialog({
   function pickLocal(v: Lookup | null) { setLocal(v ? v.id : NONE) }
 
   async function save() {
-    if (!orgId || !user?.id || !titulo.trim() || !org || ativos.length === 0) {
-      toast.error('Informe título e organização.')
+    if (!orgId || !user?.id || !titulo.trim() || ativos.length === 0) {
+      toast.error('Informe ao menos o título.')
       return
     }
     setSaving(true)
@@ -193,22 +229,34 @@ export function NovaOportunidadeDialog({
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Evento (opcional)</Label>
-            <EntityAutocomplete
-              value={eventoValue}
-              onPick={pickEvento}
-              options={eventOptions.data ?? []}
-              placeholder="Digite para buscar…"
-            />
+            <Label className="text-xs text-muted-foreground">Evento</Label>
+            <div className="flex items-center gap-2">
+              <EntityAutocomplete
+                className="flex-1"
+                value={eventoValue}
+                onPick={pickEvento}
+                options={eventOptions.data ?? []}
+                placeholder="Digite para buscar…"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => { setNewEventNome(''); setNewEventOpen(true) }} className="h-9 shrink-0 gap-1">
+                <Plus className="size-3.5" /> Novo
+              </Button>
+            </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Local (opcional)</Label>
-            <EntityAutocomplete
-              value={localValue}
-              onPick={pickLocal}
-              options={localOptions.data ?? []}
-              placeholder="Digite para buscar…"
-            />
+            <Label className="text-xs text-muted-foreground">Local</Label>
+            <div className="flex items-center gap-2">
+              <EntityAutocomplete
+                className="flex-1"
+                value={localValue}
+                onPick={pickLocal}
+                options={localOptions.data ?? []}
+                placeholder="Digite para buscar…"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => { setNewLocalNome(''); setNewLocalOpen(true) }} className="h-9 shrink-0 gap-1">
+                <Plus className="size-3.5" /> Novo
+              </Button>
+            </div>
           </div>
           <CurrencyField label="GMV estimado" value={gmv} onChange={setGmv} />
         </div>
@@ -246,6 +294,41 @@ export function NovaOportunidadeDialog({
             <Button type="submit" disabled={creatingOrg || !newOrgNome.trim()}>
               {creatingOrg ? 'Criando…' : 'Criar'}
             </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={newEventOpen} onOpenChange={(o) => !creatingEvent && setNewEventOpen(o)}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Novo evento</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); criarEvento() }} className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Nome</Label>
+            <Input value={newEventNome} autoFocus onChange={(e) => setNewEventNome(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setNewEventOpen(false)} disabled={creatingEvent}>Cancelar</Button>
+            <Button type="submit" disabled={creatingEvent || !newEventNome.trim()}>{creatingEvent ? 'Criando…' : 'Criar'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={newLocalOpen} onOpenChange={(o) => !creatingLocal && setNewLocalOpen(o)}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Novo local</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); criarLocal() }} className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Nome</Label>
+            <Input value={newLocalNome} autoFocus onChange={(e) => setNewLocalNome(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setNewLocalOpen(false)} disabled={creatingLocal}>Cancelar</Button>
+            <Button type="submit" disabled={creatingLocal || !newLocalNome.trim()}>{creatingLocal ? 'Criando…' : 'Criar'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

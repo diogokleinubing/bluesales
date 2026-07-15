@@ -20,10 +20,11 @@ import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
 import { useProfile } from '../hooks/useProfile'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
-import { useActivities, createActivity, type ActivityTipo, type ActivityRow } from '../hooks/useActivities'
+import { useActivities, createActivity, deleteActivity, type ActivityTipo, type ActivityRow } from '../hooks/useActivities'
 import { useAuditLog } from '../hooks/useAuditLog'
 import { useObjectionsBase } from '../hooks/useConfigCadastros'
 import { ActivityDialog } from './ActivityDialog'
+import { DeleteEntityButton } from './DeleteEntityButton'
 
 type Tipo = ActivityTipo | 'Objeção'
 
@@ -50,6 +51,12 @@ const TYPES: { tipo: Tipo; icon: LucideIcon }[] = [
   { tipo: 'Outro', icon: CircleDot },
 ]
 const ICON: Record<string, LucideIcon> = Object.fromEntries(TYPES.map((t) => [t.tipo, t.icon]))
+
+/** Rótulo dos eventos de email marketing no feed do contato. */
+const EMAIL_TIPO: Record<string, string> = {
+  enviado: 'Enviado', entregue: 'Entregue', aberto: 'Abriu', clique: 'Clicou',
+  bounce: 'Bounce', reclamacao: 'Reclamação', descadastro: 'Descadastrou', falha: 'Falha',
+}
 
 function dt(s: string) {
   const d = new Date(s)
@@ -146,6 +153,21 @@ export function AtividadesPanel({
   // Mudanças de estágio de relacionamento (stage_history) no mesmo feed.
   const hist = useAuditLog(AUDIT_ENTITY[entityType], entityId)
 
+  // Interações de email marketing — só no detalhe do contato (por person_id).
+  const emails = useQuery({
+    enabled: entityType === 'person',
+    queryKey: ['crm', 'timeline-emails', entityId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('email_events')
+        .select('id, tipo, url, ocorrido_em, email_campaigns(nome)')
+        .eq('person_id', entityId)
+        .order('ocorrido_em', { ascending: false })
+        .limit(200)
+      return data ?? []
+    },
+  })
+
   const timeline = useMemo(() => {
     const items: {
       key: string; at: string | null; tipo: string; icon: LucideIcon
@@ -178,15 +200,24 @@ export function AtividadesPanel({
         author: e.user,
       })
     }
+    for (const e of emails.data ?? []) {
+      const camp = e.email_campaigns as unknown as { nome: string } | null
+      items.push({
+        key: `e-${e.id}`, at: e.ocorrido_em as string, tipo: 'Email', icon: Mail,
+        titulo: `Email: ${camp?.nome ?? 'campanha'}`,
+        resumo: (EMAIL_TIPO[e.tipo as string] ?? (e.tipo as string)) + (e.url ? ` — ${e.url}` : ''),
+      })
+    }
     // Sem data (To-Do) primeiro; depois por data desc.
     return items.sort((a, b) => ((a.at ?? '9999') < (b.at ?? '9999') ? 1 : -1))
-  }, [acts.data, objs.data, hist.data])
+  }, [acts.data, objs.data, hist.data, emails.data])
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['crm', 'activities'] })
     qc.invalidateQueries({ queryKey: ['crm', 'timeline-objections', entityType, entityId] })
-    // Atividades mudam a "próxima ação" derivada do Funil de Relacionamento.
+    // Atividades mudam a "próxima ação" derivada dos funis (relacionamento e prospecção).
     qc.invalidateQueries({ queryKey: ['crm', 'relacionamento'] })
+    qc.invalidateQueries({ queryKey: ['crm', 'kanban'] })
   }
 
   async function registrar() {
@@ -291,7 +322,7 @@ export function AtividadesPanel({
       </div>
 
       {/* Timeline */}
-      {acts.isLoading || objs.isLoading || hist.isLoading ? (
+      {acts.isLoading || objs.isLoading || hist.isLoading || emails.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : timeline.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma atividade registrada.</p>
@@ -311,13 +342,23 @@ export function AtividadesPanel({
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">{it.at ? dt(it.at) : 'Sem data'}</span>
                       {it.act && (
-                        <button
-                          onClick={() => setEditing(it.act!)}
-                          title="Editar atividade"
-                          className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setEditing(it.act!)}
+                            title="Editar atividade"
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <DeleteEntityButton
+                            title="Remover atividade?"
+                            description={`"${it.act.titulo}" sairá do histórico. Pode ser desfeito em Comercial → Logs.`}
+                            onDelete={() => deleteActivity(it.act!.id)}
+                            onDeleted={refresh}
+                            variant="icon"
+                            label="Remover atividade"
+                          />
+                        </>
                       )}
                     </div>
                   </div>

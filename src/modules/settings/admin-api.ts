@@ -29,6 +29,12 @@ export async function setUserNome(id: string, nome: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/** Define a cor do avatar de um usuário (admin). null = automática (pelo nome). */
+export async function setUserColor(id: string, color: string | null): Promise<void> {
+  const { error } = await supabase.from('profiles').update({ color }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 /** Edita o próprio nome (via RPC, já que a RLS só deixa admin dar update). */
 export async function setMyNome(nome: string): Promise<void> {
   const { error } = await supabase.rpc('set_my_nome', { p_nome: nome })

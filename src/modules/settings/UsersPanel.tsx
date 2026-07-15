@@ -48,12 +48,16 @@ import {
   setGestor,
   setUserMenus,
   setUserNome,
+  setUserColor,
   resetUserPassword,
   disableUserMfa,
 } from './admin-api'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { AVATAR_COLORS, iniciais, corDoNome } from '@/modules/crm/components/avatarUtils'
 import { MODULES } from '@/modules/shared/nav'
 import type { ProfileRow } from '@/lib/database.types'
 import { fmtDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 export function UsersPanel() {
   const qc = useQueryClient()
@@ -135,6 +139,7 @@ export function UsersPanel() {
               <TableRow>
                 <TableHead>Email</TableHead>
                 <TableHead>Nome</TableHead>
+                <TableHead className="text-center">Cor</TableHead>
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-center">Admin</TableHead>
                 <TableHead className="text-center">Gestor</TableHead>
@@ -146,14 +151,14 @@ export function UsersPanel() {
               {query.isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <Skeleton className="h-5 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     Nenhum usuário.
                   </TableCell>
                 </TableRow>
@@ -177,6 +182,9 @@ export function UsersPanel() {
                       </TableCell>
                       <TableCell>
                         <NomeCell user={u} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <CorCell user={u} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {fmtDate(u.created_at)}
@@ -295,6 +303,53 @@ function NomeCell({ user }: { user: ProfileRow }) {
       <span className={user.nome ? '' : 'text-muted-foreground'}>{user.nome || '—'}</span>
       <Pencil className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
+  )
+}
+
+/** Seletor da cor do avatar do usuário (admin). */
+function CorCell({ user }: { user: ProfileRow }) {
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  async function pick(color: string | null) {
+    try {
+      await setUserColor(user.id, color)
+      await qc.invalidateQueries({ queryKey: ['admin', 'profiles'] })
+      qc.invalidateQueries({ queryKey: ['crm', 'kanban'] })
+      setOpen(false)
+    } catch (e) {
+      toast.error('Erro ao salvar cor', { description: (e as Error).message })
+    }
+  }
+  const bg = user.color || corDoNome(user.nome ?? '?')
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+          style={{ backgroundColor: bg }}
+          title="Definir cor do avatar"
+        >
+          {iniciais(user.nome ?? '?')}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="center" className="w-auto p-2">
+        <div className="grid grid-cols-6 gap-1.5">
+          {AVATAR_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => pick(c)}
+              className={cn('size-6 rounded-full border border-border', user.color === c && 'ring-2 ring-ring ring-offset-1')}
+              style={{ backgroundColor: c }}
+              title={c}
+            />
+          ))}
+        </div>
+        <button type="button" onClick={() => pick(null)} className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground">
+          Automática (pelo nome)
+        </button>
+      </PopoverContent>
+    </Popover>
   )
 }
 

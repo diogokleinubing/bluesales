@@ -102,6 +102,18 @@ const LocalDetalhe = lazyWithRetry(() =>
 const EventoDetalhe = lazyWithRetry(() =>
   import('@/modules/crm/pages/EventoDetalhe').then((m) => ({ default: m.EventoDetalhe })),
 )
+const EmailListas = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/EmailListas').then((m) => ({ default: m.EmailListas })),
+)
+const EmailListaDetalhe = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/EmailListaDetalhe').then((m) => ({ default: m.EmailListaDetalhe })),
+)
+const EmailMensagens = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/EmailMensagens').then((m) => ({ default: m.EmailMensagens })),
+)
+const EmailMensagemDetalhe = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/EmailMensagemDetalhe').then((m) => ({ default: m.EmailMensagemDetalhe })),
+)
 const Logs = lazyWithRetry(() =>
   import('@/modules/crm/pages/Logs').then((m) => ({ default: m.Logs })),
 )
@@ -281,6 +293,10 @@ export const router = createBrowserRouter([
       { path: 'comercial/eventos/:id', element: <EventoDetalhe /> },
       { path: 'comercial/locais', element: <Locais /> },
       { path: 'comercial/locais/:id', element: <LocalDetalhe /> },
+      { path: 'comercial/email/listas', element: <EmailListas /> },
+      { path: 'comercial/email/listas/:id', element: <EmailListaDetalhe /> },
+      { path: 'comercial/email/mensagens', element: <EmailMensagens /> },
+      { path: 'comercial/email/mensagens/:id', element: <EmailMensagemDetalhe /> },
       {
         path: 'comercial/logs',
         element: (

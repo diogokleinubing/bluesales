@@ -22,8 +22,8 @@ export function DeleteEntityButton({
   description: string
   onDelete: () => Promise<void>
   onDeleted: () => void
-  /** 'button' = botão outline; 'menu' = item de lista (largura total). */
-  variant?: 'button' | 'menu'
+  /** 'button' = botão outline; 'menu' = item de lista; 'icon' = só lixeira. */
+  variant?: 'button' | 'menu' | 'icon'
   label?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -44,7 +44,15 @@ export function DeleteEntityButton({
 
   return (
     <>
-      {variant === 'menu' ? (
+      {variant === 'icon' ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="text-muted-foreground transition-colors hover:text-destructive"
+          title={label}
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      ) : variant === 'menu' ? (
         <button
           onClick={() => setOpen(true)}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10"

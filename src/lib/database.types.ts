@@ -72,6 +72,8 @@ export interface ProfileRow {
   id: string
   email: string | null
   nome: string | null
+  /** Cor do avatar do usuário nos cards (null = derivada do nome). */
+  color: string | null
   is_admin: boolean
   is_gestor: boolean
   must_change_password: boolean

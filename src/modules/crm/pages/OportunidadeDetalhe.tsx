@@ -118,7 +118,7 @@ export function OportunidadeDetalhe() {
       {/* Corpo */}
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 px-6 py-4">
-          <AtividadesPanel entityType="opportunity" entityId={o.id} organizationId={o.organization_id} opportunityId={o.id} />
+          <AtividadesPanel entityType="opportunity" entityId={o.id} organizationId={o.organization_id ?? undefined} opportunityId={o.id} />
         </div>
 
         <aside className="space-y-5 border-border px-6 py-4 lg:border-l">

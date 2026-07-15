@@ -7,7 +7,7 @@ export interface Opportunity {
   id: string
   org_id: string
   titulo: string
-  organization_id: string
+  organization_id: string | null
   crm_event_id: string | null
   local_id: string | null
   artist_id: string | null
@@ -43,7 +43,7 @@ async function enrich(rows: Opportunity[]): Promise<OppListRow[]> {
     const st = stageById.get(o.stage_id)
     return {
       ...o,
-      orgNome: orgById.get(o.organization_id) ?? null,
+      orgNome: o.organization_id ? orgById.get(o.organization_id) ?? null : null,
       stageNome: st?.nome ?? null,
       stageCor: st?.cor ?? null,
       ownerNome: ownerById.get(o.owner_id) ?? null,
@@ -97,7 +97,7 @@ export function useOpportunity(id: string | undefined) {
 export async function createOpportunity(
   orgId: string,
   ownerId: string,
-  patch: { titulo: string; organization_id: string; stage_id: string } & Partial<Opportunity>,
+  patch: { titulo: string; stage_id: string; organization_id?: string | null } & Partial<Opportunity>,
 ): Promise<string> {
   const { data, error } = await supabase
     .from('opportunities')

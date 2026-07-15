@@ -17,6 +17,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClasseBadge } from './ClasseBadge'
+import { OppAcompControl } from './OppAcompControl'
+import { UserAvatar } from './UserAvatar'
 import { useFunnel, type FunnelSlug } from '../hooks/useFunnelStages'
 import {
   moveCardStage,
@@ -28,7 +30,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, showCidade = true, showGmv = true }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; showCidade?: boolean; showGmv?: boolean }) {
+export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, ownerId, showCidade = true, showGmv = true }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; ownerId?: string | null; showCidade?: boolean; showGmv?: boolean }) {
   const openItem = useOpenItem()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -49,6 +51,7 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
     const q = (search ?? '').trim().toLowerCase()
     if (q) all = all.filter((c) => c.title.toLowerCase().includes(q) || (c.subtitle ?? '').toLowerCase().includes(q))
     if (gmvMin != null) all = all.filter((c) => c.gmv != null && c.gmv >= gmvMin)
+    if (ownerId) all = all.filter((c) => c.ownerId === ownerId)
     // Org: ordena dentro das colunas — classe (A+→C), GMV desc, nome asc.
     if (kind === 'org') {
       const rank = (b?: string | null) => ({ 'A+': 4, A: 3, B: 2, C: 1 } as Record<string, number>)[b ?? ''] ?? 0
@@ -58,7 +61,7 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
         || a.title.localeCompare(b.title, 'pt-BR'))
     }
     return all
-  }, [cardsQ.data, statusFilter, classFilter, search, gmvMin, kind])
+  }, [cardsQ.data, statusFilter, classFilter, search, gmvMin, ownerId, kind])
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(
@@ -292,10 +295,23 @@ function CardView({
           {fmtBRL(card.gmv)}
         </p>
       )}
-      {kind === 'opp' && card.meta && (
-        <p className="mt-1 text-xs font-medium tabular-nums">
-          {fmtBRL(Number(card.meta))}
-        </p>
+      {kind === 'opp' && (
+        <div className="mt-1 flex items-end justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <UserAvatar nome={card.ownerNome ?? null} color={card.ownerColor} size={20} />
+            {card.meta && <p className="text-xs font-medium tabular-nums">{fmtBRL(Number(card.meta))}</p>}
+          </div>
+          {card.health && (
+            <OppAcompControl
+              oppId={card.id}
+              href={card.href}
+              health={card.health}
+              proximaAcaoAt={card.proximaAcaoAt}
+              atrasadaDesde={card.atrasadaDesde}
+              className="shrink-0"
+            />
+          )}
+        </div>
       )}
     </div>
   )

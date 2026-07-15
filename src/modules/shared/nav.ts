@@ -33,6 +33,8 @@ import {
   ListTodo,
   LayoutGrid,
   Users,
+  Mail,
+  Send,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial' | 'pesquisa' | 'projetos'
@@ -108,7 +110,7 @@ export const MODULES: ModuleDef[] = [
         title: 'Operação',
         items: [
           { to: '/comercial/relacionamento', label: 'Relacionamento', icon: Waypoints, color: '#3b82f6' },
-          { to: '/comercial/oportunidades', label: 'Oportunidades', icon: Filter, color: '#22c55e' },
+          { to: '/comercial/oportunidades', label: 'Prospecção', icon: Filter, color: '#22c55e' },
         ],
       },
       {
@@ -125,6 +127,13 @@ export const MODULES: ModuleDef[] = [
         title: 'Engajamento',
         items: [
           { to: '/comercial/apresentacoes', label: 'Apresentações', icon: Presentation, color: '#64748b' },
+        ],
+      },
+      {
+        title: 'Email marketing',
+        items: [
+          { to: '/comercial/email/mensagens', label: 'Mensagens', icon: Send, color: '#0ea5e9' },
+          { to: '/comercial/email/listas', label: 'Listas', icon: Mail, color: '#8b5cf6' },
         ],
       },
       {

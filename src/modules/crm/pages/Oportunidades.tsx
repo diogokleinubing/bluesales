@@ -38,13 +38,24 @@ export function Oportunidades() {
   const [search, setSearch] = useState(() => readStr(params, 'search'))
   const [stageF, setStageF] = useState(() => readStr(params, 'stage', ALL))
   const [statusF, setStatusF] = useState(() => readStr(params, 'result', ALL))
+  const [ownerF, setOwnerF] = useState(() => readStr(params, 'owner', ALL))
   useEffect(() => {
     setSearchParams(buildSearchParams([
       { k: 'search', v: search },
       { k: 'stage', v: stageF, def: ALL },
       { k: 'result', v: statusF, def: ALL },
+      { k: 'owner', v: ownerF, def: ALL },
     ]), { replace: true })
-  }, [search, stageF, statusF, setSearchParams])
+  }, [search, stageF, statusF, ownerF, setSearchParams])
+
+  // Responsáveis com oportunidade ativa (em aberto) — opções do filtro.
+  const ownerOptions = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const o of data ?? []) {
+      if (o.resultado == null && o.owner_id) m.set(o.owner_id, o.ownerNome ?? '—')
+    }
+    return [...m.entries()].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [data])
   const [open, setOpen] = useState(false)
 
   const rows = useMemo(() => {
@@ -54,17 +65,25 @@ export function Oportunidades() {
       if (stageF !== ALL && o.stage_id !== stageF) return false
       if (statusF === ABERTA && o.resultado != null) return false
       if (statusF !== ALL && statusF !== ABERTA && o.resultado !== statusF) return false
+      if (ownerF !== ALL && o.owner_id !== ownerF) return false
       return true
     })
-  }, [data, search, stageF, statusF])
+  }, [data, search, stageF, statusF, ownerF])
 
   return (
     <>
       <ListView
-        title="Oportunidades"
+        title="Funil de Prospecção"
         count={data ? String(data.length) : undefined}
         actions={
           <>
+            <Select value={ownerF} onValueChange={setOwnerF}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-40`} size="sm"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos</SelectItem>
+                {ownerOptions.map((o) => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <ViewToggle view={view} onChange={setView} />
             <Button onClick={() => setOpen(true)}><Plus className="size-4" /> Nova oportunidade</Button>
           </>
@@ -98,7 +117,7 @@ export function Oportunidades() {
       >
         {view === 'kanban' ? (
           <div className="p-4">
-            <KanbanBoard slug="oportunidade" search={search} />
+            <KanbanBoard slug="oportunidade" search={search} ownerId={ownerF === ALL ? null : ownerF} />
           </div>
         ) : (
         <Table>
