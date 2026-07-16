@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ClasseBadge } from './ClasseBadge'
 import { AcompanhamentoControl } from './AcompanhamentoBadge'
+import { OppSignalControl } from './OppSignalControl'
 import { useFunnel } from '../hooks/useFunnelStages'
 import { moveRelItemStage, type RelItem, type RelTipo } from '../hooks/useRelacionamento'
 import { fmtBRL, fmtDate } from '@/lib/format'
@@ -62,9 +63,12 @@ export function RelacionamentoBoard({
   )
   const columns = useMemo(() => {
     const cols = activeStages.map((s) => ({ id: s.id, nome: s.nome, cor: s.cor }))
-    if (items.some((c) => c.funil_stage_id == null)) cols.unshift({ id: NONE, nome: 'Sem estágio', cor: null })
+    // "Sem estágio" é tratada como inativa: só aparece com o toggle de inativos.
+    if (includeInactiveStages && items.some((c) => c.funil_stage_id == null)) {
+      cols.unshift({ id: NONE, nome: 'Sem estágio', cor: null })
+    }
     return cols
-  }, [activeStages, items])
+  }, [activeStages, items, includeInactiveStages])
 
   const byStage = useMemo(() => {
     const m = new Map<string, RelItem[]>()
@@ -198,7 +202,10 @@ function CardView({ item, showCidade = true, showGmv = true, showCadastro = fals
             <p className="text-xs text-muted-foreground">Cadastro: {fmtDate(item.cadastro)}</p>
           )}
         </div>
-        <AcompanhamentoControl item={item} className="shrink-0" />
+        <span className="flex shrink-0 items-center gap-1">
+          <OppSignalControl signal={item.oppSignal} />
+          <AcompanhamentoControl item={item} />
+        </span>
       </div>
     </div>
   )

@@ -108,6 +108,16 @@ export async function createOpportunity(
   return data.id as string
 }
 
+/** Define o responsável de várias oportunidades de uma vez (mudança em massa). */
+export async function setOpportunitiesOwner(ids: string[], ownerId: string) {
+  if (ids.length === 0) return
+  const { error } = await supabase
+    .from('opportunities')
+    .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+}
+
 export async function updateOpportunity(id: string, patch: Partial<Opportunity>) {
   const { error } = await supabase
     .from('opportunities')

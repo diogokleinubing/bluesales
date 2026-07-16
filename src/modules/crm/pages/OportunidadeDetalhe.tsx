@@ -124,7 +124,6 @@ export function OportunidadeDetalhe() {
         <aside className="space-y-5 border-border px-6 py-4 lg:border-l">
           <OppVisaoGeral
             o={o}
-            isGestor={profile?.role === 'gestor'}
             profiles={profilesQ.data ?? []}
           />
 
@@ -190,10 +189,9 @@ export function OportunidadeDetalhe() {
 }
 
 function OppVisaoGeral({
-  o, isGestor, profiles,
+  o, profiles,
 }: {
   o: Opportunity
-  isGestor: boolean
   profiles: { id: string; nome: string | null }[]
 }) {
   const qc = useQueryClient()
@@ -321,15 +319,13 @@ function OppVisaoGeral({
         onChange={(v) => set('local_id', v)}
       />
       <CurrencyField label="GMV estimado" value={draft.gmv_estimado} onChange={(v) => set('gmv_estimado', v)} />
-      {isGestor && (
-        <SelectField
-          label="Responsável"
-          value={draft.owner_id}
-          includeNone={false}
-          options={profiles.map((p) => ({ value: p.id, label: p.nome ?? p.id }))}
-          onChange={(v) => set('owner_id', v)}
-        />
-      )}
+      <SelectField
+        label="Responsável"
+        value={draft.owner_id}
+        includeNone={false}
+        options={profiles.map((p) => ({ value: p.id, label: p.nome ?? p.id }))}
+        onChange={(v) => set('owner_id', v)}
+      />
       <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
       {gmvDialog}

@@ -15,6 +15,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClasseBadge } from './ClasseBadge'
 import { OppAcompControl } from './OppAcompControl'
@@ -30,7 +31,7 @@ import { fmtBRL } from '@/lib/format'
 
 const NONE = '__none__'
 
-export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, ownerId, showCidade = true, showGmv = true }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; ownerId?: string | null; showCidade?: boolean; showGmv?: boolean }) {
+export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFilter, search, gmvMin, ownerId, showCidade = true, showGmv = true, selectMode = false, selectedIds, onToggleSelect }: { slug: FunnelSlug; statusFilter?: string[] | null; includeInactiveStages?: boolean; classFilter?: string[] | null; search?: string; gmvMin?: number | null; ownerId?: string | null; showCidade?: boolean; showGmv?: boolean; selectMode?: boolean; selectedIds?: Set<string>; onToggleSelect?: (id: string) => void }) {
   const openItem = useOpenItem()
   const qc = useQueryClient()
   const kind = slug === 'relacionamento' ? 'org' : 'opp'
@@ -149,6 +150,9 @@ export function KanbanBoard({ slug, statusFilter, includeInactiveStages, classFi
             showCidade={showCidade}
             showGmv={showGmv}
             onOpen={(e, href) => openItem(e, href)}
+            selectMode={selectMode}
+            selectedIds={selectedIds}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </div>
@@ -168,6 +172,9 @@ function Column({
   showCidade,
   showGmv,
   onOpen,
+  selectMode,
+  selectedIds,
+  onToggleSelect,
 }: {
   id: string
   nome: string
@@ -177,6 +184,9 @@ function Column({
   showCidade: boolean
   showGmv: boolean
   onOpen: (e: ReactMouseEvent, href: string) => void
+  selectMode?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const CAP = 60
@@ -208,7 +218,7 @@ function Column({
         }`}
       >
         {shown.map((c) => (
-          <DraggableCard key={c.id} card={c} kind={kind} showCidade={showCidade} showGmv={showGmv} onOpen={onOpen} />
+          <DraggableCard key={c.id} card={c} kind={kind} showCidade={showCidade} showGmv={showGmv} onOpen={onOpen} selectMode={selectMode} selected={!!selectedIds?.has(c.id)} onToggleSelect={onToggleSelect} />
         ))}
         {cards.length > CAP && (
           <p className="px-1 py-2 text-center text-xs text-muted-foreground">
@@ -231,16 +241,40 @@ function DraggableCard({
   showCidade,
   showGmv,
   onOpen,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   card: KanbanCard
   kind: 'org' | 'opp'
   showCidade: boolean
   showGmv: boolean
   onOpen: (e: ReactMouseEvent, href: string) => void
+  selectMode?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
   })
+
+  // Modo seleção (mudança em massa): sem drag, clique alterna a seleção.
+  if (selectMode) {
+    return (
+      <div
+        onClick={() => onToggleSelect?.(card.id)}
+        className={`flex cursor-pointer gap-2 rounded-md border bg-card p-2.5 text-left shadow-sm transition-colors ${
+          selected ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary'
+        }`}
+      >
+        <Checkbox checked={!!selected} className="mt-0.5 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <CardView card={card} kind={kind} showCidade={showCidade} showGmv={showGmv} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={setNodeRef}

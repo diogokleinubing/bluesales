@@ -196,7 +196,9 @@ export function AtividadesPanel({
       items.push({
         key: e.id, at: e.at, tipo: 'Estágio', icon: Milestone,
         titulo: 'Mudança de estágio',
-        resumo: `${c?.oldValue ?? '—'} → ${c?.newValue ?? '—'}`,
+        resumo: e.comentario
+          ? `${c?.oldValue ?? '—'} → ${c?.newValue ?? '—'}\n${e.comentario}`
+          : `${c?.oldValue ?? '—'} → ${c?.newValue ?? '—'}`,
         author: e.user,
       })
     }

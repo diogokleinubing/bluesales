@@ -17,7 +17,8 @@ import { CurrencyField } from './EditFields'
 import { EntityAutocomplete, type Lookup } from './EntityAutocomplete'
 import { useAuth } from '@/lib/auth'
 import { useCrmOrgId, useFunnel } from '../hooks/useFunnelStages'
-import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions } from '../hooks/useCrmLookups'
+import { useOrgGmvOptions, useEventGmvOptions, useLocalOptions, useUserOptions } from '../hooks/useCrmLookups'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useGmvCopy } from '../hooks/useGmvCopy'
 import { createOpportunity } from '../hooks/useOpportunities'
 import { createOrganization } from '../hooks/useOrganizations'
@@ -49,6 +50,7 @@ export function NovaOportunidadeDialog({
   const orgOptions = useOrgGmvOptions()
   const eventOptions = useEventGmvOptions()
   const localOptions = useLocalOptions()
+  const userOptions = useUserOptions()
   const { stages } = useFunnel('oportunidade')
   const ativos = stages.filter((s) => s.ativo)
 
@@ -57,6 +59,7 @@ export function NovaOportunidadeDialog({
   const [evento, setEvento] = useState<string>(NONE)
   const [local, setLocal] = useState<string>(NONE)
   const [gmv, setGmv] = useState('')
+  const [owner, setOwner] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const { consider, dialog: gmvDialog } = useGmvCopy(gmv, setGmv)
 
@@ -141,6 +144,7 @@ export function NovaOportunidadeDialog({
     setEvento(initialEventId ?? NONE)
     setLocal(initialLocalId ?? NONE)
     setGmv(initialGmv != null ? String(Math.round(initialGmv)) : '')
+    setOwner(user?.id ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -173,7 +177,7 @@ export function NovaOportunidadeDialog({
     }
     setSaving(true)
     try {
-      const id = await createOpportunity(orgId, user.id, {
+      const id = await createOpportunity(orgId, owner || user.id, {
         titulo: titulo.trim(),
         organization_id: org,
         stage_id: ativos[0].id,
@@ -257,6 +261,15 @@ export function NovaOportunidadeDialog({
                 <Plus className="size-3.5" /> Novo
               </Button>
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Responsável</Label>
+            <Select value={owner} onValueChange={setOwner}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+              <SelectContent>
+                {(userOptions.data ?? []).map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <CurrencyField label="GMV estimado" value={gmv} onChange={setGmv} />
         </div>

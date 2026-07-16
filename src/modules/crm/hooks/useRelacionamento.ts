@@ -17,7 +17,7 @@ export interface RelItem {
   uf: string | null
   classificacao: string | null
   funil_stage_id: string | null
-  /** GMV: org = gmv_anual; local = soma dos eventos; evento = gmv_estimado. */
+  /** GMV: org = gmv_anual; local = gmv_estimado (manual); evento = gmv_estimado. */
   gmv: number | null
   /** status_comercial — só organizações. */
   status: string | null
@@ -31,7 +31,27 @@ export interface RelItem {
   proximaAcaoAt: string | null
   /** Pendência vencida mais antiga (ISO), para tooltip "atrasada desde". */
   atrasadaDesde: string | null
+  /** Sinal de oportunidade de prospecção ligada à entidade (ou null se não há). */
+  oppSignal: OppSignal | null
   href: string
+}
+
+export interface RelOpp {
+  id: string
+  titulo: string
+  gmv: number | null
+  stageId: string | null
+  resultado: 'Ganho' | 'Perdida' | null
+}
+
+/**
+ * Sinal exibido no funil de relacionamento:
+ * - 'ativa': há oportunidade(s) em aberto (azul) — lista as ativas.
+ * - 'ganha'/'perdida': sem ativas; reflete a oportunidade resolvida mais recente.
+ */
+export interface OppSignal {
+  estado: 'ativa' | 'ganha' | 'perdida'
+  opps: RelOpp[]
 }
 
 /** Estado visual final: se não está em trabalho, é "fora"; senão, a saúde derivada. */
@@ -84,6 +104,30 @@ async function fetchPendentes(orgId: string): Promise<PendRow[]> {
   return out
 }
 
+interface OppRow {
+  id: string; titulo: string; gmv_estimado: number | null; stage_id: string | null
+  resultado: 'Ganho' | 'Perdida' | null; resultado_em: string | null
+  organization_id: string | null; local_id: string | null; crm_event_id: string | null
+}
+
+/** Oportunidades (ativas + resolvidas) — para sinalizar no funil de relacionamento. */
+async function fetchOpps(orgId: string): Promise<OppRow[]> {
+  const out: OppRow[] = []
+  for (let from = 0; ; from += 1000) {
+    const res = await supabase
+      .from('opportunities')
+      .select('id, titulo, gmv_estimado, stage_id, resultado, resultado_em, organization_id, local_id, crm_event_id')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .range(from, from + 999)
+    if (res.error) throw new Error(res.error.message)
+    const data = (res.data ?? []) as OppRow[]
+    out.push(...data)
+    if (data.length < 1000) break
+  }
+  return out
+}
+
 /** Itens do Funil de Relacionamento: organizações + locais + eventos. */
 export function useRelacionamento() {
   const orgId = useCrmOrgId()
@@ -92,20 +136,38 @@ export function useRelacionamento() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'relacionamento', orgId],
     queryFn: async (): Promise<RelItem[]> => {
-      const [orgs, locs, evs, pend] = await Promise.all([
+      const [orgs, locs, evs, pend, opps] = await Promise.all([
         // '*' é resiliente: pega em_trabalho_relacionamento quando a coluna existir, sem quebrar antes.
         fetchAll('organizations', '*', orgId!, true),
         fetchAll('crm_locals', '*', orgId!),
         fetchAll('crm_events', '*, crm_locals(cidade, uf)', orgId!),
         fetchPendentes(orgId!),
+        fetchOpps(orgId!),
       ])
 
-      // GMV por local = soma dos eventos do local.
-      const gmvPorLocal = new Map<string, number>()
-      for (const e of evs) {
-        if (e.local_id && e.gmv_estimado != null) {
-          gmvPorLocal.set(e.local_id, (gmvPorLocal.get(e.local_id) ?? 0) + Number(e.gmv_estimado))
+      // Oportunidades por entidade (org/local/evento), com resultado_em p/ ordenar.
+      const oppsPorEntidade = new Map<string, { rel: RelOpp; resultadoEm: string | null }[]>()
+      for (const o of opps) {
+        const rel: RelOpp = {
+          id: o.id, titulo: o.titulo,
+          gmv: o.gmv_estimado != null ? Number(o.gmv_estimado) : null,
+          stageId: o.stage_id, resultado: o.resultado,
         }
+        const entry = { rel, resultadoEm: o.resultado_em }
+        for (const eid of [o.organization_id, o.local_id, o.crm_event_id]) {
+          if (!eid) continue
+          const arr = oppsPorEntidade.get(eid) ?? []
+          arr.push(entry); oppsPorEntidade.set(eid, arr)
+        }
+      }
+      // Sinal: ativas (azul) têm prioridade; senão, a resolvida mais recente (ganha/perdida).
+      function signalDe(id: string): OppSignal | null {
+        const list = oppsPorEntidade.get(id) ?? []
+        if (list.length === 0) return null
+        const ativas = list.filter((x) => x.rel.resultado == null)
+        if (ativas.length > 0) return { estado: 'ativa', opps: ativas.map((x) => x.rel) }
+        const recente = [...list].sort((a, b) => (b.resultadoEm ?? '').localeCompare(a.resultadoEm ?? ''))[0]
+        return { estado: recente.rel.resultado === 'Ganho' ? 'ganha' : 'perdida', opps: [recente.rel] }
       }
 
       // Saúde derivada: por entidade, menor data futura (próxima ação) e menor
@@ -139,6 +201,7 @@ export function useRelacionamento() {
           gmv: o.gmv_anual != null ? Number(o.gmv_anual) : null,
           status: o.status_comercial, cadastro: o.created_at ?? null,
           emTrabalho: !!o.em_trabalho_relacionamento, ...saude(o.id),
+          oppSignal: signalDe(o.id),
           href: `/comercial/organizacoes/${o.id}`,
         })
       }
@@ -146,9 +209,10 @@ export function useRelacionamento() {
         items.push({
           tipo: 'local', id: l.id, nome: l.nome, cidade: l.cidade, uf: l.uf,
           classificacao: l.classificacao, funil_stage_id: l.funil_stage_id,
-          gmv: gmvPorLocal.get(l.id) ?? null, status: null,
+          gmv: l.gmv_estimado != null ? Number(l.gmv_estimado) : null, status: null,
           cadastro: l.created_at ?? null,
           emTrabalho: !!l.em_trabalho_relacionamento, ...saude(l.id),
+          oppSignal: signalDe(l.id),
           href: `/comercial/locais/${l.id}`,
         })
       }
@@ -160,6 +224,7 @@ export function useRelacionamento() {
           gmv: e.gmv_estimado != null ? Number(e.gmv_estimado) : null, status: null,
           cadastro: e.created_at ?? null,
           emTrabalho: !!e.em_trabalho_relacionamento, ...saude(e.id),
+          oppSignal: signalDe(e.id),
           href: `/comercial/eventos/${e.id}`,
         })
       }
@@ -173,6 +238,17 @@ const TABLE: Record<RelTipo, string> = { org: 'organizations', local: 'crm_local
 /** Move um item (org/local/evento) para outro estágio de relacionamento. */
 export async function moveRelItemStage(tipo: RelTipo, id: string, stageId: string | null) {
   const { error } = await supabase.from(TABLE[tipo]).update({ funil_stage_id: stageId }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Muda o estágio de relacionamento registrando uma observação no histórico
+ * (stage_history.comentario), via RPC transacional crm_change_stage.
+ */
+export async function changeStage(tipo: RelTipo, id: string, stageId: string, comentario: string | null) {
+  const { error } = await supabase.rpc('crm_change_stage', {
+    p_tipo: tipo, p_id: id, p_stage: stageId, p_comentario: comentario,
+  })
   if (error) throw new Error(error.message)
 }
 

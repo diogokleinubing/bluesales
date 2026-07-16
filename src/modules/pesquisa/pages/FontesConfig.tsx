@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { fmtDate, fmtInt } from '@/lib/format'
+import { supabase } from '@/lib/supabase'
 import { useProfile } from '@/modules/crm/hooks/useProfile'
 import {
   useCrawlerSources, useSourceCounts, useSourceFutureCounts, setSourceAtivo, saveSourceConfig, resetSourceScan, runCrawler,
@@ -106,7 +107,7 @@ export function FontesConfig() {
   useEffect(() => () => { varreduraStop.current = true }, [])
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-  async function cicloVarredura(s: CrawlerSource, ciclo: number, emAntes: string) {
+  async function cicloVarredura(s: CrawlerSource, ciclo: number, emAntes: string, zeros = 0) {
     if (varreduraStop.current) { setVarredura(null); return }
     setVarredura({ slug: s.slug, nome: s.nome, ciclo })
     try { await runCrawler(s.slug) } catch { /* segue */ }
@@ -127,16 +128,22 @@ export function FontesConfig() {
     if (prog.voltou) {
       setVarredura(null); toast.success('Varredura completa', { description: `${s.nome} — volta fechada em ${ciclo} ciclo(s).` }); return
     }
+    // Encerra também quando não captura novos por 3 ciclos seguidos — evita
+    // rodar sem fim em fontes cuja detecção de "volta" (pager) é imprecisa.
+    const zerosN = prog.novos === 0 ? zeros + 1 : 0
+    if (zerosN >= 3) {
+      setVarredura(null); toast.success('Varredura completa', { description: `${s.nome} — catálogo coberto (sem novos há 3 ciclos).` }); return
+    }
     if (ciclo >= 100) {
       setVarredura(null); toast('Varredura parada', { description: `${s.nome}: limite de 100 ciclos.` }); return
     }
-    void cicloVarredura(s, ciclo + 1, prog.em)
+    void cicloVarredura(s, ciclo + 1, prog.em, zerosN)
   }
 
   async function iniciarVarredura(s: CrawlerSource) {
     varreduraStop.current = false
     const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
-    void cicloVarredura(s, 1, emAntes)
+    void cicloVarredura(s, 1, emAntes, 0)
   }
   function pararVarredura() {
     varreduraStop.current = true
@@ -152,6 +159,17 @@ export function FontesConfig() {
   const tudoStop = useRef(false)
   useEffect(() => () => { tudoStop.current = true }, [])
 
+  // Ao terminar qualquer varredura, atualiza a agregação de locais (materialized
+  // view) em background, para os novos eventos aparecerem sem esperar o cron.
+  const sweepingRef = useRef(false)
+  useEffect(() => {
+    if (varredura || tudo) { sweepingRef.current = true; return }
+    if (sweepingRef.current) {
+      sweepingRef.current = false
+      void supabase.rpc('refresh_pesquisa_locais_agg').then(() => {}, () => {})
+    }
+  }, [varredura, tudo])
+
   async function iniciarTudo() {
     const fontes = (data ?? []).filter((s) => s.ativo)
     if (!fontes.length) return
@@ -161,6 +179,7 @@ export function FontesConfig() {
       const s = fontes[i]
       // Roda esta fonte em CICLOS até FECHAR a volta (varredura completa); só
       // então passa pra próxima. Tetos: 200 ciclos e 5 min de espera por ciclo.
+      let zeros = 0
       for (let ciclo = 1; ciclo <= 200 && !tudoStop.current; ciclo++) {
         setTudo({ idx: i + 1, total: fontes.length, nome: s.nome, ciclo })
         const emAntes = (await fetchSourceProgresso(s.id))?.em ?? ''
@@ -178,6 +197,8 @@ export function FontesConfig() {
         qc.invalidateQueries({ queryKey: ['pesquisa', 'runs'] })
         if (!prog || prog.em === emAntes) break // sem resposta -> próxima fonte
         if (prog.voltou) break // volta completa -> próxima fonte
+        zeros = prog.novos === 0 ? zeros + 1 : 0
+        if (zeros >= 3) break // sem novos há 3 ciclos -> catálogo coberto
       }
     }
     const parado = tudoStop.current

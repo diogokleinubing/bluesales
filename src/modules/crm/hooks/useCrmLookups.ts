@@ -11,6 +11,19 @@ export interface GmvOption extends Lookup {
   gmv: number | null
 }
 
+/** Usuários (para escolher o responsável). Requer profiles legível por membros. */
+export function useUserOptions() {
+  return useQuery({
+    staleTime: 60 * 1000,
+    queryKey: ['crm', 'lookup', 'users'],
+    queryFn: async (): Promise<Lookup[]> => {
+      const { data, error } = await supabase.from('profiles').select('id, nome').order('nome')
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((p) => ({ id: p.id as string, nome: (p.nome as string | null) ?? '—' }))
+    },
+  })
+}
+
 /** Organizações com GMV anual (para copiar para a oportunidade). */
 export function useOrgGmvOptions() {
   const orgId = useCrmOrgId()

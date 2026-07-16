@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
@@ -13,22 +13,16 @@ import {
   type ContatoEntity,
 } from '../hooks/usePersonEntities'
 
-const LABEL: Record<ContatoEntity, string> = {
-  organization: 'organização',
-  local: 'local',
-  evento: 'evento',
-}
-
 /**
- * Lista e gerencia os contatos (pessoas) vinculados a uma entidade
- * (organização, local ou evento). Buscar ou criar um contato no campo abaixo
- * já cria o vínculo com a entidade atual — sem passo extra de "Vincular".
+ * Contatos (pessoas) vinculados a uma entidade. Linhas compactas (nome + papel);
+ * adicionar via botão "+" que revela o campo de busca (buscar/criar já vincula).
  */
-export function EntityContatos({ entityType, entityId }: { entityType: ContatoEntity; entityId: string }) {
+export function EntityContatos({ entityType, entityId, title = 'Contatos' }: { entityType: ContatoEntity; entityId: string; title?: string }) {
   const qc = useQueryClient()
   const tenantOrgId = useCrmOrgId()
   const { profile } = useProfile()
   const [papel, setPapel] = useState('')
+  const [adding, setAdding] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [editPapel, setEditPapel] = useState('')
   const q = useEntityContacts(entityType, entityId)
@@ -40,7 +34,6 @@ export function EntityContatos({ entityType, entityId }: { entityType: ContatoEn
 
   async function vincular(p: { id: string; nome: string }) {
     if (!tenantOrgId) return
-    // Evita duplicar um contato que já está vinculado a esta entidade.
     if ((q.data ?? []).some((c) => c.person_id === p.id)) {
       toast.info('Este contato já está vinculado.')
       setPapel('')
@@ -49,6 +42,7 @@ export function EntityContatos({ entityType, entityId }: { entityType: ContatoEn
     try {
       await linkPersonToEntity(tenantOrgId, entityType, entityId, p.id, papel, profile?.id)
       setPapel('')
+      setAdding(false)
       refresh()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -74,30 +68,33 @@ export function EntityContatos({ entityType, entityId }: { entityType: ContatoEn
     }
   }
 
-  if (q.isLoading) return <Skeleton className="h-24 w-full" />
+  if (q.isLoading) return <Skeleton className="h-12 w-full" />
+  const contatos = q.data ?? []
 
   return (
-    <div className="space-y-3">
-      {(q.data ?? []).length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum contato vinculado.</p>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+          title="Adicionar contato"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+      {contatos.length === 0 && !adding && (
+        <p className="text-sm text-muted-foreground">Nenhum contato vinculado</p>
       )}
-      {(q.data ?? []).map((c) => {
+      {contatos.map((c) => {
         const editing = editId === c.id
         return (
-          <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
-            <div className="min-w-0 flex-1">
-              <Link to={`/comercial/contatos/${c.person_id}`} className="inline-flex items-center gap-2 font-medium hover:underline">
-                {c.nome}
-                {c.stageNome && (
-                  <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
-                    <span className="size-2 rounded-full" style={{ backgroundColor: c.stageCor ?? 'var(--muted-foreground)' }} />
-                    {c.stageNome}
-                  </span>
-                )}
-              </Link>
+          <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <Link to={`/comercial/contatos/${c.person_id}`} className="truncate text-sm font-medium hover:underline">{c.nome}</Link>
               {editing ? (
                 <Input
-                  className="mt-1 h-8 max-w-56"
+                  className="h-7 max-w-40"
                   placeholder="Papel"
                   value={editPapel}
                   autoFocus
@@ -108,52 +105,33 @@ export function EntityContatos({ entityType, entityId }: { entityType: ContatoEn
                   }}
                 />
               ) : (
-                <div className="text-xs text-muted-foreground">
-                  {[c.papel, c.email, c.telefone].filter(Boolean).join(' · ') || '—'}
-                </div>
+                c.papel && <span className="shrink-0 truncate text-xs text-muted-foreground">· {c.papel}</span>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {editing ? (
                 <>
-                  <button onClick={() => salvarPapel(c.id)} className="text-muted-foreground hover:text-foreground" title="Salvar">
-                    <Check className="size-4" />
-                  </button>
-                  <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground" title="Cancelar">
-                    <X className="size-4" />
-                  </button>
+                  <button onClick={() => salvarPapel(c.id)} className="text-muted-foreground hover:text-foreground" title="Salvar"><Check className="size-4" /></button>
+                  <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground" title="Cancelar"><X className="size-4" /></button>
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => { setEditId(c.id); setEditPapel(c.papel ?? '') }}
-                    className="text-muted-foreground hover:text-foreground"
-                    title="Editar papel"
-                  >
-                    <Pencil className="size-4" />
-                  </button>
-                  <button onClick={() => remover(c.id)} className="text-muted-foreground hover:text-destructive" title="Remover vínculo">
-                    <Trash2 className="size-4" />
-                  </button>
+                  <button onClick={() => { setEditId(c.id); setEditPapel(c.papel ?? '') }} className="text-muted-foreground hover:text-foreground" title="Editar papel"><Pencil className="size-3.5" /></button>
+                  <button onClick={() => remover(c.id)} className="text-muted-foreground hover:text-destructive" title="Remover vínculo"><Trash2 className="size-3.5" /></button>
                 </>
               )}
             </div>
           </div>
         )
       })}
-      <div className="space-y-2 border-t border-border pt-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input placeholder="Papel (opcional)" className="h-9 max-w-40" value={papel} onChange={(e) => setPapel(e.target.value)} />
-          <PersonAutocomplete
-            className="w-full sm:w-56"
-            placeholder="Buscar ou criar contato…"
-            onPick={vincular}
-          />
+
+      {adding && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2">
+          <Input placeholder="Papel (opcional)" className="h-8 max-w-32" value={papel} onChange={(e) => setPapel(e.target.value)} />
+          <PersonAutocomplete className="w-full sm:w-52" placeholder="Buscar ou criar contato…" onPick={vincular} />
+          <button onClick={() => { setAdding(false); setPapel('') }} className="text-muted-foreground hover:text-foreground" title="Fechar"><X className="size-4" /></button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Buscar ou criar um contato já vincula a este {LABEL[entityType]}.
-        </p>
-      </div>
+      )}
     </div>
   )
 }

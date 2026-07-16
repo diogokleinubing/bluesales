@@ -15,6 +15,8 @@ export interface HistoryEntry {
   at: string
   /** Alterações agrupadas (um update pode mexer em vários campos de uma vez). */
   changes: HistoryChange[]
+  /** Observação anexada à mudança de estágio (stage_history.comentario). */
+  comentario?: string | null
 }
 
 /**
@@ -38,7 +40,7 @@ export function useAuditLog(entityType: string, entityId: string | undefined) {
           .limit(300),
         supabase
           .from('stage_history')
-          .select('id, from_stage_id, to_stage_id, user_id, created_at')
+          .select('id, from_stage_id, to_stage_id, user_id, created_at, comentario')
           .eq('entity_type', entityType)
           .eq('entity_id', entityId!)
           .order('created_at', { ascending: false }),
@@ -98,6 +100,7 @@ export function useAuditLog(entityType: string, entityId: string | undefined) {
           action: 'stage_change',
           user: s.user_id ? userById.get(s.user_id) ?? null : null,
           at: s.created_at,
+          comentario: (s as { comentario?: string | null }).comentario ?? null,
           changes: [
             {
               oldValue: s.from_stage_id ? stageById.get(s.from_stage_id) ?? null : null,

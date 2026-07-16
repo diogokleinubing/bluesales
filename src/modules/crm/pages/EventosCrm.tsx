@@ -42,6 +42,7 @@ const NONE = '__none__'
 const STATUS_NONE = '__status_none__'
 const ALL = '__all__'
 const STAGE_NONE = '__stage_none__'
+const SEG_NONE = '__seg_none__'
 
 type Edicao = { data: string; platform_ids: string[] }
 
@@ -80,6 +81,7 @@ export function EventosCrm() {
   const [oppFilter, setOppFilter] = useState<string>(() => readStr(params, 'opportunity', 'todos'))
   const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
   const [stageFilter, setStageFilter] = useState<string>(() => readStr(params, 'stage', ALL))
+  const [segFilter, setSegFilter] = useState<string>(() => readStr(params, 'seg', ALL))
   const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
   useEffect(() => {
     setSearchParams(buildSearchParams([
@@ -88,9 +90,10 @@ export function EventosCrm() {
       { k: 'opportunity', v: oppFilter, def: 'todos' },
       { k: 'classes', v: classesSel },
       { k: 'stage', v: stageFilter, def: ALL },
+      { k: 'seg', v: segFilter, def: ALL },
       { k: 'gmvMin', v: gmvMin },
     ]), { replace: true })
-  }, [search, statusFilter, oppFilter, classesSel, stageFilter, gmvMin, setSearchParams])
+  }, [search, statusFilter, oppFilter, classesSel, stageFilter, segFilter, gmvMin, setSearchParams])
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [f, setF] = useState({ ...EMPTY_FORM })
@@ -125,10 +128,11 @@ export function EventosCrm() {
         && e.oportunidade_status !== oppFilter) return false
       if (classesSel.length > 0 && !(e.classificacao != null && classesSel.includes(e.classificacao))) return false
       if (stageFilter !== ALL && (stageFilter === STAGE_NONE ? e.funil_stage_id != null : e.funil_stage_id !== stageFilter)) return false
+      if (segFilter !== ALL && (segFilter === SEG_NONE ? e.segmento_id != null : e.segmento_id !== segFilter)) return false
       if (gmvMin.trim() !== '' && (e.gmv_estimado == null || e.gmv_estimado < Number(gmvMin))) return false
       return true
     })
-  }, [data, search, statusFilter, oppFilter, classesSel, stageFilter, gmvMin])
+  }, [data, search, statusFilter, oppFilter, classesSel, stageFilter, segFilter, gmvMin])
 
   function openNew() {
     setEditId(null)
@@ -219,6 +223,14 @@ export function EventosCrm() {
                 <SelectItem value={ALL}>Todos os estágios</SelectItem>
                 <SelectItem value={STAGE_NONE}>Sem estágio</SelectItem>
                 {[...stageMap.values()].map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={segFilter} onValueChange={setSegFilter}>
+              <SelectTrigger className={`${TOOLBAR_TRIGGER} w-44`} size="sm"><SelectValue placeholder="Segmento" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os segmentos</SelectItem>
+                <SelectItem value={SEG_NONE}>Sem segmento</SelectItem>
+                {(segs.data ?? []).map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>

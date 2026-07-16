@@ -13,12 +13,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { fmtBRL } from '@/lib/format'
-import { StageSelector } from '../components/StageSelector'
+import { StageChanger } from '../components/StageChanger'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
 import { NovaOportunidadeDialog } from '../components/NovaOportunidadeDialog'
 import {
-  TextField, SelectField, CurrencyField, TextareaField, FormActions, useDraft, toText, toNumber,
+  TextField, SelectField, CurrencyField, FormActions, useDraft, toText, toNumber,
 } from '../components/EditFields'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import { ClasseBadge } from '../components/ClasseBadge'
@@ -72,17 +72,20 @@ export function OrganizacaoDetalhe() {
       </div>
 
       {/* Título */}
-      <div className="flex items-center gap-2 border-b border-border px-6 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
         <h1 className="text-xl font-semibold tracking-tight">{org.nome}</h1>
         {org.classificacao && <ClasseBadge classe={org.classificacao} />}
-        <SocialLinks site={org.site} instagram={org.instagram} />
-        <button
-          onClick={() => setVerEventos(true)}
-          className="ml-auto inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-          title="Ver eventos captados pelo módulo Pesquisa"
-        >
-          <CalendarSearch className="size-4" /> Ver eventos
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <EmTrabalhoToggle tipo="org" entityId={org.id} />
+          <button
+            onClick={() => setVerEventos(true)}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+            title="Ver eventos captados pelo módulo Pesquisa"
+          >
+            <CalendarSearch className="size-4" /> Ver eventos
+          </button>
+          <SocialLinks site={org.site} instagram={org.instagram} />
+        </div>
       </div>
 
       <EventosDialog
@@ -96,7 +99,7 @@ export function OrganizacaoDetalhe() {
       />
 
       {/* Corpo: principal | divisória | detalhes */}
-      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
+      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_450px]">
         {/* Coluna principal — atividades */}
         <div className="min-w-0 px-6 py-4">
           <AtividadesPanel entityType="organization" entityId={org.id} organizationId={org.id} />
@@ -108,30 +111,27 @@ export function OrganizacaoDetalhe() {
 
           <OrgSubs parentId={org.id} />
 
-          <section className="border-t border-border pt-4">
-            <h3 className="mb-2 text-sm font-medium">Contatos</h3>
+          <section className="-mx-6 border-t border-border px-6 pt-4">
             <EntityContatos entityType="organization" entityId={org.id} />
           </section>
 
-          <section className="border-t border-border pt-4">
+          <section className="-mx-6 border-t border-border px-6 pt-4">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-medium">Oportunidades</h3>
-              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setOppOpen(true)}>
-                <Plus className="size-4" /> Nova
-              </Button>
+              <button onClick={() => setOppOpen(true)} className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground" title="Nova oportunidade">
+                <Plus className="size-4" />
+              </button>
             </div>
             <OrgOportunidades organizationId={org.id} />
           </section>
 
-          <section className="border-t border-border pt-4">
-            <h3 className="mb-2 text-sm font-medium">Locais</h3>
+          <section className="-mx-6 border-t border-border px-6 pt-4">
             <OrgLocais organizationId={org.id} />
           </section>
 
-          <section className="border-t border-border pt-4">
+          <section className="-mx-6 border-t border-border px-6 pt-4">
             <h3 className="mb-2 text-sm font-medium">Opções</h3>
             <div className="space-y-1">
-              <EmTrabalhoToggle tipo="org" entityId={org.id} />
               <button
                 onClick={() => setMergeOpen(true)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -180,7 +180,7 @@ function OrgSubs({ parentId }: { parentId: string }) {
   const { data, isLoading } = useSubOrganizations(parentId)
   if (isLoading || !data || data.length === 0) return null
   return (
-    <section className="border-t border-border pt-4">
+    <section className="-mx-6 border-t border-border px-6 pt-4">
       <h3 className="mb-2 text-sm font-medium">Sub-organizações <span className="text-muted-foreground">({data.length})</span></h3>
       <div className="space-y-1">
         {data.map((s) => (
@@ -209,7 +209,7 @@ function OrgOportunidades({ organizationId }: { organizationId: string }) {
   const { data, isLoading } = useOpportunities(organizationId)
   if (isLoading) return <Skeleton className="h-24 w-full" />
   if (!data || data.length === 0)
-    return <p className="text-sm text-muted-foreground">Nenhuma oportunidade.</p>
+    return <p className="text-sm text-muted-foreground">Nenhuma oportunidade</p>
   return (
     <div className="space-y-2">
       {data.map((o) => (
@@ -241,6 +241,7 @@ function OrgLocais({ organizationId }: { organizationId: string }) {
   const { data: locais } = useLocais()
   const [pick, setPick] = useState<Lookup | null>(null)
   const [saving, setSaving] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   const jaVinculados = new Set((vinculos ?? []).map((v) => v.local_id))
   const options: Lookup[] = (locais ?? [])
@@ -255,6 +256,7 @@ function OrgLocais({ organizationId }: { organizationId: string }) {
     try {
       await linkLocalToOrg(tenantOrgId, organizationId, pick.id)
       setPick(null)
+      setAdding(false)
       refresh()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -276,8 +278,14 @@ function OrgLocais({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Locais</h3>
+        <button onClick={() => setAdding((v) => !v)} className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground" title="Vincular local">
+          <Plus className="size-4" />
+        </button>
+      </div>
       {(vinculos ?? []).length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum local vinculado.</p>
+        <p className="text-sm text-muted-foreground">Nenhum local vinculado</p>
       )}
       {(vinculos ?? []).map((v) => (
         <div key={v.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
@@ -295,18 +303,21 @@ function OrgLocais({ organizationId }: { organizationId: string }) {
           </button>
         </div>
       ))}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        <EntityAutocomplete
-          className="w-56"
-          value={pick}
-          onPick={setPick}
-          options={options}
-          placeholder="Buscar local…"
-        />
-        <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
-          <Plus className="size-4" /> Vincular
-        </Button>
-      </div>
+      {adding && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <EntityAutocomplete
+            className="w-56"
+            value={pick}
+            onPick={setPick}
+            options={options}
+            placeholder="Buscar local…"
+          />
+          <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
+            <Plus className="size-4" /> Vincular
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setPick(null) }}>Cancelar</Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -370,22 +381,14 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
     }
   }
 
-  async function setStage(stageId: string | null) {
-    try {
-      await updateOrganization(org.id, { funil_stage_id: stageId })
-      invalidate()
-    } catch (e) {
-      toast.error('Erro', { description: (e as Error).message })
-    }
-  }
-
+  const [maisDetalhes, setMaisDetalhes] = useState(false)
   return (
     <section className="space-y-3">
       <h3 className="text-sm font-medium">Detalhes</h3>
       <TextField label="Nome" value={draft.nome} onChange={(v) => set('nome', v)} />
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Estágio (relacionamento)</Label>
-        <StageSelector slug="relacionamento" value={org.funil_stage_id} onChange={setStage} className="h-8 w-full" />
+        <StageChanger tipo="org" entityId={org.id} currentStageId={org.funil_stage_id} className="h-8 w-full" />
       </div>
       <div className="grid grid-cols-[1fr_70px] gap-3">
         <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
@@ -399,17 +402,23 @@ function OrgVisaoGeral({ org }: { org: Organization }) {
         <SelectField label="Status comercial" value={draft.status_comercial} options={[...STATUS_COMERCIAL]} onChange={(v) => set('status_comercial', v)} />
         <TextField label="Cliente desde (ano)" value={draft.cliente_desde} onChange={(v) => set('cliente_desde', v)} placeholder="ex.: 2019" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
-        <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
-      </div>
-      <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
-      <div className="grid grid-cols-2 gap-3">
-        <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
-        <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
-      </div>
-      <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
-      <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
+      <button type="button" onClick={() => setMaisDetalhes((v) => !v)} className="text-xs font-medium text-primary hover:underline">
+        {maisDetalhes ? '− Menos detalhes' : '+ Mais detalhes'}
+      </button>
+      {maisDetalhes && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField label="Estrutura" value={draft.estrutura} options={ESTRUTURAS} onChange={(v) => set('estrutura', v)} />
+            <SelectField label="Sociedade" value={draft.sociedade} options={SOCIEDADES} onChange={(v) => set('sociedade', v)} />
+          </div>
+          <SelectField label="Origem do lead" value={draft.origem_lead} options={ORIGENS} onChange={(v) => set('origem_lead', v)} />
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
+            <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
+          </div>
+          <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
+        </>
+      )}
       {dirty && <FormActions dirty={dirty} saving={saving} onSave={salvar} onCancel={reset} />}
     </section>
   )

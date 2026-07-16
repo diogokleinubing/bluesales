@@ -18,6 +18,7 @@ import { STATUS_COMERCIAL } from '../hooks/useOrganizations'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { StatusComercialBadge } from '../components/StatusComercialBadge'
 import { AcompanhamentoControl } from '../components/AcompanhamentoBadge'
+import { OppSignalControl } from '../components/OppSignalControl'
 import { ACOMP_META, ACOMP_ORDER } from '../components/acompanhamentoMeta'
 import { CLASSES, StageDot, useRelStageMap } from '../components/RelacionamentoBits'
 import { RelacionamentoBoard, RelTipoBadge, TIPO_META } from '../components/RelacionamentoBoard'
@@ -38,7 +39,12 @@ export function Relacionamento() {
   const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
   const [statusSel, setStatusSel] = useState<string[]>(() => readArr(params, 'status'))
   const [tiposSel, setTiposSel] = useState<RelTipo[]>(() => readArr(params, 'tipos').filter((t): t is RelTipo => (REL_TIPOS as string[]).includes(t)))
-  const [acompSel, setAcompSel] = useState<AcompEstado[]>(() => readArr(params, 'acomp').filter((a): a is AcompEstado => (ACOMP_ORDER as string[]).includes(a)))
+  const [acompSel, setAcompSel] = useState<AcompEstado[]>(() => {
+    const fromUrl = readArr(params, 'acomp').filter((a): a is AcompEstado => (ACOMP_ORDER as string[]).includes(a))
+    // Padrão (sem param na URL): trabalho ativo — em dia, atrasada e sem próxima ação (esconde "fora").
+    return params.has('acomp') ? fromUrl : ['em_dia', 'atrasada', 'sem_acao']
+  })
+  const [prospSel, setProspSel] = useState<string[]>(() => readArr(params, 'prosp'))
   const [ufSel, setUfSel] = useState<string[]>(() => readArr(params, 'uf'))
   const [gmvMin, setGmvMin] = useState(() => readStr(params, 'gmvMin'))
   const [estagiosInativos, setEstagiosInativos] = useState<boolean>(() => readBool(params, 'includeInactive'))
@@ -57,6 +63,7 @@ export function Relacionamento() {
       { k: 'status', v: statusSel },
       { k: 'tipos', v: tiposSel },
       { k: 'acomp', v: acompSel },
+      { k: 'prosp', v: prospSel },
       { k: 'uf', v: ufSel },
       { k: 'gmvMin', v: gmvMin },
       { k: 'includeInactive', v: estagiosInativos },
@@ -67,13 +74,16 @@ export function Relacionamento() {
       { k: 'cadMin', v: cadastroMin },
       { k: 'cadMax', v: cadastroMax },
     ]), { replace: true })
-  }, [view, search, classesSel, statusSel, tiposSel, acompSel, ufSel, gmvMin, estagiosInativos, showCidade, showGmv, showCadastro, cadastroDias, cadastroMin, cadastroMax, setSearchParams])
+  }, [view, search, classesSel, statusSel, tiposSel, acompSel, prospSel, ufSel, gmvMin, estagiosInativos, showCidade, showGmv, showCadastro, cadastroDias, cadastroMin, cadastroMax, setSearchParams])
 
   function toggleStatus(s: string) {
     setStatusSel(statusSel.includes(s) ? statusSel.filter((x) => x !== s) : [...statusSel, s])
   }
   function toggleAcomp(a: AcompEstado) {
     setAcompSel(acompSel.includes(a) ? acompSel.filter((x) => x !== a) : [...acompSel, a])
+  }
+  function toggleProsp(p: string) {
+    setProspSel(prospSel.includes(p) ? prospSel.filter((x) => x !== p) : [...prospSel, p])
   }
   function toggleUf(u: string) {
     setUfSel(ufSel.includes(u) ? ufSel.filter((x) => x !== u) : [...ufSel, u])
@@ -117,6 +127,7 @@ export function Relacionamento() {
     return (data ?? []).filter((it) => {
       if (tiposSel.length > 0 && !tiposSel.includes(it.tipo)) return false
       if (acompSel.length > 0 && !acompSel.includes(acompEstado(it))) return false
+      if (prospSel.length > 0 && !(it.oppSignal && prospSel.includes(it.oppSignal.estado))) return false
       if (ufSel.length > 0 && !(it.uf && ufSel.includes(it.uf))) return false
       if (q && !it.nome.toLowerCase().includes(q) && !(it.cidade ?? '').toLowerCase().includes(q)) return false
       if (classesSel.length > 0 && !(it.classificacao != null && classesSel.includes(it.classificacao))) return false
@@ -129,13 +140,16 @@ export function Relacionamento() {
         if (cadastroRange.min && t < cadastroRange.min) return false
         if (cadastroRange.max && t > cadastroRange.max) return false
       }
-      // Estágios inativos: esconde itens em estágio inativo, salvo o toggle.
-      const st = it.funil_stage_id ? stageMap.get(it.funil_stage_id) : null
-      if (!estagiosInativos && st && st.ativo === false) return false
+      // Estágios inativos: esconde itens sem estágio ou em estágio inativo, salvo o toggle.
+      if (!estagiosInativos) {
+        if (!it.funil_stage_id) return false
+        const st = stageMap.get(it.funil_stage_id)
+        if (st && st.ativo === false) return false
+      }
       if (gmvMinNum != null && !(it.gmv != null && it.gmv >= gmvMinNum)) return false
       return true
     })
-  }, [data, search, classesSel, statusSel, tiposSel, acompSel, ufSel, estagiosInativos, gmvMinNum, cadastroAtivo, cadastroRange, stageMap])
+  }, [data, search, classesSel, statusSel, tiposSel, acompSel, prospSel, ufSel, estagiosInativos, gmvMinNum, cadastroAtivo, cadastroRange, stageMap])
 
   const gmvTotal = useMemo(() => rows.reduce((s, o) => s + (o.gmv ?? 0), 0), [rows])
 
@@ -314,6 +328,27 @@ export function Relacionamento() {
     </DropdownMenu>
   )
 
+  const prospMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          Status Prospecção{prospSel.length > 0 ? ` · ${prospSel.length}` : ''}
+          <ChevronDown className="size-4 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>Status Prospecção</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {([['ativa', 'Em andamento'], ['ganha', 'Ganhas'], ['perdida', 'Perdidas']] as const).map(([v, label]) => (
+          <DropdownMenuCheckboxItem key={v} checked={prospSel.includes(v)}
+            onCheckedChange={() => toggleProsp(v)} onSelect={(ev) => ev.preventDefault()}>
+            {label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <ListView
       title="Funil de Relacionamento"
@@ -325,9 +360,10 @@ export function Relacionamento() {
           <ToolbarSearch value={search} onChange={setSearch} placeholder="Buscar por nome ou cidade…" />
           {tipoChips}
           {acompMenu}
+          {prospMenu}
+          {statusMenu}
           {classeMenu}
           {ufMenu}
-          {statusMenu}
           <Input type="number" min={0} value={gmvMin} onChange={(e) => setGmvMin(e.target.value)}
             placeholder="GMV mín. (R$)" className={`${TOOLBAR_TRIGGER} w-[150px]`} />
           {extraFiltrosMenu}
@@ -363,7 +399,7 @@ export function Relacionamento() {
             ) : rows.map((it) => (
               <TableRow key={`${it.tipo}:${it.id}`} className="cursor-pointer" onClick={(e) => openItem(e, it.href)}>
                 <TableCell><RelTipoBadge tipo={it.tipo} /></TableCell>
-                <TableCell><span className="flex justify-center"><AcompanhamentoControl item={it} /></span></TableCell>
+                <TableCell><span className="flex items-center justify-center gap-1"><OppSignalControl signal={it.oppSignal} /><AcompanhamentoControl item={it} /></span></TableCell>
                 <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={it.nome}>{it.nome}</div></TableCell>
                 <TableCell><ClasseBadge classe={it.classificacao} /></TableCell>
                 <TableCell className="text-muted-foreground">{[it.cidade, it.uf].filter(Boolean).join('/') || '—'}</TableCell>

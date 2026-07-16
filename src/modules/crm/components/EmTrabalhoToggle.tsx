@@ -38,13 +38,11 @@ export function EmTrabalhoToggle({ tipo, entityId }: { tipo: RelTipo; entityId: 
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm">
-      <span className="flex flex-col">
-        <span className="font-medium">Em trabalho de relacionamento</span>
-        <span className="text-xs text-muted-foreground">
-          {value ? 'Acompanhamento ativo' : 'Fora de trabalho ativo'}
-        </span>
-      </span>
+    <div
+      className="inline-flex items-center gap-2 rounded-full bg-muted px-2.5 py-1 text-xs"
+      title={value ? 'Acompanhamento ativo' : 'Fora de trabalho ativo'}
+    >
+      <span className="font-medium text-muted-foreground">Em trabalho de relacionamento</span>
       <Switch checked={value} onCheckedChange={toggle} disabled={q.isLoading} />
     </div>
   )

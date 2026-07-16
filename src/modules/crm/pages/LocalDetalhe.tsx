@@ -26,11 +26,11 @@ import { OportunidadesCard } from '../components/OportunidadesCard'
 import { EntityContatos } from '../components/EntityContatos'
 import { EmTrabalhoToggle } from '../components/EmTrabalhoToggle'
 import { MergeEntityDialog } from '../components/MergeEntityDialog'
-import { StageSelector } from '../components/StageSelector'
+import { StageChanger } from '../components/StageChanger'
 import { ClasseBadge } from '../components/ClasseBadge'
 import { DeleteEntityButton } from '../components/DeleteEntityButton'
 import {
-  useDraft, TextField, SelectField, TextareaField, FormActions, toText, toNumber,
+  useDraft, TextField, SelectField, CurrencyField, FormActions, toText, toNumber,
 } from '../components/EditFields'
 
 const REL_NONE = '__none__'
@@ -63,14 +63,17 @@ export function LocalDetalhe() {
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3">
         <h1 className="text-xl font-semibold tracking-tight">{local.nome}</h1>
         <ClasseBadge classe={local.classificacao} />
-        <SocialLinks site={local.site} instagram={local.instagram} />
-        <button
-          onClick={() => setVerEventos(true)}
-          className="ml-auto inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-          title="Ver eventos captados pelo módulo Pesquisa"
-        >
-          <CalendarSearch className="size-4" /> Ver eventos
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <EmTrabalhoToggle tipo="local" entityId={local.id} />
+          <button
+            onClick={() => setVerEventos(true)}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+            title="Ver eventos captados pelo módulo Pesquisa"
+          >
+            <CalendarSearch className="size-4" /> Ver eventos
+          </button>
+          <SocialLinks site={local.site} instagram={local.instagram} />
+        </div>
       </div>
 
       <EventosDialog
@@ -84,25 +87,23 @@ export function LocalDetalhe() {
 
       <MergeEntityDialog tipo="local" entityId={local.id} entityNome={local.nome} open={mergeOpen} onOpenChange={setMergeOpen} />
 
-      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_340px]">
+      <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_450px]">
         <div className="min-w-0 border-b border-border p-4 lg:border-b-0 lg:border-r">
           <AtividadesPanel entityType="local" entityId={local.id} allowObjection={false} />
         </div>
         <aside className="space-y-6 p-4">
           <LocalDetalhesForm local={local} />
+          <div className="-mx-4 border-t border-border" />
           <LocalPlataformas local={local} />
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Organizações vinculadas</h3>
-            <LocalOrganizacoes localId={local.id} />
-          </div>
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Contatos</h3>
-            <EntityContatos entityType="local" entityId={local.id} />
-          </div>
+          <div className="-mx-4 border-t border-border" />
+          <LocalOrganizacoes localId={local.id} />
+          <div className="-mx-4 border-t border-border" />
+          <EntityContatos entityType="local" entityId={local.id} />
+          <div className="-mx-4 border-t border-border" />
           <OportunidadesCard localId={local.id} initialTitulo={local.nome} />
+          <div className="-mx-4 border-t border-border" />
           <div>
             <h3 className="mb-2 text-sm font-semibold">Opções</h3>
-            <EmTrabalhoToggle tipo="local" entityId={local.id} />
             <button
               onClick={() => setMergeOpen(true)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -133,16 +134,17 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
     uf: local.uf ?? '',
     capacidade: local.capacidade != null ? String(local.capacidade) : '',
     tipo_id: local.tipo_id ?? '',
+    gmv: local.gmv_estimado != null ? String(Math.round(local.gmv_estimado)) : '',
     site: local.site ?? '',
     instagram: local.instagram ?? '',
     aliases: local.aliases ?? '',
     classificacao: local.classificacao ?? '',
     observacoes: local.observacoes ?? '',
   }), [local])
-  const { draft, set, dirty, reset } = useDraft(initial, local.id + (local.classificacao ?? '') + (local.funil_stage_id ?? ''))
-  const [stage, setStage] = useState<string | null>(local.funil_stage_id)
+  const { draft, set, dirty, reset } = useDraft(initial, local.id + (local.classificacao ?? ''))
   const [saving, setSaving] = useState(false)
-  const changed = dirty || stage !== local.funil_stage_id
+  const [maisDetalhes, setMaisDetalhes] = useState(false)
+  const changed = dirty
 
   async function salvar() {
     if (!orgId) return
@@ -152,11 +154,12 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
         nome: draft.nome.trim() || local.nome,
         cidade: toText(draft.cidade), uf: toText(draft.uf),
         capacidade: toNumber(draft.capacidade), tipo_id: toText(draft.tipo_id),
+        gmv_estimado: toNumber(draft.gmv),
         site: toText(draft.site), instagram: toText(draft.instagram),
         aliases: toText(draft.aliases),
         observacoes: toText(draft.observacoes),
         classificacao: (toText(draft.classificacao) as CrmClasse | null),
-        funil_stage_id: stage,
+        funil_stage_id: local.funil_stage_id,
       }, local.id)
       qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
     } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
@@ -172,7 +175,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
           <SelectField label="Classe" value={draft.classificacao} options={[...CRM_CLASSES]} onChange={(v) => set('classificacao', v)} />
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Estágio</Label>
-            <StageSelector slug="relacionamento" value={stage} onChange={setStage} className="h-8 w-full" />
+            <StageChanger tipo="local" entityId={local.id} currentStageId={local.funil_stage_id} className="h-8 w-full" />
           </div>
         </div>
         <div className="grid grid-cols-[1fr_70px] gap-3">
@@ -180,18 +183,25 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
           <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v.toUpperCase())} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Capacidade" type="number" value={draft.capacidade} onChange={(v) => set('capacidade', v)} />
           <SelectField label="Tipo" value={draft.tipo_id}
             options={(tipos.data ?? []).map((t) => ({ value: t.id, label: t.nome }))}
             onChange={(v) => set('tipo_id', v)} />
+          <TextField label="Capacidade" type="number" value={draft.capacidade} onChange={(v) => set('capacidade', v)} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
-          <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
-        </div>
-        <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
-        <TextareaField label="Observações" value={draft.observacoes} onChange={(v) => set('observacoes', v)} />
-        {changed && <FormActions dirty={changed} saving={saving} onSave={salvar} onCancel={() => { reset(); setStage(local.funil_stage_id) }} />}
+        <CurrencyField label="GMV estimado" value={draft.gmv} onChange={(v) => set('gmv', v)} />
+        <button type="button" onClick={() => setMaisDetalhes((v) => !v)} className="text-xs font-medium text-primary hover:underline">
+          {maisDetalhes ? '− Menos detalhes' : '+ Mais detalhes'}
+        </button>
+        {maisDetalhes && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="Site" value={draft.site} onChange={(v) => set('site', v)} placeholder="https://…" />
+              <TextField label="Instagram" value={draft.instagram} onChange={(v) => set('instagram', v)} placeholder="@perfil" />
+            </div>
+            <TextField label="Nomes alternativos (match com a Pesquisa)" value={draft.aliases} onChange={(v) => set('aliases', v)} placeholder="Separe por vírgula" />
+          </>
+        )}
+        {changed && <FormActions dirty={changed} saving={saving} onSave={salvar} onCancel={reset} />}
       </div>
     </div>
   )
@@ -204,6 +214,7 @@ function LocalOrganizacoes({ localId }: { localId: string }) {
   const { data: orgs } = useOrganizations()
   const [pick, setPick] = useState<Lookup | null>(null)
   const [saving, setSaving] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   const jaVinculadas = new Set((vinculos ?? []).map((v) => v.organization_id))
   const options: Lookup[] = (orgs ?? [])
@@ -218,6 +229,7 @@ function LocalOrganizacoes({ localId }: { localId: string }) {
     try {
       await linkLocalToOrg(tenantOrgId, pick.id, localId)
       setPick(null)
+      setAdding(false)
       refresh()
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
@@ -239,8 +251,14 @@ function LocalOrganizacoes({ localId }: { localId: string }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Organizações vinculadas</h3>
+        <button onClick={() => setAdding((v) => !v)} className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground" title="Vincular organização">
+          <Plus className="size-4" />
+        </button>
+      </div>
       {(vinculos ?? []).length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhuma organização vinculada.</p>
+        <p className="text-sm text-muted-foreground">Nenhuma organização vinculada</p>
       )}
       {(vinculos ?? []).map((v) => (
         <div key={v.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
@@ -258,18 +276,21 @@ function LocalOrganizacoes({ localId }: { localId: string }) {
           </button>
         </div>
       ))}
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        <EntityAutocomplete
-          className="w-56"
-          value={pick}
-          onPick={setPick}
-          options={options}
-          placeholder="Buscar organização…"
-        />
-        <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
-          <Plus className="size-4" /> Vincular
-        </Button>
-      </div>
+      {adding && (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <EntityAutocomplete
+            className="w-56"
+            value={pick}
+            onPick={setPick}
+            options={options}
+            placeholder="Buscar organização…"
+          />
+          <Button size="sm" variant="secondary" onClick={vincular} disabled={!pick || saving}>
+            <Plus className="size-4" /> Vincular
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setPick(null) }}>Cancelar</Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -280,6 +301,7 @@ function LocalPlataformas({ local }: { local: LocalRow }) {
   const platforms = usePlatforms()
   const [plats, setPlats] = useState(() => local.platforms.map((p) => ({ platform_id: p.platform_id, tipo_relacao: p.tipo_relacao })))
   const [newPlat, setNewPlat] = useState('')
+  const [adding, setAdding] = useState(false)
   const platformById = useMemo(() => new Map((platforms.data ?? []).map((p) => [p.id, p.nome])), [platforms.data])
   const avail = (platforms.data ?? []).filter((p) => !plats.some((x) => x.platform_id === p.id))
 
@@ -294,37 +316,48 @@ function LocalPlataformas({ local }: { local: LocalRow }) {
 
   return (
     <div>
-      <h3 className="mb-2 text-sm font-semibold">Plataformas de ingressos</h3>
-      <div className="space-y-2 rounded-md border border-border p-3">
-        {plats.length > 0 && (
-          <ul className="space-y-1">
-            {plats.map((pl) => (
-              <li key={pl.platform_id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
-                <span className="min-w-0 flex-1 truncate font-medium">{platformById.get(pl.platform_id) ?? '?'}</span>
-                <Select value={pl.tipo_relacao ?? REL_NONE}
-                  onValueChange={(v) => persist(plats.map((x) => x.platform_id === pl.platform_id ? { ...x, tipo_relacao: v === REL_NONE ? null : (v as RelacaoPlataforma) } : x))}>
-                  <SelectTrigger className="h-7 w-32 shrink-0"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={REL_NONE}>-</SelectItem>
-                    {RELACAO_PLATAFORMA.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <button onClick={() => persist(plats.filter((x) => x.platform_id !== pl.platform_id))} className="shrink-0 text-muted-foreground hover:text-destructive"><X className="size-4" /></button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex items-end gap-2 border-t border-border pt-2">
-          <Select value={newPlat} onValueChange={setNewPlat}>
-            <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Adicionar plataforma…" /></SelectTrigger>
-            <SelectContent>{avail.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
-          </Select>
-          <Button type="button" size="sm" variant="secondary" disabled={!newPlat}
-            onClick={() => { if (newPlat) { persist([...plats, { platform_id: newPlat, tipo_relacao: null }]); setNewPlat('') } }}>
-            <Plus className="size-4" />
-          </Button>
-        </div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Plataformas de ingressos</h3>
+        <button onClick={() => setAdding((v) => !v)} className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground" title="Adicionar plataforma">
+          <Plus className="size-4" />
+        </button>
       </div>
+      {plats.length === 0 && !adding ? (
+        <p className="text-sm text-muted-foreground">Nenhuma plataforma</p>
+      ) : (
+        <div className="space-y-2">
+          {plats.length > 0 && (
+            <ul className="space-y-1">
+              {plats.map((pl) => (
+                <li key={pl.platform_id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+                  <span className="min-w-0 flex-1 truncate font-medium">{platformById.get(pl.platform_id) ?? '?'}</span>
+                  <Select value={pl.tipo_relacao ?? REL_NONE}
+                    onValueChange={(v) => persist(plats.map((x) => x.platform_id === pl.platform_id ? { ...x, tipo_relacao: v === REL_NONE ? null : (v as RelacaoPlataforma) } : x))}>
+                    <SelectTrigger className="h-7 w-32 shrink-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={REL_NONE}>-</SelectItem>
+                      {RELACAO_PLATAFORMA.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <button onClick={() => persist(plats.filter((x) => x.platform_id !== pl.platform_id))} className="shrink-0 text-muted-foreground hover:text-destructive"><X className="size-4" /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {adding && (
+            <div className="flex items-end gap-2">
+              <Select value={newPlat} onValueChange={setNewPlat}>
+                <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Adicionar plataforma…" /></SelectTrigger>
+                <SelectContent>{avail.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button type="button" size="sm" variant="secondary" disabled={!newPlat}
+                onClick={() => { if (newPlat) { persist([...plats, { platform_id: newPlat, tipo_relacao: null }]); setNewPlat('') } }}>
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

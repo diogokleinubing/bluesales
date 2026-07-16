@@ -103,6 +103,7 @@ export interface Local {
   aliases: string | null
   funil_stage_id: string | null
   classificacao: CrmClasse | null
+  gmv_estimado: number | null
 }
 
 export interface LocalPlatform {
@@ -119,7 +120,7 @@ export interface LocalRow extends Local {
   /** Estágio + cor da oportunidade ativa (para exibir o status como nos eventos). */
   oppStatus: string | null
   oppCor: string | null
-  /** GMV estimado somado dos eventos realizados/planejados neste local. */
+  /** GMV estimado (valor manual do local, coluna gmv_estimado). */
   gmv: number | null
 }
 
@@ -130,15 +131,13 @@ export function useLocais() {
     staleTime: 30 * 1000,
     queryKey: ['crm', 'locais', orgId],
     queryFn: async (): Promise<LocalRow[]> => {
-      const [locs, lps, evs, opps] = await Promise.all([
+      const [locs, lps, opps] = await Promise.all([
         supabase.from('crm_locals').select('*, local_types(nome)').eq('org_id', orgId!).is('deleted_at', null).order('nome'),
         supabase
           .from('local_platforms')
           .select('local_id, platform_id, tipo_relacao, platforms(nome)')
           .eq('org_id', orgId!),
-        // GMV estimado somado dos eventos do local; oportunidades ligadas
-        // DIRETAMENTE ao local (não via evento).
-        supabase.from('crm_events').select('local_id, gmv_estimado').eq('org_id', orgId!).is('deleted_at', null).not('local_id', 'is', null),
+        // Oportunidades ligadas DIRETAMENTE ao local (não via evento).
         supabase.from('opportunities').select('local_id, funnel_stages(nome, cor)').eq('org_id', orgId!).is('deleted_at', null).is('resultado', null).not('local_id', 'is', null),
       ])
       if (locs.error) throw new Error(locs.error.message)
@@ -154,12 +153,6 @@ export function useLocais() {
         byLocal.set(lp.local_id, arr)
       }
 
-      const gmvPorLocal = new Map<string, number>()
-      for (const e of evs.data ?? []) {
-        const localId = e.local_id as string
-        const g = e.gmv_estimado as number | null
-        if (g != null) gmvPorLocal.set(localId, (gmvPorLocal.get(localId) ?? 0) + g)
-      }
       const oppPorLocal = new Map<string, number>()
       const oppStatusPorLocal = new Map<string, { nome: string | null; cor: string | null }>()
       for (const o of opps.data ?? []) {
@@ -179,7 +172,7 @@ export function useLocais() {
         oppAtivas: oppPorLocal.get(l.id) ?? 0,
         oppStatus: oppStatusPorLocal.get(l.id)?.nome ?? null,
         oppCor: oppStatusPorLocal.get(l.id)?.cor ?? null,
-        gmv: gmvPorLocal.get(l.id) ?? null,
+        gmv: (l.gmv_estimado as number | null) ?? null,
       }))
     },
   })
@@ -226,6 +219,7 @@ export async function saveLocal(
     aliases: l.aliases ?? null,
     funil_stage_id: l.funil_stage_id ?? null,
     classificacao: l.classificacao ?? null,
+    gmv_estimado: l.gmv_estimado ?? null,
   }
   if (id) {
     const { error } = await supabase.from('crm_locals').update(payload).eq('id', id)
@@ -386,6 +380,12 @@ export async function saveCrmEvent(
     .single()
   if (error) throw new Error(error.message)
   return data.id as string
+}
+
+/** Atualiza apenas a organização vinculada de um evento, sem tocar nos demais campos. */
+export async function setEventOrganization(eventId: string, organizationId: string | null) {
+  const { error } = await supabase.from('crm_events').update({ organization_id: organizationId }).eq('id', eventId)
+  if (error) throw new Error(error.message)
 }
 
 /** Lê as edições (data + plataformas) de um evento. */

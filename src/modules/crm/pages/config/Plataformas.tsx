@@ -70,7 +70,7 @@ export function PlataformasConfig() {
                 <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : (data ?? []).length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">Nenhuma plataforma.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">Nenhuma plataforma</TableCell></TableRow>
             ) : (data ?? []).map((p) => (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.nome}</TableCell>
