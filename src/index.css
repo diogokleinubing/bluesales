@@ -182,3 +182,20 @@
     font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   }
 }
+
+/* Conteúdo (markdown renderizado) — landing pública /conteudo + preview do editor. */
+.prose-conteudo { line-height: 1.7; }
+.prose-conteudo > :first-child { margin-top: 0; }
+.prose-conteudo h1 { font-size: 1.5rem; font-weight: 700; margin: 1.4em 0 .5em; line-height: 1.25; }
+.prose-conteudo h2 { font-size: 1.25rem; font-weight: 700; margin: 1.3em 0 .5em; }
+.prose-conteudo h3 { font-size: 1.1rem; font-weight: 600; margin: 1.2em 0 .4em; }
+.prose-conteudo p { margin: 0 0 1em; }
+.prose-conteudo ul, .prose-conteudo ol { margin: 0 0 1em; padding-left: 1.4em; }
+.prose-conteudo li { margin: .25em 0; }
+.prose-conteudo a { color: #2f6df6; text-decoration: underline; }
+.prose-conteudo img { max-width: 100%; height: auto; border-radius: 8px; margin: .5em 0; }
+.prose-conteudo blockquote { margin: 0 0 1em; padding-left: 1em; border-left: 3px solid var(--border); color: var(--muted-foreground); }
+.prose-conteudo code { background: rgba(127,127,127,.15); padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+.prose-conteudo pre { background: rgba(127,127,127,.12); padding: .8em 1em; border-radius: 8px; overflow-x: auto; }
+.prose-conteudo pre code { background: none; padding: 0; }
+.prose-conteudo hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }

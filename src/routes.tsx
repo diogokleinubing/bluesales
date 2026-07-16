@@ -5,6 +5,7 @@ import { ControlsProvider } from '@/modules/shared/controls-context'
 import { ProtectedRoute } from '@/modules/auth/ProtectedRoute'
 import { AdminRoute, RoleRoute } from '@/modules/auth/AdminRoute'
 import { LoginPage } from '@/modules/auth/LoginPage'
+import { ConteudoPublico } from '@/modules/crm/pages/email/ConteudoPublico'
 import { lastRoute } from '@/modules/shared/navigation'
 
 // Carrega rotas lazy com auto-recuperação: se o chunk falhar ao baixar (chunk
@@ -114,6 +115,9 @@ const EmailMensagens = lazyWithRetry(() =>
 const EmailMensagemDetalhe = lazyWithRetry(() =>
   import('@/modules/crm/pages/email/EmailMensagemDetalhe').then((m) => ({ default: m.EmailMensagemDetalhe })),
 )
+const EmailTemplates = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/EmailTemplates').then((m) => ({ default: m.EmailTemplates })),
+)
 const Logs = lazyWithRetry(() =>
   import('@/modules/crm/pages/Logs').then((m) => ({ default: m.Logs })),
 )
@@ -219,6 +223,7 @@ function RegrasEventosRedirect() {
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/conteudo/:codigo', element: <ConteudoPublico /> },
   {
     path: '/',
     element: (
@@ -297,6 +302,7 @@ export const router = createBrowserRouter([
       { path: 'comercial/email/listas/:id', element: <EmailListaDetalhe /> },
       { path: 'comercial/email/mensagens', element: <EmailMensagens /> },
       { path: 'comercial/email/mensagens/:id', element: <EmailMensagemDetalhe /> },
+      { path: 'comercial/email/templates', element: <EmailTemplates /> },
       {
         path: 'comercial/logs',
         element: (

@@ -66,6 +66,8 @@ export interface CampaignRow {
   html: string | null
   status: CampaignStatus
   enviada_em: string | null
+  template_id: string | null
+  template_data: { mensagemInicial?: string; mensagemFinal?: string; edicao?: string } | null
 }
 
 export function useCampaign(id: string | undefined) {
@@ -86,10 +88,10 @@ export function useCampaign(id: string | undefined) {
   })
 }
 
-export async function createCampaign(orgId: string, nome: string, userId?: string | null) {
+export async function createCampaign(orgId: string, nome: string, userId?: string | null, templateId?: string | null) {
   const { data, error } = await supabase
     .from('email_campaigns')
-    .insert({ org_id: orgId, nome: nome.trim() || 'Nova mensagem', created_by: userId ?? null })
+    .insert({ org_id: orgId, nome: nome.trim() || 'Nova mensagem', created_by: userId ?? null, template_id: templateId ?? null })
     .select('id')
     .single()
   if (error) throw new Error(error.message)

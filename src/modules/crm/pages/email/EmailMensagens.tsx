@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, LayoutTemplate } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,7 +48,14 @@ export function EmailMensagens() {
     <ListView
       title="Mensagens"
       count={data ? `${data.length} mensagens` : undefined}
-      actions={<Button size="sm" onClick={nova} disabled={creating}><Plus className="size-4" /> Nova mensagem</Button>}
+      actions={
+        <>
+          <Button variant="outline" size="sm" onClick={() => navigate('/comercial/email/templates')}>
+            <LayoutTemplate className="size-4" /> Templates
+          </Button>
+          <Button size="sm" onClick={nova} disabled={creating}><Plus className="size-4" /> Nova mensagem</Button>
+        </>
+      }
     >
       <Table>
         <TableHeader>

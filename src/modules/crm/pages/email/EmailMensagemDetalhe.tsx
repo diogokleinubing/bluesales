@@ -16,6 +16,10 @@ import {
   useCampaign, useRecipients, updateCampaign, setCampaignLists, prepareSend,
   type CampaignRow,
 } from '../../hooks/useEmailCampaigns'
+import { useConteudos, type ConteudoRow } from '../../hooks/useConteudos'
+import { getTemplate } from '../../email/templates'
+import { renderNewsletterProduto } from '../../email/newsletterProduto'
+import { NewsletterSectionEditor } from './NewsletterSectionEditor'
 
 export function EmailMensagemDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -56,6 +60,26 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
   const [sel, setSel] = useState<Set<string>>(new Set(listIds))
   const [saving, setSaving] = useState(false)
 
+  // Template (newsletter por seções): dados de texto ficam no template_data;
+  // as matérias vêm de crm_conteudos e o HTML final é gerado pelo renderer.
+  const tpl = getTemplate(campaign.template_id)
+  const td = campaign.template_data ?? {}
+  const [edicao, setEdicao] = useState(td.edicao ?? '')
+  const [msgIni, setMsgIni] = useState(td.mensagemInicial ?? '')
+  const [msgFim, setMsgFim] = useState(td.mensagemFinal ?? '')
+  const conteudosData = useConteudos(tpl ? campaign.id : undefined).data
+  const finalHtml = useMemo(() => {
+    if (!tpl) return html
+    const conteudos = conteudosData ?? []
+    const ref = (c: ConteudoRow) => ({ codigo: c.codigo, titulo: c.titulo, resumo: c.resumo, cover_url: c.cover_url })
+    const bs = (s: string) => conteudos.filter((c) => c.secao === s).sort((a, b) => a.ordem - b.ordem)
+    return renderNewsletterProduto({
+      edicao, mensagemInicial: msgIni, mensagemFinal: msgFim,
+      destaque: bs('destaque')[0] ? ref(bs('destaque')[0]) : null,
+      novidades: bs('novidade').map(ref), comoUsar: bs('como_usar').map(ref),
+    }, { baseUrl: window.location.origin })
+  }, [tpl, html, conteudosData, edicao, msgIni, msgFim])
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['crm', 'email', 'campaign', campaign.id] })
     qc.invalidateQueries({ queryKey: ['crm', 'email', 'campaigns'] })
@@ -72,7 +96,8 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
       await updateCampaign(campaign.id, {
         nome: nome.trim() || 'Nova mensagem', assunto: assunto.trim() || null,
         remetente_nome: remNome.trim() || null, remetente_email: remEmail.trim() || null,
-        reply_to: replyTo.trim() || null, html,
+        reply_to: replyTo.trim() || null, html: finalHtml,
+        ...(tpl ? { template_data: { edicao, mensagemInicial: msgIni, mensagemFinal: msgFim } } : {}),
       })
       await setCampaignLists(campaign.id, [...sel])
       refresh()
@@ -84,7 +109,7 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
 
   async function prepararEnvio() {
     if (sel.size === 0) { toast.error('Selecione ao menos uma lista.'); return }
-    if (!assunto.trim() || !html.trim()) { toast.error('Preencha o assunto e o conteúdo.'); return }
+    if (!assunto.trim() || !finalHtml.trim()) { toast.error('Preencha o assunto e o conteúdo.'); return }
     if (!orgId) return
     const ok = await salvar()
     if (!ok) return
@@ -121,9 +146,20 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
           </div>
         </div>
 
-        <Field label="Conteúdo (HTML)">
-          <Textarea value={html} onChange={(e) => setHtml(e.target.value)} className="min-h-[240px] font-mono text-xs" placeholder="<html>…cole ou edite o HTML…</html>" />
-        </Field>
+        {tpl ? (
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-muted-foreground">Conteúdo · {tpl.nome}</div>
+            <NewsletterSectionEditor
+              orgId={orgId!} campaignId={campaign.id}
+              edicao={edicao} mensagemInicial={msgIni} mensagemFinal={msgFim}
+              onEdicao={setEdicao} onMensagemInicial={setMsgIni} onMensagemFinal={setMsgFim}
+            />
+          </div>
+        ) : (
+          <Field label="Conteúdo (HTML)">
+            <Textarea value={html} onChange={(e) => setHtml(e.target.value)} className="min-h-[240px] font-mono text-xs" placeholder="<html>…cole ou edite o HTML…</html>" />
+          </Field>
+        )}
         <p className="text-xs text-muted-foreground">O link de descadastro (LGPD) será injetado no envio. Variáveis como <code>{'{{nome}}'}</code> serão suportadas no disparo.</p>
 
         <div className="flex flex-wrap gap-2 pt-1">
@@ -136,7 +172,7 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
       {/* Preview */}
       <div className="flex min-h-[300px] flex-col bg-muted/20 p-5">
         <div className="mb-2 text-xs font-medium text-muted-foreground">Pré-visualização</div>
-        <iframe title="preview" className="min-h-[400px] flex-1 rounded-md border border-border bg-white" sandbox="" srcDoc={html || '<p style="color:#888;font-family:sans-serif;padding:16px">Sem conteúdo ainda.</p>'} />
+        <iframe title="preview" className="min-h-[400px] flex-1 rounded-md border border-border bg-white" sandbox="" srcDoc={finalHtml || '<p style="color:#888;font-family:sans-serif;padding:16px">Sem conteúdo ainda.</p>'} />
       </div>
     </div>
   )
