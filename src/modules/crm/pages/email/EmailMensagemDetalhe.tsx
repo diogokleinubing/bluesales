@@ -13,13 +13,30 @@ import { fmtDate } from '@/lib/format'
 import { useCrmOrgId } from '../../hooks/useFunnelStages'
 import { useEmailLists } from '../../hooks/useEmailLists'
 import {
-  useCampaign, useRecipients, updateCampaign, setCampaignLists, prepareSend,
+  useCampaign, useRecipients, useCampaignClicks, updateCampaign, setCampaignLists, prepareSend,
   type CampaignRow,
 } from '../../hooks/useEmailCampaigns'
-import { useConteudos, type ConteudoRow } from '../../hooks/useConteudos'
+import { useCampaignConteudos, type CampaignConteudo } from '../../hooks/useConteudos'
 import { getTemplate } from '../../email/templates'
 import { renderNewsletterProduto } from '../../email/newsletterProduto'
 import { NewsletterSectionEditor } from './NewsletterSectionEditor'
+import { supabase } from '@/lib/supabase'
+import { CONTEUDO_BASE_URL, codigoFromUrl } from '@/lib/conteudo'
+
+const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+/** Chama uma edge function autenticada (JWT do usuário) e devolve o JSON, com erro legível. */
+async function callFn(name: string, body: unknown): Promise<Record<string, unknown>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${session?.access_token ?? ANON}` },
+    body: JSON.stringify(body),
+  })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok || j?.error) throw new Error(j?.error || `Erro ${res.status}`)
+  return j
+}
 
 export function EmailMensagemDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -67,18 +84,20 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
   const [edicao, setEdicao] = useState(td.edicao ?? '')
   const [msgIni, setMsgIni] = useState(td.mensagemInicial ?? '')
   const [msgFim, setMsgFim] = useState(td.mensagemFinal ?? '')
-  const conteudosData = useConteudos(tpl ? campaign.id : undefined).data
+  const conteudosData = useCampaignConteudos(tpl ? campaign.id : undefined).data
   const finalHtml = useMemo(() => {
     if (!tpl) return html
     const conteudos = conteudosData ?? []
-    const ref = (c: ConteudoRow) => ({ codigo: c.codigo, titulo: c.titulo, resumo: c.resumo, cover_url: c.cover_url })
+    const ref = (c: CampaignConteudo) => ({ codigo: c.codigo, titulo: c.titulo, resumo: c.resumo, cover_url: c.cover_url })
     const bs = (s: string) => conteudos.filter((c) => c.secao === s).sort((a, b) => a.ordem - b.ordem)
     return renderNewsletterProduto({
       edicao, mensagemInicial: msgIni, mensagemFinal: msgFim,
       destaque: bs('destaque')[0] ? ref(bs('destaque')[0]) : null,
       novidades: bs('novidade').map(ref), comoUsar: bs('como_usar').map(ref),
-    }, { baseUrl: window.location.origin })
+    }, { baseUrl: CONTEUDO_BASE_URL })
   }, [tpl, html, conteudosData, edicao, msgIni, msgFim])
+
+  const [testEmail, setTestEmail] = useState('')
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['crm', 'email', 'campaign', campaign.id] })
@@ -115,9 +134,19 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
     if (!ok) return
     try {
       const n = await prepareSend(orgId, campaign.id)
-      toast.success(`${n} destinatário(s) na fila. O disparo será feito na integração com o Resend.`)
+      toast.success(`${n} destinatário(s) na fila. Abra a mensagem e use "Disparar agora".`)
       refresh()
     } catch (e) { toast.error('Não foi possível preparar', { description: (e as Error).message }) }
+  }
+
+  async function enviarTeste() {
+    if (!testEmail.trim()) { toast.error('Informe um email para o teste.'); return }
+    const ok = await salvar()
+    if (!ok) return
+    try {
+      await callFn('email-send-sparkpost', { campaignId: campaign.id, testEmail: testEmail.trim() })
+      toast.success(`Teste enviado para ${testEmail.trim()}.`)
+    } catch (e) { toast.error('Falha no envio de teste', { description: (e as Error).message }) }
   }
 
   return (
@@ -162,9 +191,10 @@ function Editor({ campaign, listIds }: { campaign: CampaignRow; listIds: string[
         )}
         <p className="text-xs text-muted-foreground">O link de descadastro (LGPD) será injetado no envio. Variáveis como <code>{'{{nome}}'}</code> serão suportadas no disparo.</p>
 
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button variant="secondary" size="sm" onClick={salvar} disabled={saving}><Save className="size-4" /> Salvar rascunho</Button>
-          <Button variant="ghost" size="sm" onClick={() => toast.info('Envio de teste ficará disponível após a integração com o Resend.')}><TestTube2 className="size-4" /> Enviar teste</Button>
+          <Input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="email p/ teste" className="h-8 w-44" />
+          <Button variant="ghost" size="sm" onClick={enviarTeste} disabled={saving || !testEmail.trim()}><TestTube2 className="size-4" /> Enviar teste</Button>
           <Button size="sm" onClick={prepararEnvio} disabled={saving}><Send className="size-4" /> Preparar envio</Button>
         </div>
       </div>
@@ -185,8 +215,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // ---------------------------------------------------------------------------
 function Envio({ campaign }: { campaign: CampaignRow }) {
   const recipientsQ = useRecipients(campaign.id)
+  const qc = useQueryClient()
   const [busca, setBusca] = useState('')
+  const [disparando, setDisparando] = useState(false)
   const recs = useMemo(() => recipientsQ.data ?? [], [recipientsQ.data])
+  const clicksQ = useCampaignClicks(campaign.id)
+  const conteudosQ = useCampaignConteudos(campaign.id)
+  const clicksByRec = useMemo(() => {
+    const titulo = new Map((conteudosQ.data ?? []).map((c) => [c.codigo, c.titulo]))
+    const m = new Map<string, string[]>()
+    for (const c of clicksQ.data ?? []) {
+      const cod = codigoFromUrl(c.url)
+      const label = (cod && titulo.get(cod)) || c.url || 'link'
+      const arr = m.get(c.recipient_id) ?? []
+      if (!arr.includes(label)) arr.push(label)
+      m.set(c.recipient_id, arr)
+    }
+    return m
+  }, [clicksQ.data, conteudosQ.data])
+
+  async function disparar() {
+    setDisparando(true)
+    try {
+      const r = await callFn('email-send-sparkpost', { campaignId: campaign.id })
+      toast.success(`Disparado: ${r.sent ?? 0} email(s).`)
+      qc.invalidateQueries({ queryKey: ['crm', 'email', 'recipients', campaign.id] })
+      qc.invalidateQueries({ queryKey: ['crm', 'email', 'campaign', campaign.id] })
+      qc.invalidateQueries({ queryKey: ['crm', 'email', 'campaigns'] })
+    } catch (e) { toast.error('Falha no disparo', { description: (e as Error).message }) }
+    finally { setDisparando(false) }
+  }
 
   const stats = useMemo(() => {
     const s = { total: recs.length, enviados: 0, entregues: 0, aberturas: 0, cliques: 0, descadastros: 0, bounces: 0 }
@@ -209,12 +267,19 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="border-b border-border px-5 py-3">
-        <h1 className="text-xl font-semibold tracking-tight">{campaign.nome}</h1>
-        <p className="text-sm text-muted-foreground">
-          {campaign.assunto || 'sem assunto'} · {campaign.status === 'fila' ? 'na fila (aguardando disparo)' : campaign.status}
-          {campaign.enviada_em ? ` · ${fmtDate(campaign.enviada_em)}` : ''}
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{campaign.nome}</h1>
+          <p className="text-sm text-muted-foreground">
+            {campaign.assunto || 'sem assunto'} · {campaign.status === 'fila' ? 'na fila (aguardando disparo)' : campaign.status}
+            {campaign.enviada_em ? ` · ${fmtDate(campaign.enviada_em)}` : ''}
+          </p>
+        </div>
+        {campaign.status === 'fila' && (
+          <Button size="sm" className="shrink-0" onClick={disparar} disabled={disparando}>
+            <Send className="size-4" /> {disparando ? 'Disparando…' : 'Disparar agora'}
+          </Button>
+        )}
       </div>
 
       {/* Cards de estatística */}
@@ -260,7 +325,16 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
                 <TableCell>{r.email}</TableCell>
                 <TableCell><span title={r.error ?? undefined}>{r.status}</span></TableCell>
                 <TableCell className="text-muted-foreground">{r.opened_at ? fmtDate(r.opened_at) : '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{r.clicked_at ? fmtDate(r.clicked_at) : '—'}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {r.clicked_at ? (
+                    <>
+                      {fmtDate(r.clicked_at)}
+                      {(clicksByRec.get(r.id) ?? []).length > 0 && (
+                        <div className="text-xs">{(clicksByRec.get(r.id) ?? []).join(', ')}</div>
+                      )}
+                    </>
+                  ) : '—'}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{r.unsubscribed_at ? fmtDate(r.unsubscribed_at) : '—'}</TableCell>
               </TableRow>
             ))}

@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       .from('crm_conteudos')
       .select('codigo, titulo, resumo, corpo, cover_url, created_at')
       .eq('codigo', codigo)
-      .eq('publicado', true)
+      .neq('status', 'rascunho')
       .is('deleted_at', null)
       .maybeSingle()
 

@@ -157,6 +157,23 @@ export function useRecipients(campaignId: string | undefined) {
   })
 }
 
+/** Eventos de clique da campanha (recipient_id + url do conteúdo) para o relatório. */
+export function useCampaignClicks(campaignId: string | undefined) {
+  return useQuery({
+    enabled: !!campaignId,
+    queryKey: ['crm', 'email', 'clicks', campaignId],
+    queryFn: async (): Promise<{ recipient_id: string; url: string | null }[]> => {
+      const { data, error } = await supabase
+        .from('email_events')
+        .select('recipient_id, url')
+        .eq('campaign_id', campaignId!)
+        .eq('tipo', 'clique')
+      if (error) throw new Error(error.message)
+      return (data ?? []).map((r) => ({ recipient_id: r.recipient_id as string, url: (r.url as string | null) ?? null }))
+    },
+  })
+}
+
 /**
  * Monta a fila de destinatários a partir das listas-alvo: inscritos, com email,
  * sem os suprimidos globalmente, deduplicados por email. Marca a campanha como

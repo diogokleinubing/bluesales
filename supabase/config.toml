@@ -414,3 +414,6 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.conteudo-publico]
 verify_jwt = false
+
+[functions.email-webhook-sparkpost]
+verify_jwt = false

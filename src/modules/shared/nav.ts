@@ -35,6 +35,7 @@ import {
   Users,
   Mail,
   Send,
+  Newspaper,
 } from 'lucide-react'
 
 export type ModuleId = 'bi' | 'comercial' | 'pesquisa' | 'projetos'
@@ -134,6 +135,7 @@ export const MODULES: ModuleDef[] = [
         items: [
           { to: '/comercial/email/mensagens', label: 'Mensagens', icon: Send, color: '#0ea5e9' },
           { to: '/comercial/email/listas', label: 'Listas', icon: Mail, color: '#8b5cf6' },
+          { to: '/comercial/email/conteudo', label: 'Conteúdo', icon: Newspaper, color: '#f59e0b' },
         ],
       },
       {

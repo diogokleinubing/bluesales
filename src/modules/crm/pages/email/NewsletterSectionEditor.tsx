@@ -1,22 +1,32 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Trash2, ImagePlus, ExternalLink, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { renderMarkdown } from '@/lib/markdown'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  useConteudos, createConteudo, updateConteudo, deleteConteudo, uploadConteudoImage,
-  type ConteudoRow, type ConteudoSecao,
+  useConteudos, useCampaignConteudos, addCampaignConteudo, removeCampaignConteudo,
+  CONTEUDO_STATUS, type ConteudoSecao, type ConteudoStatus,
 } from '../../hooks/useConteudos'
 
+const SECOES: { key: ConteudoSecao; label: string; descricao: string; single?: boolean }[] = [
+  { key: 'destaque', label: 'Destaque do mês', descricao: 'Uma matéria em destaque.', single: true },
+  { key: 'novidade', label: 'Outras novidades', descricao: 'Novidades de produto.' },
+  { key: 'como_usar', label: 'Como usar melhor', descricao: 'Dicas de uso.' },
+]
+
+const STATUS_CLS: Record<ConteudoStatus, string> = {
+  rascunho: 'text-muted-foreground', pronto: 'text-[var(--success)]', utilizado: 'text-[var(--warning)]',
+}
+
 /**
- * Editor por seções da Newsletter de Produto. Mensagem inicial/final são texto
- * (guardadas no template_data da campanha). Destaque/Novidades/Como usar são
- * matérias (linhas em crm_conteudos) com resumo (newsletter) + conteúdo (landing).
+ * Editor por seções da newsletter: as seções agora SELECIONAM artigos já criados
+ * na biblioteca de Conteúdo (vínculo em email_campaign_conteudos). Mensagem
+ * inicial/final continuam como texto no template_data.
  */
 export function NewsletterSectionEditor({
   orgId, campaignId, edicao, mensagemInicial, mensagemFinal,
@@ -32,20 +42,20 @@ export function NewsletterSectionEditor({
   onMensagemFinal: (v: string) => void
 }) {
   const qc = useQueryClient()
-  const q = useConteudos(campaignId)
-  const conteudos = q.data ?? []
-  const bySecao = (s: ConteudoSecao) => conteudos.filter((c) => c.secao === s).sort((a, b) => a.ordem - b.ordem)
-  const destaque = bySecao('destaque')[0] ?? null
-  const novidades = bySecao('novidade')
-  const comoUsar = bySecao('como_usar')
+  const q = useCampaignConteudos(campaignId)
+  const links = q.data ?? []
+  const [picker, setPicker] = useState<ConteudoSecao | null>(null)
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'conteudos', campaignId] })
+  const refresh = () => qc.invalidateQueries({ queryKey: ['crm', 'campaign-conteudos', campaignId] })
 
-  async function adicionar(secao: ConteudoSecao, ordem: number) {
-    try {
-      await createConteudo(orgId, campaignId, secao, ordem)
-      refresh()
-    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+  async function remover(joinId: string) {
+    try { await removeCampaignConteudo(joinId); refresh() }
+    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
+  }
+  async function adicionar(conteudoId: string, secao: ConteudoSecao) {
+    const ordem = links.filter((l) => l.secao === secao).length
+    try { await addCampaignConteudo(orgId, campaignId, conteudoId, secao, ordem); refresh(); setPicker(null) }
+    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   return (
@@ -53,38 +63,48 @@ export function NewsletterSectionEditor({
       <Bloco label="Edição (cabeçalho)">
         <Input value={edicao} onChange={(e) => onEdicao(e.target.value)} placeholder="Ex.: Junho de 2026" />
       </Bloco>
-
       <Bloco label="Mensagem inicial">
         <Textarea value={mensagemInicial} onChange={(e) => onMensagemInicial(e.target.value)} className="min-h-[80px]" placeholder="Abertura da newsletter…" />
       </Bloco>
 
-      {q.isLoading ? (
-        <Skeleton className="h-40 w-full" />
-      ) : (
-        <>
-          <Secao titulo="Destaque do mês" descricao="Uma matéria em destaque.">
-            {destaque ? (
-              <MateriaEditor orgId={orgId} materia={destaque} onChanged={refresh} />
-            ) : (
-              <BotaoAdicionar label="Adicionar destaque" onClick={() => adicionar('destaque', 0)} />
-            )}
-          </Secao>
-
-          <Secao titulo="Outras novidades" descricao="Lista de novidades de produto.">
-            {novidades.map((m) => <MateriaEditor key={m.id} orgId={orgId} materia={m} onChanged={refresh} />)}
-            <BotaoAdicionar label="Adicionar novidade" onClick={() => adicionar('novidade', novidades.length)} />
-          </Secao>
-
-          <Secao titulo="Como usar melhor" descricao="Dicas de uso.">
-            {comoUsar.map((m) => <MateriaEditor key={m.id} orgId={orgId} materia={m} onChanged={refresh} />)}
-            <BotaoAdicionar label="Adicionar dica" onClick={() => adicionar('como_usar', comoUsar.length)} />
-          </Secao>
-        </>
-      )}
+      {q.isLoading ? <Skeleton className="h-40 w-full" /> : SECOES.map((sec) => {
+        const itens = links.filter((l) => l.secao === sec.key).sort((a, b) => a.ordem - b.ordem)
+        const podeAdd = !sec.single || itens.length === 0
+        return (
+          <div key={sec.key} className="space-y-2 rounded-lg border border-border p-3">
+            <div><div className="text-sm font-semibold">{sec.label}</div><div className="text-xs text-muted-foreground">{sec.descricao}</div></div>
+            <div className="space-y-1.5">
+              {itens.map((it) => (
+                <div key={it.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-2.5 py-1.5">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium">{it.titulo || '(sem título)'}</span>
+                    <Badge variant="secondary" className={STATUS_CLS[it.status]}>{CONTEUDO_STATUS.find((s) => s.value === it.status)?.label}</Badge>
+                  </span>
+                  <button onClick={() => remover(it.id)} className="shrink-0 text-muted-foreground hover:text-destructive" title="Remover"><Trash2 className="size-4" /></button>
+                </div>
+              ))}
+              {podeAdd && (
+                <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setPicker(sec.key)}>
+                  <Plus className="size-4" /> Selecionar conteúdo
+                </Button>
+              )}
+            </div>
+          </div>
+        )
+      })}
 
       <Bloco label="Mensagem final">
         <Textarea value={mensagemFinal} onChange={(e) => onMensagemFinal(e.target.value)} className="min-h-[80px]" placeholder="Encerramento…" />
       </Bloco>
+
+      {picker && (
+        <ArtigoPicker
+          secao={picker}
+          jaLinkados={links.map((l) => l.conteudo_id)}
+          onPick={(id) => adicionar(id, picker)}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   )
 }
@@ -93,110 +113,41 @@ function Bloco({ label, children }: { label: string; children: React.ReactNode }
   return <div className="space-y-1"><div className="text-xs font-medium text-muted-foreground">{label}</div>{children}</div>
 }
 
-function Secao({ titulo, descricao, children }: { titulo: string; descricao: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2 rounded-lg border border-border p-3">
-      <div>
-        <div className="text-sm font-semibold">{titulo}</div>
-        <div className="text-xs text-muted-foreground">{descricao}</div>
-      </div>
-      <div className="space-y-2">{children}</div>
-    </div>
-  )
-}
-
-function BotaoAdicionar({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <Button type="button" variant="outline" size="sm" className="w-full" onClick={onClick}>
-      <Plus className="size-4" /> {label}
-    </Button>
-  )
-}
-
-// ---------------------------------------------------------------------------
-function MateriaEditor({ orgId, materia, onChanged }: { orgId: string; materia: ConteudoRow; onChanged: () => void }) {
-  const [titulo, setTitulo] = useState(materia.titulo)
-  const [resumo, setResumo] = useState(materia.resumo ?? '')
-  const [corpo, setCorpo] = useState(materia.corpo ?? '')
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const conteudoUrl = `${window.location.origin}/conteudo/${materia.codigo}`
-
-  async function salvar(patch: Partial<ConteudoRow>) {
-    try {
-      await updateConteudo(materia.id, patch)
-      onChanged()
-    } catch (e) { toast.error('Erro ao salvar', { description: (e as Error).message }) }
-  }
-
-  async function enviarCapa(file: File) {
-    setUploading(true)
-    try {
-      const url = await uploadConteudoImage(orgId, file)
-      await salvar({ cover_url: url })
-    } catch (e) { toast.error('Falha no upload', { description: (e as Error).message }) }
-    finally { setUploading(false) }
-  }
-
-  async function remover() {
-    try { await deleteConteudo(materia.id); onChanged() }
-    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
-  }
+function ArtigoPicker({ secao, jaLinkados, onPick, onClose }: {
+  secao: ConteudoSecao; jaLinkados: string[]; onPick: (id: string) => void; onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const q = useConteudos({ search })
+  const disponiveis = (q.data ?? []).filter((a) => !jaLinkados.includes(a.id))
+  const label = SECOES.find((s) => s.key === secao)?.label ?? ''
 
   return (
-    <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} onBlur={() => titulo !== materia.titulo && salvar({ titulo })}
-          placeholder="Título da matéria" className="h-8 font-medium" />
-        <button type="button" onClick={remover} className="shrink-0 text-muted-foreground hover:text-destructive" title="Remover matéria">
-          <Trash2 className="size-4" />
-        </button>
-      </div>
-
-      <div className="space-y-1">
-        <div className="text-xs text-muted-foreground">Resumo (aparece na newsletter)</div>
-        <Textarea value={resumo} onChange={(e) => setResumo(e.target.value)} onBlur={() => resumo !== (materia.resumo ?? '') && salvar({ resumo: resumo.trim() || null })}
-          className="min-h-[56px]" placeholder="Resumo curto…" />
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-2">
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Conteúdo completo (markdown — vai para a página)</div>
-          <Textarea value={corpo} onChange={(e) => setCorpo(e.target.value)} onBlur={() => corpo !== (materia.corpo ?? '') && salvar({ corpo: corpo.trim() || null })}
-            className="min-h-[160px] font-mono text-xs" placeholder="# Título&#10;&#10;Texto em **markdown**…" />
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Pré-visualização</div>
-          <div className="min-h-[160px] rounded-md border border-border bg-card p-3 text-sm">
-            {corpo.trim()
-              ? <div className="prose-conteudo" dangerouslySetInnerHTML={{ __html: renderMarkdown(corpo) }} />
-              : <span className="text-muted-foreground">Sem conteúdo.</span>}
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Selecionar conteúdo · {label}</DialogTitle></DialogHeader>
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input className="h-9 pl-8" placeholder="Buscar artigo…" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+          </div>
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {q.isLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : disponiveis.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum artigo disponível. Crie em Conteúdo.</p>
+            ) : disponiveis.map((a) => (
+              <button key={a.id} onClick={() => onPick(a.id)}
+                className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left hover:border-primary">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{a.titulo || '(sem título)'}</span>
+                  {a.resumo && <span className="block truncate text-xs text-muted-foreground">{a.resumo}</span>}
+                </span>
+                <Badge variant="secondary" className={`shrink-0 ${STATUS_CLS[a.status]}`}>{CONTEUDO_STATUS.find((s) => s.value === a.status)?.label}</Badge>
+              </button>
+            ))}
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {materia.cover_url && <img src={materia.cover_url} alt="" className="h-10 w-16 rounded object-cover" />}
-        <input ref={fileRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) enviarCapa(f); e.target.value = '' }} />
-        <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {materia.cover_url ? 'Trocar capa' : 'Capa'}
-        </Button>
-        {materia.cover_url && (
-          <button type="button" onClick={() => salvar({ cover_url: null })} className="text-xs text-muted-foreground hover:text-destructive">Remover capa</button>
-        )}
-        <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <Switch checked={materia.publicado} onCheckedChange={(v) => salvar({ publicado: v === true })} />
-          Publicado
-        </label>
-      </div>
-
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <a href={conteudoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-          <ExternalLink className="size-3" /> {conteudoUrl}
-        </a>
-        {!materia.publicado && <span className="text-[var(--warning)]">— publique para o link funcionar</span>}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

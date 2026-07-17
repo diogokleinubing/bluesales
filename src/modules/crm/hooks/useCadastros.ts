@@ -89,6 +89,9 @@ export type RelacaoPlataforma = (typeof RELACAO_PLATAFORMA)[number]
 export const CRM_CLASSES = ['A+', 'A', 'B', 'C'] as const
 export type CrmClasse = (typeof CRM_CLASSES)[number]
 
+export const LOCAL_RELACOES = ['Comercial', 'Parceria'] as const
+export type LocalRelacao = (typeof LOCAL_RELACOES)[number]
+
 export interface Local {
   id: string
   org_id: string
@@ -103,6 +106,7 @@ export interface Local {
   aliases: string | null
   funil_stage_id: string | null
   classificacao: CrmClasse | null
+  relacao: LocalRelacao | null
   gmv_estimado: number | null
 }
 
@@ -219,6 +223,7 @@ export async function saveLocal(
     aliases: l.aliases ?? null,
     funil_stage_id: l.funil_stage_id ?? null,
     classificacao: l.classificacao ?? null,
+    relacao: l.relacao ?? null,
     gmv_estimado: l.gmv_estimado ?? null,
   }
   if (id) {
