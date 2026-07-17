@@ -1,6 +1,8 @@
-// Edge Function pública: retorna UMA matéria publicada de crm_conteudos pelo
-// código, para a landing pública /conteudo/:codigo. Usa service_role para ler a
-// tabela (que segue sob RLS is_member()); expõe apenas linhas publicado=true.
+// Edge Function pública: retorna UMA matéria de crm_conteudos pelo código, para
+// a landing pública /conteudo/:codigo. Usa service_role para ler a tabela (que
+// segue sob RLS is_member()). Abre qualquer status (inclusive rascunho) — o
+// código é aleatório/não-enumerável, então só acessa quem tem o link. Exclui só
+// as deletadas (deleted_at).
 //
 // Deploy (público, sem exigir JWT):
 //   supabase functions deploy conteudo-publico --no-verify-jwt
@@ -41,7 +43,6 @@ Deno.serve(async (req) => {
       .from('crm_conteudos')
       .select('codigo, titulo, resumo, corpo, cover_url, created_at')
       .eq('codigo', codigo)
-      .neq('status', 'rascunho')
       .is('deleted_at', null)
       .maybeSingle()
 
