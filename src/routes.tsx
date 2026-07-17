@@ -118,6 +118,9 @@ const EmailMensagemDetalhe = lazyWithRetry(() =>
 const EmailTemplates = lazyWithRetry(() =>
   import('@/modules/crm/pages/email/EmailTemplates').then((m) => ({ default: m.EmailTemplates })),
 )
+const ConteudoBiblioteca = lazyWithRetry(() =>
+  import('@/modules/crm/pages/email/ConteudoBiblioteca').then((m) => ({ default: m.ConteudoBiblioteca })),
+)
 const Logs = lazyWithRetry(() =>
   import('@/modules/crm/pages/Logs').then((m) => ({ default: m.Logs })),
 )
@@ -302,6 +305,7 @@ export const router = createBrowserRouter([
       { path: 'comercial/email/listas/:id', element: <EmailListaDetalhe /> },
       { path: 'comercial/email/mensagens', element: <EmailMensagens /> },
       { path: 'comercial/email/mensagens/:id', element: <EmailMensagemDetalhe /> },
+      { path: 'comercial/email/conteudo', element: <ConteudoBiblioteca /> },
       { path: 'comercial/email/templates', element: <EmailTemplates /> },
       {
         path: 'comercial/logs',

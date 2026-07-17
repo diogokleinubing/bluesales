@@ -18,6 +18,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { fmtDate } from '@/lib/format'
+import { codigoFromUrl } from '@/lib/conteudo'
 import { useProfile } from '../hooks/useProfile'
 import { useCrmOrgId } from '../hooks/useFunnelStages'
 import { useActivities, createActivity, deleteActivity, type ActivityTipo, type ActivityRow } from '../hooks/useActivities'
@@ -167,6 +168,15 @@ export function AtividadesPanel({
       return data ?? []
     },
   })
+  // Mapa código→título para nomear o conteúdo clicado no tracking.
+  const conteudosMap = useQuery({
+    enabled: entityType === 'person',
+    queryKey: ['crm', 'conteudos-map'],
+    queryFn: async () => {
+      const { data } = await supabase.from('crm_conteudos').select('codigo, titulo').is('deleted_at', null)
+      return new Map((data ?? []).map((c) => [c.codigo as string, c.titulo as string]))
+    },
+  })
 
   const timeline = useMemo(() => {
     const items: {
@@ -204,15 +214,17 @@ export function AtividadesPanel({
     }
     for (const e of emails.data ?? []) {
       const camp = e.email_campaigns as unknown as { nome: string } | null
+      const cod = codigoFromUrl(e.url as string | null)
+      const alvo = (cod && conteudosMap.data?.get(cod)) || (e.url as string | null) || null
       items.push({
         key: `e-${e.id}`, at: e.ocorrido_em as string, tipo: 'Email', icon: Mail,
         titulo: `Email: ${camp?.nome ?? 'campanha'}`,
-        resumo: (EMAIL_TIPO[e.tipo as string] ?? (e.tipo as string)) + (e.url ? ` — ${e.url}` : ''),
+        resumo: (EMAIL_TIPO[e.tipo as string] ?? (e.tipo as string)) + (e.tipo === 'clique' && alvo ? ` — ${alvo}` : ''),
       })
     }
     // Sem data (To-Do) primeiro; depois por data desc.
     return items.sort((a, b) => ((a.at ?? '9999') < (b.at ?? '9999') ? 1 : -1))
-  }, [acts.data, objs.data, hist.data, emails.data])
+  }, [acts.data, objs.data, hist.data, emails.data, conteudosMap.data])
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['crm', 'activities'] })

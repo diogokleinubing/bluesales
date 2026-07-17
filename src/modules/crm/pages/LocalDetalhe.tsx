@@ -16,7 +16,7 @@ import { useCrmOrgId } from '../hooks/useFunnelStages'
 import {
   useLocais, saveLocal, deleteLocal, replaceLocalPlatforms,
   useLocalOrgs, linkLocalToOrg, unlinkOrgLocal,
-  RELACAO_PLATAFORMA, CRM_CLASSES, type RelacaoPlataforma, type CrmClasse, type LocalRow,
+  RELACAO_PLATAFORMA, CRM_CLASSES, LOCAL_RELACOES, type RelacaoPlataforma, type CrmClasse, type LocalRelacao, type LocalRow,
 } from '../hooks/useCadastros'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { EntityAutocomplete, type Lookup } from '../components/EntityAutocomplete'
@@ -139,6 +139,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
     instagram: local.instagram ?? '',
     aliases: local.aliases ?? '',
     classificacao: local.classificacao ?? '',
+    relacao: local.relacao ?? '',
     observacoes: local.observacoes ?? '',
   }), [local])
   const { draft, set, dirty, reset } = useDraft(initial, local.id + (local.classificacao ?? ''))
@@ -159,6 +160,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
         aliases: toText(draft.aliases),
         observacoes: toText(draft.observacoes),
         classificacao: (toText(draft.classificacao) as CrmClasse | null),
+        relacao: (toText(draft.relacao) as LocalRelacao | null),
         funil_stage_id: local.funil_stage_id,
       }, local.id)
       qc.invalidateQueries({ queryKey: ['crm', 'locais'] })
@@ -178,6 +180,7 @@ function LocalDetalhesForm({ local }: { local: LocalRow }) {
             <StageChanger tipo="local" entityId={local.id} currentStageId={local.funil_stage_id} className="h-8 w-full" />
           </div>
         </div>
+        <SelectField label="Relação (o que buscamos com o local)" value={draft.relacao} options={[...LOCAL_RELACOES]} onChange={(v) => set('relacao', v)} />
         <div className="grid grid-cols-[1fr_70px] gap-3">
           <TextField label="Cidade" value={draft.cidade} onChange={(v) => set('cidade', v)} />
           <TextField label="UF" value={draft.uf} onChange={(v) => set('uf', v.toUpperCase())} />

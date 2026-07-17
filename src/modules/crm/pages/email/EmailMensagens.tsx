@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Plus, LayoutTemplate } from 'lucide-react'
+import { Plus, LayoutTemplate, FileCode2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useOpenItem } from '@/lib/useOpenItem'
 import { fmtDate } from '@/lib/format'
 import { ListView } from '../../components/ListView'
 import { useCrmOrgId } from '../../hooks/useFunnelStages'
 import { useProfile } from '../../hooks/useProfile'
 import { useEmailCampaigns, createCampaign, type CampaignStatus } from '../../hooks/useEmailCampaigns'
+import { TEMPLATES } from '../../email/templates'
 
 const STATUS_LABEL: Record<CampaignStatus, { label: string; cls: string }> = {
   rascunho: { label: 'Rascunho', cls: 'text-muted-foreground' },
@@ -32,30 +34,25 @@ export function EmailMensagens() {
   const { profile } = useProfile()
   const { data, isLoading } = useEmailCampaigns()
   const [creating, setCreating] = useState(false)
+  const [novoOpen, setNovoOpen] = useState(false)
 
-  async function nova() {
+  async function nova(templateId: string | null, nome: string) {
     if (!orgId) return
     setCreating(true)
     try {
-      const id = await createCampaign(orgId, 'Nova mensagem', profile?.id)
+      const id = await createCampaign(orgId, nome, profile?.id, templateId)
       navigate(`/comercial/email/mensagens/${id}`)
     } catch (e) {
       toast.error('Erro', { description: (e as Error).message })
-    } finally { setCreating(false) }
+    } finally { setCreating(false); setNovoOpen(false) }
   }
 
   return (
+    <>
     <ListView
       title="Mensagens"
       count={data ? `${data.length} mensagens` : undefined}
-      actions={
-        <>
-          <Button variant="outline" size="sm" onClick={() => navigate('/comercial/email/templates')}>
-            <LayoutTemplate className="size-4" /> Templates
-          </Button>
-          <Button size="sm" onClick={nova} disabled={creating}><Plus className="size-4" /> Nova mensagem</Button>
-        </>
-      }
+      actions={<Button size="sm" onClick={() => setNovoOpen(true)}><Plus className="size-4" /> Nova mensagem</Button>}
     >
       <Table>
         <TableHeader>
@@ -100,5 +97,26 @@ export function EmailMensagens() {
         </TableBody>
       </Table>
     </ListView>
+
+    <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Nova mensagem</DialogTitle></DialogHeader>
+        <div className="space-y-2">
+          <button onClick={() => nova(null, 'Nova mensagem')} disabled={creating}
+            className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left transition-colors hover:border-primary disabled:opacity-60">
+            <FileCode2 className="size-5 shrink-0 text-muted-foreground" />
+            <span><span className="block text-sm font-medium">Em branco</span><span className="block text-xs text-muted-foreground">Cole ou edite o HTML direto.</span></span>
+          </button>
+          {TEMPLATES.map((t) => (
+            <button key={t.id} onClick={() => nova(t.id, `Newsletter — ${t.nome}`)} disabled={creating}
+              className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left transition-colors hover:border-primary disabled:opacity-60">
+              <LayoutTemplate className="size-5 shrink-0 text-primary" />
+              <span><span className="block text-sm font-medium">{t.nome}</span><span className="block text-xs text-muted-foreground">{t.descricao}</span></span>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
