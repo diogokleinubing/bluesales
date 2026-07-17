@@ -77,8 +77,8 @@ export function NewsletterSectionEditor({
               {itens.map((it) => (
                 <div key={it.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/20 px-2.5 py-1.5">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-sm font-medium">{it.titulo || '(sem título)'}</span>
-                    <Badge variant="secondary" className={STATUS_CLS[it.status]}>{CONTEUDO_STATUS.find((s) => s.value === it.status)?.label}</Badge>
+                    <span className="min-w-0 truncate text-sm font-medium">{it.titulo || '(sem título)'}</span>
+                    <Badge variant="secondary" className={`shrink-0 ${STATUS_CLS[it.status]}`}>{CONTEUDO_STATUS.find((s) => s.value === it.status)?.label}</Badge>
                   </span>
                   <button onClick={() => remover(it.id)} className="shrink-0 text-muted-foreground hover:text-destructive" title="Remover"><Trash2 className="size-4" /></button>
                 </div>
@@ -138,10 +138,10 @@ function ArtigoPicker({ secao, jaLinkados, onPick, onClose }: {
             ) : disponiveis.map((a) => (
               <button key={a.id} onClick={() => onPick(a.id)}
                 className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left hover:border-primary">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{a.titulo || '(sem título)'}</span>
-                  {a.resumo && <span className="block truncate text-xs text-muted-foreground">{a.resumo}</span>}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{a.titulo || '(sem título)'}</div>
+                  {a.resumo && <div className="truncate text-xs text-muted-foreground">{a.resumo}</div>}
+                </div>
                 <Badge variant="secondary" className={`shrink-0 ${STATUS_CLS[a.status]}`}>{CONTEUDO_STATUS.find((s) => s.value === a.status)?.label}</Badge>
               </button>
             ))}
