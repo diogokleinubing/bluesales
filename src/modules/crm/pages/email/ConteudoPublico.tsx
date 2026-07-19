@@ -39,7 +39,9 @@ export function ConteudoPublico() {
   return (
     <div className="min-h-screen bg-[#edeef2] text-[#1a1c23]">
       <header className="border-b border-black/5 bg-white">
-        <div className="mx-auto max-w-2xl px-5 py-4 text-lg font-bold" style={{ color: '#2f6df6' }}>Blueticket</div>
+        <div className="mx-auto max-w-2xl px-5 py-4">
+          <img src="https://cdn.blueticket.com.br/assets/bt-logo-azul.png" alt="Blueticket" className="h-7 w-auto" />
+        </div>
       </header>
       <main className="mx-auto max-w-2xl px-5 py-10">
         {q.isLoading ? (

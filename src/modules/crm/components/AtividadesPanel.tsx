@@ -161,7 +161,7 @@ export function AtividadesPanel({
     queryFn: async () => {
       const { data } = await supabase
         .from('email_events')
-        .select('id, tipo, url, ocorrido_em, email_campaigns(nome)')
+        .select('id, tipo, url, ocorrido_em, campaign_id, email_campaigns(nome)')
         .eq('person_id', entityId)
         .order('ocorrido_em', { ascending: false })
         .limit(200)
@@ -212,14 +212,36 @@ export function AtividadesPanel({
         author: e.user,
       })
     }
+    // Uma linha por campanha: consolida os eventos e mostra só o status mais
+    // avançado do ciclo (clique > abertura > entrega > envio; opt-out/erro no
+    // topo por serem o desfecho). Alvos de clique são agregados.
+    const EMAIL_RANK: Record<string, number> = {
+      falha: 1, bounce: 2, enviado: 3, entregue: 4, aberto: 5, clique: 6, reclamacao: 7, descadastro: 8,
+    }
+    const porCampanha = new Map<string, { nome: string; at: string; tipo: string; rank: number; alvos: Set<string> }>()
     for (const e of emails.data ?? []) {
       const camp = e.email_campaigns as unknown as { nome: string } | null
+      const chave = (e.campaign_id as string | null) ?? `ev-${e.id}`
+      const tipo = e.tipo as string
+      const rank = EMAIL_RANK[tipo] ?? 0
       const cod = codigoFromUrl(e.url as string | null)
       const alvo = (cod && conteudosMap.data?.get(cod)) || (e.url as string | null) || null
+      const cur = porCampanha.get(chave)
+      if (!cur) {
+        const alvos = new Set<string>()
+        if (tipo === 'clique' && alvo) alvos.add(alvo)
+        porCampanha.set(chave, { nome: camp?.nome ?? 'campanha', at: e.ocorrido_em as string, tipo, rank, alvos })
+      } else {
+        if (tipo === 'clique' && alvo) cur.alvos.add(alvo)
+        if (rank >= cur.rank) { cur.rank = rank; cur.tipo = tipo; cur.at = e.ocorrido_em as string; cur.nome = camp?.nome ?? cur.nome }
+      }
+    }
+    for (const [chave, v] of porCampanha) {
+      const alvos = [...v.alvos]
       items.push({
-        key: `e-${e.id}`, at: e.ocorrido_em as string, tipo: 'Email', icon: Mail,
-        titulo: `Email: ${camp?.nome ?? 'campanha'}`,
-        resumo: (EMAIL_TIPO[e.tipo as string] ?? (e.tipo as string)) + (e.tipo === 'clique' && alvo ? ` — ${alvo}` : ''),
+        key: `e-${chave}`, at: v.at, tipo: 'Email', icon: Mail,
+        titulo: `Email: ${v.nome}`,
+        resumo: (EMAIL_TIPO[v.tipo] ?? v.tipo) + (v.tipo === 'clique' && alvos.length ? ` — ${alvos.join(', ')}` : ''),
       })
     }
     // Sem data (To-Do) primeiro; depois por data desc.

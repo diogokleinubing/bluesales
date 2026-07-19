@@ -17,11 +17,14 @@ export interface PersonPick {
  */
 export function PersonAutocomplete({
   onPick,
+  onCreate,
   placeholder = 'Buscar contato…',
   allowCreate = true,
   className,
 }: {
   onPick: (p: PersonPick) => void
+  /** Se informado, o botão "Criar" delega ao pai (ex.: abrir dialog de dados completos) em vez de criar inline. */
+  onCreate?: (term: string) => void
   placeholder?: string
   allowCreate?: boolean
   className?: string
@@ -42,7 +45,14 @@ export function PersonAutocomplete({
   }
 
   async function criar() {
-    if (!orgId || !term) return
+    if (!term) return
+    if (onCreate) {
+      onCreate(term)
+      setQuery('')
+      setOpen(false)
+      return
+    }
+    if (!orgId) return
     setCreating(true)
     try {
       const id = await createContact(orgId, term)
