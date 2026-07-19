@@ -122,6 +122,7 @@ export interface Recipient {
   email: string
   status: string
   nome: string
+  person_id: string | null
   opened_at: string | null
   clicked_at: string | null
   unsubscribed_at: string | null
@@ -135,7 +136,7 @@ export function useRecipients(campaignId: string | undefined) {
     queryFn: async (): Promise<Recipient[]> => {
       const { data, error } = await supabase
         .from('email_recipients')
-        .select('id, email, status, opened_at, clicked_at, unsubscribed_at, error, persons(nome)')
+        .select('id, email, status, opened_at, clicked_at, unsubscribed_at, error, person_id, persons(nome)')
         .eq('campaign_id', campaignId!)
         .order('email')
         .limit(5000)
@@ -147,6 +148,7 @@ export function useRecipients(campaignId: string | undefined) {
           email: r.email as string,
           status: r.status as string,
           nome: p?.nome ?? '—',
+          person_id: (r.person_id as string | null) ?? null,
           opened_at: (r.opened_at as string | null) ?? null,
           clicked_at: (r.clicked_at as string | null) ?? null,
           unsubscribed_at: (r.unsubscribed_at as string | null) ?? null,

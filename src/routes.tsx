@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/modules/auth/ProtectedRoute'
 import { AdminRoute, RoleRoute } from '@/modules/auth/AdminRoute'
 import { LoginPage } from '@/modules/auth/LoginPage'
 import { ConteudoPublico } from '@/modules/crm/pages/email/ConteudoPublico'
+import { Descadastro } from '@/modules/crm/pages/email/Descadastro'
 import { lastRoute } from '@/modules/shared/navigation'
 
 // Carrega rotas lazy com auto-recuperação: se o chunk falhar ao baixar (chunk
@@ -227,6 +228,7 @@ function RegrasEventosRedirect() {
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/conteudo/:codigo', element: <ConteudoPublico /> },
+  { path: '/descadastrar/:rid', element: <Descadastro /> },
   {
     path: '/',
     element: (

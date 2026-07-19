@@ -36,6 +36,43 @@ const TYPE_MAP: Record<string, Map> = {
   link_unsubscribe: { tipo: 'descadastro', sup: 'optout', stamp: 'unsubscribed_at' },
 }
 
+// --- Aberturas de máquina (proxy/prefetch/scanner) ---------------------------
+// Aberturas geradas por robôs não são leitura humana. Detecção simples por
+// user-agent e IP; ao bater, a abertura é ignorada (não registra evento nem
+// carimba opened_at). Proxies de imagem de Gmail/Yahoo NÃO entram aqui — eles
+// também servem aberturas humanas reais; o foco são scanners de segurança e
+// bots de preview de link.
+const OPEN_TYPES = new Set(['open', 'initial_open', 'amp_open'])
+
+// Substrings (minúsculas) de user-agents claramente não-humanos.
+const BOT_UA = [
+  // Scanners de segurança / filtragem (abrem na entrega, não no humano)
+  'proofpoint', 'pphosted', 'mimecast', 'barracuda', 'messagelabs', 'symantec',
+  'cloudmark', 'forcepoint', 'fireeye', 'trendmicro', 'trend micro', 'fortimail',
+  'sophos', 'ironport',
+  // Bots de preview / unfurl de links
+  'slackbot', 'slack-imgproxy', 'facebookexternalhit', 'twitterbot', 'linkedinbot',
+  'telegrambot', 'whatsapp', 'discordbot', 'skypeuripreview', 'bingpreview',
+  'google-read-aloud',
+  // Genéricos de robô / automação
+  'bot/', 'crawler', 'spider', 'headless',
+]
+
+// Prefixos de IP a ignorar. Reservados/privados nunca aparecem como origem real
+// de abertura; faixas públicas de scanners/datacenter/Apple MPP podem entrar
+// aqui conforme identificadas.
+const BOT_IP_PREFIXES: string[] = [
+  '10.', '127.', '169.254.', '192.168.',
+]
+
+function isMachineOpen(ua?: string, ip?: string): boolean {
+  const u = (ua ?? '').toLowerCase()
+  if (u && BOT_UA.some((b) => u.includes(b))) return true
+  const p = (ip ?? '').trim()
+  if (p && BOT_IP_PREFIXES.some((b) => p.startsWith(b))) return true
+  return false
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
@@ -60,6 +97,8 @@ Deno.serve(async (req) => {
     const recipientId = (ev.rcpt_meta as Record<string, unknown> | undefined)?.recipient_id as string | undefined
     const type = ev.type as string | undefined
     if (!recipientId || !type || !TYPE_MAP[type]) continue
+    // Ignora abertura de máquina (proxy/scanner/prefetch) por UA/IP — não registra.
+    if (OPEN_TYPES.has(type) && isMachineOpen(ev.user_agent as string | undefined, ev.ip_address as string | undefined)) continue
     const tsRaw = ev.timestamp as string | number | undefined
     const ts = tsRaw ? new Date(Number(tsRaw) * 1000).toISOString() : new Date().toISOString()
     evs.push({ recipientId, type, ts, url: ev.target_link_url as string | undefined, reason: (ev.raw_reason || ev.reason) as string | undefined })
@@ -81,7 +120,12 @@ Deno.serve(async (req) => {
   for (const e of evs) {
     const rec = recById.get(e.recipientId)
     if (!rec) continue
-    const m = TYPE_MAP[e.type]
+    let m = TYPE_MAP[e.type]
+    // O link de descadastro fica no corpo (rastreado pelo SparkPost). Um clique
+    // nele é opt-out, não engajamento — remapeia p/ não sujar cliques/aberturas.
+    if ((e.type === 'click' || e.type === 'amp_click') && e.url?.includes('/descadastrar/')) {
+      m = { tipo: 'descadastro', sup: 'optout', stamp: 'unsubscribed_at' }
+    }
 
     // Atualiza o destinatário (status e/ou carimbo de data).
     const patch: Record<string, unknown> = {}

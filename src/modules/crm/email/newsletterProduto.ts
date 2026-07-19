@@ -33,6 +33,7 @@ export const NEWSLETTER_SECOES = [
   { key: 'mensagem_final', label: 'Mensagem final', tipo: 'texto' as const },
 ]
 
+const LOGO = 'https://cdn.blueticket.com.br/assets/bt-logo-azul.png'
 const BRAND = '#2f6df6'
 const BG = '#edeef2'
 const CARD = '#ffffff'
@@ -104,7 +105,7 @@ export function renderNewsletterProduto(data: NewsletterProdutoData, ctx: Render
   // Cabeçalho.
   rows.push(`<tr><td style="padding:28px 28px 8px">
     <table role="presentation" width="100%"><tr>
-      <td style="font-size:18px;font-weight:700;color:${BRAND}">Blueticket</td>
+      <td><img src="${LOGO}" alt="Blueticket" height="26" style="display:block;height:26px;width:auto;border:0" /></td>
       <td align="right" style="font-size:12px;color:${MUTED}">${esc(data.edicao)}</td>
     </tr></table>
   </td></tr>`)
@@ -137,21 +138,29 @@ export function renderNewsletterProduto(data: NewsletterProdutoData, ctx: Render
     rows.push(`<tr><td style="padding:20px 28px 0">${paragraphs(data.mensagemFinal)}</td></tr>`)
   }
 
-  // Rodapé.
-  const unsub = ctx.unsubscribeUrl
-    ? `<a href="${esc(ctx.unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline">descadastrar</a>`
-    : 'descadastrar'
+  // Rodapé. Link de descadastro: por padrão usa o placeholder de substituição
+  // do SparkPost ({{unsubscribe_url}}), preenchido por destinatário no disparo.
+  const unsub = `<a href="${esc(ctx.unsubscribeUrl || '{{unsubscribe_url}}')}" style="color:${MUTED};text-decoration:underline">descadastrar</a>`
   rows.push(`<tr><td style="padding:28px">
     <div style="border-top:1px solid ${BORDER};padding-top:16px;font-size:12px;line-height:1.6;color:${MUTED}">
       Você recebe este email por fazer parte da base Blueticket.<br>Para não receber mais, ${unsub}.
     </div>
   </td></tr>`)
 
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(data.edicao)}</title></head>
-<body style="margin:0;padding:0;background:${BG}">
+  // Renderização consistente entre apps: x-apple-disable-message-reformatting
+  // impede o iOS Mail de reescalar o texto; text-size-adjust trava o ajuste
+  // automático; a largura é fluida (100% até 600px) para o iOS não "diminuir"
+  // um layout de largura fixa. Fonte repetida em body/table/td p/ o Gmail.
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><meta name="format-detection" content="telephone=no"><title>${esc(data.edicao)}</title>
+<style>
+  html,body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%}
+  body,table,td{font-family:${FONT}}
+  img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic}
+</style></head>
+<body style="margin:0;padding:0;background:${BG};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG}">
     <tr><td align="center" style="padding:24px 12px">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:100%;background:${CARD};border-radius:14px;font-family:${FONT}">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${CARD};border-radius:14px;font-family:${FONT}">
         ${rows.join('\n')}
       </table>
     </td></tr>

@@ -6,7 +6,6 @@ import { ArrowLeft, Plus, Pencil, Trash2, Check, X, History } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -19,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase'
+import { linkPersonToEntity, unlinkEntity, updateEntityLinkPapel } from '../hooks/usePersonEntities'
 import { StageSelector } from '../components/StageSelector'
 import { AtividadesPanel } from '../components/AtividadesPanel'
 import { AuditLog } from '../components/AuditLog'
@@ -126,45 +126,43 @@ function ContatoOrgs({ personId }: { personId: string }) {
     queryKey: ['crm', 'contato-orgs', personId],
     queryFn: async () => {
       const { data } = await supabase
-        .from('org_persons')
-        .select('id, papel, ativo, organization_id, organizations(nome)')
+        .from('person_organizations_v')
+        .select('id, papel, organization_id, organization_nome')
         .eq('person_id', personId)
-        .order('ativo', { ascending: false })
+        .order('organization_nome')
       return data ?? []
     },
   })
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['crm', 'contato-orgs', personId] })
     qc.invalidateQueries({ queryKey: ['crm', 'contacts'] })
+    qc.invalidateQueries({ queryKey: ['crm', 'entity-contacts'] })
   }
 
   async function vincular() {
     if (!orgId || !sel) return
-    const { error } = await supabase.from('org_persons').insert({
-      org_id: orgId, organization_id: sel, person_id: personId,
-      papel: papel.trim() || null, data_inicio: new Date().toISOString().slice(0, 10),
-    })
-    if (error) return toast.error('Erro', { description: error.message })
-    setSel(''); setPapel(''); refresh()
+    try {
+      await linkPersonToEntity(orgId, 'organization', sel, personId, papel)
+      setSel(''); setPapel(''); refresh()
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   async function salvarPapel(id: string) {
-    const { error } = await supabase.from('org_persons').update({ papel: editPapel.trim() || null }).eq('id', id)
-    if (error) return toast.error('Erro', { description: error.message })
-    setEditId(null); refresh()
+    try {
+      await updateEntityLinkPapel(id, editPapel)
+      setEditId(null); refresh()
+    } catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   async function remover(id: string) {
-    const { error } = await supabase.from('org_persons').delete().eq('id', id)
-    if (error) return toast.error('Erro', { description: error.message })
-    refresh()
+    try { await unlinkEntity(id); refresh() }
+    catch (e) { toast.error('Erro', { description: (e as Error).message }) }
   }
 
   if (q.isLoading) return <Skeleton className="h-24 w-full" />
   return (
     <div className="space-y-3">
       {(q.data ?? []).map((r) => {
-        const o = r.organizations as unknown as { nome: string } | null
         const editing = editId === r.id
         return (
           <div key={r.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">
@@ -173,8 +171,7 @@ function ContatoOrgs({ personId }: { personId: string }) {
                 to={`/comercial/organizacoes/${r.organization_id}`}
                 className="inline-flex items-center gap-2 font-medium hover:underline"
               >
-                {o?.nome}
-                {!r.ativo && <Badge variant="outline">anterior</Badge>}
+                {(r as { organization_nome?: string }).organization_nome}
               </Link>
               {editing ? (
                 <Input

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Send, Save, TestTube2, Search } from 'lucide-react'
@@ -217,6 +217,7 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
   const recipientsQ = useRecipients(campaign.id)
   const qc = useQueryClient()
   const [busca, setBusca] = useState('')
+  const [filtro, setFiltro] = useState<'todos' | 'abriu' | 'clicou'>('todos')
   const [disparando, setDisparando] = useState(false)
   const recs = useMemo(() => recipientsQ.data ?? [], [recipientsQ.data])
   const clicksQ = useCampaignClicks(campaign.id)
@@ -261,9 +262,13 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
 
   const filtrados = useMemo(() => {
     const t = busca.trim().toLowerCase()
-    if (!t) return recs
-    return recs.filter((r) => r.nome.toLowerCase().includes(t) || r.email.toLowerCase().includes(t))
-  }, [recs, busca])
+    return recs.filter((r) => {
+      if (filtro === 'abriu' && !r.opened_at) return false
+      if (filtro === 'clicou' && !r.clicked_at) return false
+      if (t && !(r.nome.toLowerCase().includes(t) || r.email.toLowerCase().includes(t))) return false
+      return true
+    })
+  }, [recs, busca, filtro])
 
   return (
     <div className="flex flex-1 flex-col">
@@ -293,10 +298,21 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
       </div>
 
       {/* Destinatários */}
-      <div className="flex items-center gap-2 px-5 py-2">
+      <div className="flex flex-wrap items-center gap-2 px-5 py-2">
         <div className="relative w-72 max-w-full">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input className="h-9 pl-8" placeholder="Buscar destinatário…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+        <div className="inline-flex overflow-hidden rounded-md border border-border">
+          {([['todos', 'Todos'], ['abriu', 'Abriram'], ['clicou', 'Clicaram']] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setFiltro(v)}
+              className={`px-3 py-1.5 text-sm transition-colors ${filtro === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <span className="text-sm text-muted-foreground">{filtrados.length} de {recs.length}</span>
       </div>
@@ -321,7 +337,11 @@ function Envio({ campaign }: { campaign: CampaignRow }) {
               <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">Nenhum destinatário.</TableCell></TableRow>
             ) : filtrados.map((r) => (
               <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.nome}</TableCell>
+                <TableCell className="font-medium">
+                  {r.person_id ? (
+                    <Link to={`/comercial/contatos/${r.person_id}`} className="text-primary hover:underline">{r.nome}</Link>
+                  ) : r.nome}
+                </TableCell>
                 <TableCell>{r.email}</TableCell>
                 <TableCell><span title={r.error ?? undefined}>{r.status}</span></TableCell>
                 <TableCell className="text-muted-foreground">{r.opened_at ? fmtDate(r.opened_at) : '—'}</TableCell>

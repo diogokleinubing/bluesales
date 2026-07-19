@@ -20,6 +20,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 const API_BASE = Deno.env.get('SPARKPOST_API_BASE') || 'https://api.sparkpost.com'
+// Domínio público das landings (conteúdo + descadastro). O link de descadastro
+// é preenchido por destinatário via substitution_data ({{unsubscribe_url}}).
+const CONTEUDO_BASE = (Deno.env.get('CONTEUDO_BASE_URL') || 'https://conteudo.blueticket.com.br').replace(/\/$/, '')
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
       const { ok, jr } = await sparkpost({
         options: { open_tracking: true, click_tracking: true, transactional: true },
         content,
-        recipients: [{ address: { email: String(testEmail) }, metadata: { test: true } }],
+        recipients: [{ address: { email: String(testEmail) }, metadata: { test: true }, substitution_data: { nome: '', unsubscribe_url: CONTEUDO_BASE } }],
       })
       if (!ok) return json({ error: jr?.errors?.[0]?.message ?? 'Falha no SparkPost', detail: jr }, 502)
       return json({ ok: true, test: true })
@@ -89,7 +92,7 @@ Deno.serve(async (req) => {
       return {
         address: { email: rc.email as string, name: nome || undefined },
         metadata: { recipient_id: rc.id },
-        substitution_data: { nome },
+        substitution_data: { nome, unsubscribe_url: `${CONTEUDO_BASE}/descadastrar/${rc.id}` },
       }
     })
 

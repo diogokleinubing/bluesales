@@ -44,15 +44,15 @@ export function useContacts() {
           .is('deleted_at', null)
           .order('nome'),
         supabase
-          .from('org_persons')
-          .select('person_id, ativo, papel, organizations(nome)')
-          .eq('ativo', true),
+          .from('person_organizations_v')
+          .select('person_id, papel, organization_nome')
+          .eq('org_id', orgId!),
       ])
       if (persons.error) throw new Error(persons.error.message)
       const byPerson = new Map<string, PersonOrgLink[]>()
       for (const l of links.data ?? []) {
         const arr = byPerson.get(l.person_id) ?? []
-        const nome = (l.organizations as unknown as { nome?: string } | null)?.nome
+        const nome = (l as { organization_nome?: string | null }).organization_nome
         if (nome) arr.push({ nome, papel: l.papel ?? null })
         byPerson.set(l.person_id, arr)
       }
@@ -110,10 +110,20 @@ export function useContact(id: string | undefined) {
   })
 }
 
-export async function createContact(orgId: string, nome: string): Promise<string> {
+export async function createContact(
+  orgId: string,
+  nome: string,
+  extra?: { email?: string | null; telefone?: string | null; cargo?: string | null },
+): Promise<string> {
   const { data, error } = await supabase
     .from('persons')
-    .insert({ org_id: orgId, nome })
+    .insert({
+      org_id: orgId,
+      nome: nome.trim(),
+      email: extra?.email?.trim() || null,
+      telefone: extra?.telefone?.trim() || null,
+      cargo: extra?.cargo?.trim() || null,
+    })
     .select('id')
     .single()
   if (error) throw new Error(error.message)
