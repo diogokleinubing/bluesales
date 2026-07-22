@@ -210,6 +210,53 @@ export function useArtistUnifiedAgenda(artistId: string | null): UseQueryResult<
   })
 }
 
+/**
+ * Contagem de shows da agenda unificada (oficial + plataformas) por atração,
+ * para a coluna "Eventos" da lista de Atrações. Replica em massa o dedup por
+ * data do useArtistUnifiedAgenda (mesma data = 1 evento).
+ */
+export function useArtistAgendaCounts(): UseQueryResult<Map<string, number>> {
+  return useQuery({
+    staleTime: 20_000,
+    queryKey: ['comercial', 'artist-agenda-counts'],
+    queryFn: async (): Promise<Map<string, number>> => {
+      const [oficial, plat] = await Promise.all([
+        supabase.from('artist_agenda_events').select('artist_id, id, data'),
+        supabase.from('crawled_event_artists')
+          .select('artist_id, crawled_events!inner(id, data_inicio, ignorado)')
+          .eq('removido', false),
+      ])
+      if (oficial.error) throw new Error(oficial.error.message)
+      if (plat.error) throw new Error(plat.error.message)
+
+      const byArtist = new Map<string, Set<string>>()
+      const add = (artistId: string, key: string) => {
+        let s = byArtist.get(artistId)
+        if (!s) { s = new Set(); byArtist.set(artistId, s) }
+        s.add(key)
+      }
+      for (const o of oficial.data ?? []) {
+        const data = (o.data as string | null) ?? null
+        add(o.artist_id as string, data ? `d:${data}` : `i:${o.id as string}`)
+      }
+      for (const row of plat.data ?? []) {
+        // supabase-js tipa o embed como array, mas em runtime é objeto (FK to-one).
+        const r = row as unknown as {
+          artist_id: string
+          crawled_events: { id: string; data_inicio: string | null; ignorado: boolean | null } | null
+        }
+        const ce = r.crawled_events
+        if (!ce || ce.ignorado) continue
+        const data = dataBR(ce.data_inicio)
+        add(r.artist_id, data ? `d:${data}` : `i:${ce.id}`)
+      }
+      const counts = new Map<string, number>()
+      for (const [id, s] of byArtist) counts.set(id, s.size)
+      return counts
+    },
+  })
+}
+
 export async function setAgendaUrl(artistId: string, url: string | null): Promise<void> {
   const { error } = await supabase.from('artists').update({ agenda_url: url }).eq('id', artistId)
   if (error) throw new Error(error.message)

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { readStr, buildSearchParams } from '@/lib/urlState'
+import { readStr, readArr, buildSearchParams } from '@/lib/urlState'
+import { cn } from '@/lib/utils'
 import { Plus, Pencil, ChevronUp, ChevronDown, ChevronsUpDown, CalendarDays, ExternalLink } from 'lucide-react'
 import { fmtDate } from '@/lib/format'
-import { useArtistUnifiedAgenda } from '@/modules/pesquisa/hooks/useAgenda'
+import { useArtistUnifiedAgenda, useArtistAgendaCounts } from '@/modules/pesquisa/hooks/useAgenda'
 import { CopyUrlButton } from '@/modules/pesquisa/components/CopyUrlButton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
@@ -29,16 +30,20 @@ import { AtracaoDialog } from '../components/AtracaoDialog'
 
 const NONE = '__none__'
 
-type SortKey = 'nome' | 'classe' | 'segmento' | 'genero' | 'organizacao' | 'plataforma'
+type SortKey = 'nome' | 'classe' | 'segmento' | 'genero' | 'organizacao' | 'plataforma' | 'eventos'
 
-/** Valor ordenável da coluna; índice p/ classe (ordem natural), texto p/ resto. */
-function sortVal(a: ArtistRow, k: SortKey): string | number {
+/** Linha da lista com a contagem de eventos anexada. */
+type ArtistListRow = ArtistRow & { eventos: number }
+
+/** Valor ordenável da coluna; índice p/ classe (ordem natural), nº p/ eventos, texto p/ resto. */
+function sortVal(a: ArtistListRow, k: SortKey): string | number {
   switch (k) {
     case 'classe': { const i = ARTIST_CLASSES.indexOf(a.classificacao as ArtistClasse); return i < 0 ? 99 : i }
     case 'segmento': return (a.segmento ?? '').toLowerCase()
     case 'genero': return (a.genero_nome ?? '').toLowerCase()
     case 'organizacao': return (a.organization_nome ?? '').toLowerCase()
     case 'plataforma': return (a.platform_nome ?? '').toLowerCase()
+    case 'eventos': return a.eventos
     default: return (a.nome ?? '').toLowerCase()
   }
 }
@@ -52,11 +57,12 @@ function passaFiltro(val: string | null, filtro: string): boolean {
 
 export function Artistas() {
   const { data, isLoading } = useArtists()
+  const counts = useArtistAgendaCounts()
   const generos = useGeneroOptions()
   const segmentos = useSegmentOptions()
   const [params, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState(() => readStr(params, 'search'))
-  const [classeFiltro, setClasseFiltro] = useState<string>(() => readStr(params, 'class', 'all'))
+  const [classesSel, setClassesSel] = useState<string[]>(() => readArr(params, 'classes'))
   const [segmentoFiltro, setSegmentoFiltro] = useState<string>(() => readStr(params, 'segment', 'all'))
   const [generoFiltro, setGeneroFiltro] = useState<string>(() => readStr(params, 'genre', 'all'))
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>(() => ({
@@ -66,37 +72,40 @@ export function Artistas() {
   useEffect(() => {
     setSearchParams(buildSearchParams([
       { k: 'search', v: search },
-      { k: 'class', v: classeFiltro, def: 'all' },
+      { k: 'classes', v: classesSel },
       { k: 'segment', v: segmentoFiltro, def: 'all' },
       { k: 'genre', v: generoFiltro, def: 'all' },
       { k: 'sortBy', v: sort.key, def: 'nome' },
       { k: 'sortDir', v: sort.dir, def: 'asc' },
     ]), { replace: true })
-  }, [search, classeFiltro, segmentoFiltro, generoFiltro, sort, setSearchParams])
+  }, [search, classesSel, segmentoFiltro, generoFiltro, sort, setSearchParams])
   const [open, setOpen] = useState(false)
   const [agenda, setAgenda] = useState<ArtistRow | null>(null)
   const [edit, setEdit] = useState<ArtistRow | null>(null)
 
-  const rows = useMemo(() => {
+  const rows = useMemo<ArtistListRow[]>(() => {
     const q = search.trim().toLowerCase()
     const filtered = (data ?? []).filter((a) => {
       if (q && !a.nome.toLowerCase().includes(q)) return false
       return (
-        passaFiltro(a.classificacao, classeFiltro) &&
+        (classesSel.length === 0 || classesSel.includes(a.classificacao ?? '')) &&
         passaFiltro(a.segmento, segmentoFiltro) &&
         passaFiltro(a.genero_nome, generoFiltro)
       )
     })
+    const withCount: ArtistListRow[] = filtered.map((a) => ({ ...a, eventos: counts.data?.get(a.id) ?? 0 }))
     const mul = sort.dir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
+    // "Vazio" (vai por último): texto '' ou o sentinel 99 só da coluna classe.
+    const vazio = (v: string | number) => v === '' || (sort.key === 'classe' && v === 99)
+    return withCount.sort((a, b) => {
       const va = sortVal(a, sort.key), vb = sortVal(b, sort.key)
-      const ea = va === '' || va === 99, eb = vb === '' || vb === 99
+      const ea = vazio(va), eb = vazio(vb)
       if (ea !== eb) return ea ? 1 : -1 // vazios/sem valor sempre por último
       if (va < vb) return -1 * mul
       if (va > vb) return 1 * mul
       return 0
     })
-  }, [data, search, classeFiltro, segmentoFiltro, generoFiltro, sort])
+  }, [data, counts.data, search, classesSel, segmentoFiltro, generoFiltro, sort])
 
   // Clique simples na linha abre a agenda; duplo clique abre o editar. Usa um
   // timer p/ não disparar a agenda quando o usuário dá duplo clique.
@@ -159,14 +168,25 @@ export function Artistas() {
                 <SelectItem value={NONE}>(sem gênero)</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={classeFiltro} onValueChange={setClasseFiltro}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Classe" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as classes</SelectItem>
-                {ARTIST_CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                <SelectItem value={NONE}>(sem classe)</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Classe:</span>
+              {ARTIST_CLASSES.map((c) => {
+                const on = classesSel.includes(c)
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setClassesSel((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))}
+                    className={cn(
+                      'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary',
+                    )}
+                  >
+                    {c}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         }
       >
@@ -178,15 +198,16 @@ export function Artistas() {
             <SortHead k="genero">Gênero</SortHead>
             <SortHead k="organizacao">Organização</SortHead>
             <SortHead k="plataforma">Plataforma</SortHead>
+            <SortHead k="eventos" className="w-24">Eventos</SortHead>
             <TableHead className="w-20" />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Nenhuma atração.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhuma atração.</TableCell></TableRow>
             ) : rows.map((a) => (
               <TableRow key={a.id} className="cursor-pointer" onClick={() => onRowClick(a)} onDoubleClick={() => onRowDouble(a)}>
                 <TableCell className="font-medium"><div className="max-w-[260px] truncate" title={a.nome}>{a.nome}</div></TableCell>
@@ -195,6 +216,19 @@ export function Artistas() {
                 <TableCell>{a.genero_nome ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{a.organization_nome ?? '—'}</TableCell>
                 <TableCell>{a.platform_nome ? <Badge variant="outline">{a.platform_nome}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell>
+                  {a.eventos > 0 ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAgenda(a) }}
+                      className="font-medium tabular-nums text-primary hover:underline"
+                      title="Ver agenda"
+                    >
+                      {a.eventos}
+                    </button>
+                  ) : (
+                    <span className="tabular-nums text-muted-foreground">0</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     <button onClick={(e) => { e.stopPropagation(); setAgenda(a) }} className="text-muted-foreground hover:text-foreground" title="Ver agenda"><CalendarDays className="size-4" /></button>
